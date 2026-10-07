@@ -1,0 +1,7 @@
+/dist/
+/golangtak
+/golangtak.exe
+*.test
+*.out
+*.prof
+coverage.*
