@@ -77,6 +77,35 @@ type FederationConfig struct {
 	MaxHops  int      `json:"maxHops"`
 }
 
+type ADSBFeed struct {
+	Enabled     bool    `json:"enabled"`
+	URL         string  `json:"url"`
+	APIKey      string  `json:"apiKey,omitempty"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	RadiusNM    float64 `json:"radiusNm"`
+	IntervalSec int     `json:"intervalSec"`
+	Group       string  `json:"group"`
+}
+
+type AISFeed struct {
+	Enabled     bool    `json:"enabled"`
+	Username    string  `json:"username"`
+	South       float64 `json:"south"`
+	West        float64 `json:"west"`
+	North       float64 `json:"north"`
+	East        float64 `json:"east"`
+	MMSI        string  `json:"mmsi,omitempty"`
+	IMO         string  `json:"imo,omitempty"`
+	IntervalSec int     `json:"intervalSec"`
+	Group       string  `json:"group"`
+}
+
+type FeedsConfig struct {
+	ADSB ADSBFeed `json:"adsb"`
+	AIS  AISFeed  `json:"ais"`
+}
+
 type PeerConfig struct {
 	Name       string   `json:"name"`
 	URL        string   `json:"url"`
@@ -113,6 +142,7 @@ type Config struct {
 	Repeater       RepeaterConfig   `json:"repeater"`
 	Federation     FederationConfig `json:"federation"`
 	Peers          []PeerConfig     `json:"peers"`
+	Feeds          FeedsConfig      `json:"feeds"`
 	TileURL        string           `json:"tileUrl"`
 	LogLevel       string           `json:"logLevel"`
 	ACMEEmail      string           `json:"acmeEmail"`
@@ -174,6 +204,10 @@ func DefaultConfig() Config {
 		Federation: FederationConfig{
 			Groups:  []string{"__ANON__"},
 			MaxHops: 4,
+		},
+		Feeds: FeedsConfig{
+			ADSB: ADSBFeed{URL: "https://api.airplanes.live/v2/point", RadiusNM: 25, IntervalSec: 30},
+			AIS:  AISFeed{South: -90, West: -180, North: 90, East: 180, IntervalSec: 120},
 		},
 		TileURL:  "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
 		LogLevel: "info",
@@ -247,6 +281,21 @@ func (c *Config) fill() {
 	}
 	if c.LogLevel == "" {
 		c.LogLevel = "info"
+	}
+	if c.Feeds.ADSB.URL == "" {
+		c.Feeds.ADSB.URL = d.Feeds.ADSB.URL
+	}
+	if c.Feeds.ADSB.RadiusNM <= 0 {
+		c.Feeds.ADSB.RadiusNM = d.Feeds.ADSB.RadiusNM
+	}
+	if c.Feeds.ADSB.IntervalSec < 5 {
+		c.Feeds.ADSB.IntervalSec = d.Feeds.ADSB.IntervalSec
+	}
+	if c.Feeds.AIS.IntervalSec < 60 {
+		c.Feeds.AIS.IntervalSec = d.Feeds.AIS.IntervalSec
+	}
+	if c.Feeds.AIS.South == 0 && c.Feeds.AIS.North == 0 && c.Feeds.AIS.West == 0 && c.Feeds.AIS.East == 0 {
+		c.Feeds.AIS.South, c.Feeds.AIS.West, c.Feeds.AIS.North, c.Feeds.AIS.East = d.Feeds.AIS.South, d.Feeds.AIS.West, d.Feeds.AIS.North, d.Feeds.AIS.East
 	}
 	if c.NodeID == "" {
 		b := make([]byte, 8)

@@ -816,6 +816,25 @@ func validateConfig(c *Config) error {
 	default:
 		return errors.New("replay must be all, sa or none")
 	}
+	if a := c.Feeds.ADSB; a.Enabled {
+		if a.Lat < -90 || a.Lat > 90 || a.Lon < -180 || a.Lon > 180 {
+			return errors.New("ADS-B center must be a valid latitude and longitude")
+		}
+		if a.RadiusNM <= 0 || a.RadiusNM > 250 {
+			return errors.New("ADS-B radius must be between 1 and 250 nautical miles")
+		}
+		if !strings.HasPrefix(a.URL, "http://") && !strings.HasPrefix(a.URL, "https://") {
+			return errors.New("ADS-B URL must start with http:// or https://")
+		}
+	}
+	if a := c.Feeds.AIS; a.Enabled {
+		if strings.TrimSpace(a.Username) == "" {
+			return errors.New("the AIS feed needs an AISHub user name")
+		}
+		if a.South < -90 || a.North > 90 || a.South >= a.North || a.West < -180 || a.East > 180 || a.West >= a.East {
+			return errors.New("the AIS area must be south < north and west < east")
+		}
+	}
 	return nil
 }
 

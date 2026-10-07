@@ -78,6 +78,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Data**: data packages and the Data Sync API, missions with subscriptions, roles, passwords, invitations and change notifications, ExCheck checklists, CI-TRAP reports, video feeds, KML export, track history.
 - **Administration**: web dashboard (map, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation.
+- **Data feeds**: live aircraft from ADS-B exchanges (airplanes.live, adsb.lol and compatible services) and ships from AISHub, sent to everyone or to one group.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
 
 ## Ports

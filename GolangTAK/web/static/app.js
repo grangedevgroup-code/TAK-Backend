@@ -613,6 +613,10 @@
         ["Server certificate valid until", fmtDate(st.serverCertExpires)],
       ])
     );
+    const feeds = (st.feeds || []).filter((f) => f.enabled);
+    if (feeds.length) {
+      main.append(h("h2", null, "Data feeds"), table([{ title: "Feed", render: (r) => (r.name === "adsb" ? "ADS-B aircraft" : "AIS ships") }, { title: "Items", key: "items" }, { title: "Last update", render: (r) => fmtAgo(r.lastOk) }, { title: "Problem", render: (r) => r.error || "-" }], feeds));
+    }
     if (st.peers && st.peers.length) {
       main.append(h("h2", null, "Server links"), table([{ title: "Name", key: "name" }, { title: "URL", render: (r) => h("span", { class: "mono" }, r.url) }, { title: "State", render: (r) => r.state + (r.error ? " (" + r.error + ")" : "") }], st.peers));
     }
@@ -1706,6 +1710,7 @@
     );
     main.append(actions);
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const form = h(
       "form",
@@ -1755,6 +1760,25 @@
       field("Largest upload (MB)", n("lup", l.maxUploadMB)),
       field("Idle timeout (seconds)", n("lidle", l.idleTimeoutSec)),
       field("Items replayed", n("lrep", l.replayLimit)),
+      h("h2", { class: "full" }, "ADS-B aircraft feed"),
+      field("Enabled", checkbox("fa_on", fa.enabled, "Show aircraft from an ADS-B exchange on all devices")),
+      field("Center latitude", input("fa_lat", fa.lat)),
+      field("Center longitude", input("fa_lon", fa.lon)),
+      field("Radius (nautical miles)", n("fa_rad", fa.radiusNm)),
+      field("Update every (seconds)", n("fa_int", fa.intervalSec)),
+      field("Group", input("fa_group", fa.group, { placeholder: "everyone" }), "Only members of this group see the aircraft. Empty sends to everyone."),
+      field("Source URL", input("fa_url", fa.url), "airplanes.live, adsb.lol or any service with the same /point/lat/lon/radius API."),
+      field("API key", input("fa_key", fa.apiKey, { autocomplete: "off" })),
+      h("h2", { class: "full" }, "AIS ship feed (AISHub)"),
+      field("Enabled", checkbox("fs_on", fs.enabled, "Show ships from AISHub on all devices")),
+      field("AISHub user name", input("fs_user", fs.username, { autocomplete: "off" })),
+      field("South", input("fs_s", fs.south)),
+      field("West", input("fs_w", fs.west)),
+      field("North", input("fs_n", fs.north)),
+      field("East", input("fs_e", fs.east)),
+      field("MMSI list", input("fs_mmsi", fs.mmsi), "Optional, comma separated."),
+      field("Update every (seconds)", n("fs_int", fs.intervalSec), "AISHub allows one request per minute."),
+      field("Group", input("fs_group", fs.group, { placeholder: "everyone" })),
       h("h2", { class: "full" }, "Certificates"),
       field("Organization", input("corg", c.organization)),
       field("Unit", input("cunit", c.unit)),
@@ -1784,6 +1808,10 @@
         retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
+        feeds: {
+          adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),
+          ais: Object.assign({}, fs, { enabled: val(form, "fs_on"), username: val(form, "fs_user"), south: num(form, "fs_s"), west: num(form, "fs_w"), north: num(form, "fs_n"), east: num(form, "fs_e"), mmsi: val(form, "fs_mmsi"), intervalSec: num(form, "fs_int"), group: val(form, "fs_group") }),
+        },
       };
       try {
         const res = await api("PUT", "/api/settings", next);

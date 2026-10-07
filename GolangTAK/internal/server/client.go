@@ -28,6 +28,7 @@ type Message struct {
 	Everyone    bool
 	Received    time.Time
 	NoReplay    bool
+	NoHistory   bool
 	ForceXML    bool
 	SwitchProto bool
 	Disconnect  bool

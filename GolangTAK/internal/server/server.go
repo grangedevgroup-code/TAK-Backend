@@ -62,6 +62,7 @@ type Server struct {
 	peers    *PeerManager
 	fed      *Federation
 	reports  *Reports
+	feeds    *feedState
 	control  string
 	lock     *flock.Lock
 	localMux http.Handler

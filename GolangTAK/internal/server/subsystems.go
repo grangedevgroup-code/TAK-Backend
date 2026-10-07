@@ -39,6 +39,7 @@ func (s *Server) initSubsystems() error {
 		return err
 	}
 	s.links = map[string]*downloadLink{}
+	s.feeds = &feedState{status: map[string]*FeedStatus{}}
 	s.restart = make(chan struct{}, 1)
 	s.peers = newPeerManager(s)
 	s.fed = newFederation(s)
@@ -56,7 +57,9 @@ func (s *Server) initSubsystems() error {
 		}
 	}
 	s.hub.OnCoT = func(m *Message) {
-		s.history.Record(m)
+		if !m.NoHistory {
+			s.history.Record(m)
+		}
 		if src := m.Source; src != nil && !src.Relay && m.Event.IsSA() && m.Event.UID == src.UID() {
 			s.devices.Seen(src, "Connected")
 		}
@@ -79,6 +82,7 @@ func (s *Server) startSubsystems() error {
 	if err := s.startFederation(); err != nil {
 		return err
 	}
+	s.startFeeds()
 	s.histStop = make(chan struct{})
 	s.wg.Add(1)
 	go func() {

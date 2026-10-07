@@ -133,7 +133,7 @@ func (s *Server) apiStatus(w http.ResponseWriter, r *http.Request) {
 		"ports": cfg.Ports, "allowAnonymous": cfg.AllowAnonymous, "protobuf": cfg.Protobuf, "mesh": cfg.Mesh,
 		"caSubject": ca.Subject.CommonName, "caFingerprint": pki.Fingerprint(ca), "caExpires": ca.NotAfter,
 		"serverCertExpires": leaf.NotAfter, "serverNames": append(append([]string{}, leaf.DNSNames...), ipStrings(leaf.IPAddresses)...),
-		"peers": s.peerStatus(), "federation": s.federationStatus(),
+		"peers": s.peerStatus(), "federation": s.federationStatus(), "feeds": s.feedStatus(),
 	})
 }
 
