@@ -128,6 +128,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 	}
 	s.hub = NewHub(s, s.log, cfg.Limits.QueueLength, cfg.Limits.MaxClients, cfg.Limits.CacheLimit)
 	s.dir.OnChange = s.refreshUser
+	s.dir.External = s.ldapAuth
 	if err := s.initSubsystems(); err != nil {
 		s.closeSubsystems()
 		s.dir.Close()

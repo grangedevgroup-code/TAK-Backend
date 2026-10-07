@@ -1288,7 +1288,7 @@
         table(
           [
             { title: "Name", render: (r) => h("b", null, r.name) },
-            { title: "Role", render: (r) => (r.admin ? "admin" : "user") + (r.disabled ? ", disabled" : "") },
+            { title: "Role", render: (r) => (r.admin ? "admin" : "user") + (r.external ? ", directory" : "") + (r.disabled ? ", disabled" : "") },
             { title: "Callsign", key: "callsign" },
             { title: "Receives from", render: (r) => joined(r.in) },
             { title: "Sends to", render: (r) => joined(r.out) },
@@ -1710,7 +1710,7 @@
     );
     main.append(actions);
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const form = h(
       "form",
@@ -1760,6 +1760,37 @@
       field("Largest upload (MB)", n("lup", l.maxUploadMB)),
       field("Idle timeout (seconds)", n("lidle", l.idleTimeoutSec)),
       field("Items replayed", n("lrep", l.replayLimit)),
+      h("h2", { class: "full" }, "Directory sign-in (LDAP or Active Directory)"),
+      field("Enabled", checkbox("ld_on", ld.enabled, "Let directory users sign in with their directory password")),
+      field("Server URL", input("ld_url", ld.url, { placeholder: "ldaps://dc.example.org" })),
+      field("StartTLS", checkbox("ld_tls", ld.startTls, "Upgrade ldap:// connections to TLS")),
+      field("Skip certificate check", checkbox("ld_ins", ld.insecure, "Do not verify the directory server certificate")),
+      field("Trusted CA file", input("ld_ca", ld.trustFile), "Path on this server to the directory's CA certificate (PEM)."),
+      field("Service account DN", input("ld_bind", ld.bindDn, { autocomplete: "off" })),
+      field("Service account password", input("ld_bpw", ld.bindPassword, { type: "password", autocomplete: "new-password" })),
+      field("Base DN", input("ld_base", ld.baseDn, { placeholder: "dc=example,dc=org" })),
+      field("User filter", input("ld_filter", ld.userFilter), "{user} is replaced by the sign-in name."),
+      field("User DN template", input("ld_udn", ld.userDn, { placeholder: "uid={user},ou=people,dc=example,dc=org" }), "Optional. Signs in directly without a service account."),
+      field("Group filter", input("ld_gfilter", ld.groupFilter, { placeholder: "(&(objectClass=groupOfNames)(member={dn}))" }), "Optional. Without it the memberOf attribute is used."),
+      field("Group base DN", input("ld_gbase", ld.groupBaseDn)),
+      field("Group prefix", input("ld_gprefix", ld.groupPrefix, { placeholder: "tak_" }), "Only directory groups starting with this become TAK groups (prefix removed)."),
+      field("Administrator group", input("ld_admin", ld.adminGroup)),
+      field("Callsign attribute", input("ld_cs", ld.callsignAttribute)),
+      h("div", { class: "full" }, btn("Test directory sign-in", () => {
+        const f = h("form", { class: "grid" }, field("User name", input("tu", "", { autocomplete: "off" })), field("Password", input("tp", "", { type: "password", autocomplete: "off" })));
+        modal("Test directory sign-in", f, [
+          { label: "Cancel" },
+          {
+            label: "Test",
+            primary: true,
+            run: async () => {
+              const r = await api("POST", "/api/ldap/test", { username: val(f, "tu"), password: f.querySelector("#tp").value, config: ldapFromForm() });
+              toast("Signed in. Groups: " + (r.groups.join(", ") || "none") + (r.admin ? ". Administrator." : ".") + (r.callsign ? " Callsign " + r.callsign + "." : ""));
+              return true;
+            },
+          },
+        ]);
+      })),
       h("h2", { class: "full" }, "ADS-B aircraft feed"),
       field("Enabled", checkbox("fa_on", fa.enabled, "Show aircraft from an ADS-B exchange on all devices")),
       field("Center latitude", input("fa_lat", fa.lat)),
@@ -1787,6 +1818,24 @@
       field("Server validity (days)", n("sdays", c.serverDays)),
       h("div", { class: "full" }, h("button", { type: "submit", class: "primary" }, "Save settings"))
     );
+    const ldapFromForm = () =>
+      Object.assign({}, ld, {
+        enabled: val(form, "ld_on"),
+        url: val(form, "ld_url"),
+        startTls: val(form, "ld_tls"),
+        insecure: val(form, "ld_ins"),
+        trustFile: val(form, "ld_ca"),
+        bindDn: val(form, "ld_bind"),
+        bindPassword: form.querySelector("#ld_bpw").value,
+        baseDn: val(form, "ld_base"),
+        userFilter: val(form, "ld_filter"),
+        userDn: val(form, "ld_udn"),
+        groupFilter: val(form, "ld_gfilter"),
+        groupBaseDn: val(form, "ld_gbase"),
+        groupPrefix: val(form, "ld_gprefix"),
+        adminGroup: val(form, "ld_admin"),
+        callsignAttribute: val(form, "ld_cs"),
+      });
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const next = {
@@ -1808,6 +1857,7 @@
         retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
+        ldap: ldapFromForm(),
         feeds: {
           adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),
           ais: Object.assign({}, fs, { enabled: val(form, "fs_on"), username: val(form, "fs_user"), south: num(form, "fs_s"), west: num(form, "fs_w"), north: num(form, "fs_n"), east: num(form, "fs_e"), mmsi: val(form, "fs_mmsi"), intervalSec: num(form, "fs_int"), group: val(form, "fs_group") }),

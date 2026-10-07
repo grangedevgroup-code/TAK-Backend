@@ -189,6 +189,13 @@ type Directory struct {
 	sessions map[string]*Session
 	limiter  *limiter
 	OnChange func(user string)
+	External func(name, password string) (*ExternalAuth, error)
+}
+
+type ExternalAuth struct {
+	Groups   []string
+	Admin    bool
+	Callsign string
 }
 
 func OpenDirectory(dir, anonGroup string) (*Directory, error) {
@@ -630,11 +637,57 @@ func (d *Directory) CheckPassword(ip, name, pw string) (*Identity, error) {
 		if id, err := d.useToken(pw, name, "enroll"); err == nil {
 			return id, nil
 		}
-	} else {
+	} else if !ok {
 		checkHash("pbkdf2-sha256$"+strconv.Itoa(hashIterations)+"$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", pw)
+	}
+	if d.External != nil && (!ok || (!u.Disabled && (u.External || u.Hash == ""))) && validName.MatchString(name) {
+		if res, err := d.External(name, pw); err == nil {
+			if id, err := d.externalLogin(name, res); err == nil {
+				d.vmu.Lock()
+				d.verified[name] = verifyEntry{digest: digest(name, pw), expires: time.Now().Add(15 * time.Minute)}
+				d.vmu.Unlock()
+				return id, nil
+			}
+		}
 	}
 	d.limiter.fail(ip)
 	return nil, errors.New("invalid user name or password")
+}
+
+func (d *Directory) externalLogin(name string, res *ExternalAuth) (*Identity, error) {
+	groups := res.Groups
+	if len(groups) == 0 {
+		groups = []string{d.anon}
+	}
+	if err := d.ensureGroups(groups); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	u, err := d.users.Update(name, func(cur User, exists bool) (User, bool, error) {
+		if exists && !cur.External && cur.Hash != "" {
+			return cur, true, errors.New("a local account with this name exists")
+		}
+		if !exists {
+			cur = User{Name: name, Created: now}
+		}
+		cur.External = true
+		cur.In = uniqueSorted(groups)
+		cur.Out = uniqueSorted(groups)
+		cur.Admin = res.Admin
+		if res.Callsign != "" {
+			cur.Callsign = res.Callsign
+		}
+		cur.LastLogin = now
+		return cur, true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	d.forget(name)
+	if d.OnChange != nil {
+		d.OnChange(name)
+	}
+	return d.identityFor(u, "ldap"), nil
 }
 
 func NewSecret(n int) string {

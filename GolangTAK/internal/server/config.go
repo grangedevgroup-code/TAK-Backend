@@ -101,6 +101,24 @@ type AISFeed struct {
 	Group       string  `json:"group"`
 }
 
+type LDAPConfig struct {
+	Enabled           bool   `json:"enabled"`
+	URL               string `json:"url"`
+	StartTLS          bool   `json:"startTls"`
+	Insecure          bool   `json:"insecure"`
+	TrustFile         string `json:"trustFile,omitempty"`
+	BindDN            string `json:"bindDn"`
+	BindPassword      string `json:"bindPassword"`
+	BaseDN            string `json:"baseDn"`
+	UserFilter        string `json:"userFilter"`
+	UserDN            string `json:"userDn"`
+	GroupFilter       string `json:"groupFilter"`
+	GroupBaseDN       string `json:"groupBaseDn"`
+	GroupPrefix       string `json:"groupPrefix"`
+	AdminGroup        string `json:"adminGroup"`
+	CallsignAttribute string `json:"callsignAttribute"`
+}
+
 type FeedsConfig struct {
 	ADSB ADSBFeed `json:"adsb"`
 	AIS  AISFeed  `json:"ais"`
@@ -143,6 +161,7 @@ type Config struct {
 	Federation     FederationConfig `json:"federation"`
 	Peers          []PeerConfig     `json:"peers"`
 	Feeds          FeedsConfig      `json:"feeds"`
+	LDAP           LDAPConfig       `json:"ldap"`
 	TileURL        string           `json:"tileUrl"`
 	LogLevel       string           `json:"logLevel"`
 	ACMEEmail      string           `json:"acmeEmail"`
@@ -205,6 +224,7 @@ func DefaultConfig() Config {
 			Groups:  []string{"__ANON__"},
 			MaxHops: 4,
 		},
+		LDAP: LDAPConfig{UserFilter: "(|(uid={user})(sAMAccountName={user})(userPrincipalName={user}))"},
 		Feeds: FeedsConfig{
 			ADSB: ADSBFeed{URL: "https://api.airplanes.live/v2/point", RadiusNM: 25, IntervalSec: 30},
 			AIS:  AISFeed{South: -90, West: -180, North: 90, East: 180, IntervalSec: 120},

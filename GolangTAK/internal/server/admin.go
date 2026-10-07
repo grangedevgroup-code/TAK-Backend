@@ -730,6 +730,12 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 		peers[i] = p
 	}
 	cfg.Peers = peers
+	if cfg.LDAP.BindPassword != "" {
+		cfg.LDAP.BindPassword = "********"
+	}
+	if cfg.Feeds.ADSB.APIKey != "" {
+		cfg.Feeds.ADSB.APIKey = "********"
+	}
 	writeJSON(w, http.StatusOK, cfg)
 }
 
@@ -742,8 +748,15 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	before := s.Config()
 	next, err := s.UpdateConfig(func(c *Config) error {
 		old := c.Peers
+		oldBind, oldKey := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
+		}
+		if c.LDAP.BindPassword == "********" {
+			c.LDAP.BindPassword = oldBind
+		}
+		if c.Feeds.ADSB.APIKey == "********" {
+			c.Feeds.ADSB.APIKey = oldKey
 		}
 		for i := range c.Peers {
 			for _, o := range old {
@@ -825,6 +838,14 @@ func validateConfig(c *Config) error {
 		}
 		if !strings.HasPrefix(a.URL, "http://") && !strings.HasPrefix(a.URL, "https://") {
 			return errors.New("ADS-B URL must start with http:// or https://")
+		}
+	}
+	if l := c.LDAP; l.Enabled {
+		if !strings.HasPrefix(l.URL, "ldap://") && !strings.HasPrefix(l.URL, "ldaps://") {
+			return errors.New("the LDAP server URL must start with ldap:// or ldaps://")
+		}
+		if l.UserDN == "" && l.BaseDN == "" {
+			return errors.New("LDAP needs a base DN or a user DN template")
 		}
 	}
 	if a := c.Feeds.AIS; a.Enabled {
