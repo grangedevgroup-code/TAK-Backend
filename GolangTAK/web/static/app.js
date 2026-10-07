@@ -613,6 +613,19 @@
         ["Server certificate valid until", fmtDate(st.serverCertExpires)],
       ])
     );
+    const mesh = st.meshtastic || {};
+    if (mesh.enabled) {
+      main.append(
+        h("h2", null, "Meshtastic"),
+        kv([
+          ["Gateway node", h("span", { class: "mono" }, mesh.gatewayId || "-")],
+          ["Built-in broker", mesh.brokerPort ? "port " + mesh.brokerPort + ", " + mesh.brokerClients + " node(s) connected" + (mesh.brokerError ? " (" + mesh.brokerError + ")" : "") : "off"],
+          mesh.upstream ? ["Upstream", mesh.upstream + ": " + (mesh.upstreamState || "-") + (mesh.upstreamError ? " (" + mesh.upstreamError + ")" : "")] : null,
+          ["Packets", mesh.packetsIn + " received, " + mesh.packetsOut + " sent, " + mesh.undecryptable + " not readable"],
+        ]),
+        table([{ title: "Node", render: (r) => r.callsign || r.name || r.id }, { title: "ID", render: (r) => h("span", { class: "mono small" }, r.id) }, { title: "Position", render: (r) => h("span", { class: "mono small" }, fmtCoord(r.lat, r.lon)) }, { title: "Battery", render: (r) => (r.battery ? r.battery + "%" : "-") }, { title: "Last heard", render: (r) => fmtAgo(r.lastSeen) }], mesh.nodes || [], "No mesh nodes heard yet.")
+      );
+    }
     const feeds = (st.feeds || []).filter((f) => f.enabled);
     if (feeds.length) {
       main.append(h("h2", null, "Data feeds"), table([{ title: "Feed", render: (r) => (r.name === "adsb" ? "ADS-B aircraft" : "AIS ships") }, { title: "Items", key: "items" }, { title: "Last update", render: (r) => fmtAgo(r.lastOk) }, { title: "Problem", render: (r) => r.error || "-" }], feeds));
@@ -1710,7 +1723,7 @@
     );
     main.append(actions);
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const form = h(
       "form",
@@ -1791,6 +1804,17 @@
           },
         ]);
       })),
+      h("h2", { class: "full" }, "Meshtastic (LoRa mesh radios)"),
+      field("Enabled", checkbox("mt_on", mt.enabled, "Bridge Meshtastic nodes and TAK in both directions")),
+      field("Built-in MQTT port", n("mt_port", mt.brokerPort), "Point each gateway node's MQTT setting at this server and port. 0 turns the built-in broker off."),
+      field("Open broker", checkbox("mt_anon", mt.brokerAnonymous, "Accept nodes without a GolangTAK user name and password")),
+      field("Upstream broker", input("mt_up", mt.upstream, { placeholder: "mqtt://user:password@mqtt.example.org:1883" }), "Optional. Also exchange traffic through another MQTT broker."),
+      field("Topic root", input("mt_root", mt.root), "Must match the nodes' MQTT root topic, for example msh/US or msh/EU_868."),
+      field("Channels", input("mt_ch", (mt.channels || []).map((c) => c.name + "=" + c.key).join(", ")), "name=key pairs. The default channel is LongFast=AQ==."),
+      field("Send TAK traffic to the mesh", checkbox("mt_down", mt.downlink, "Positions and All Chat Rooms messages (nodes need downlink enabled)")),
+      field("Downlink channel", input("mt_dch", mt.downlinkChannel, { placeholder: "first channel" })),
+      field("Seconds between positions", n("mt_int", mt.intervalSec), "Per TAK user, to protect the mesh's airtime."),
+      field("Group", input("mt_group", mt.group, { placeholder: "everyone" }), "Mesh traffic goes to this group; only its traffic goes to the mesh. Empty means everyone."),
       h("h2", { class: "full" }, "ADS-B aircraft feed"),
       field("Enabled", checkbox("fa_on", fa.enabled, "Show aircraft from an ADS-B exchange on all devices")),
       field("Center latitude", input("fa_lat", fa.lat)),
@@ -1858,6 +1882,21 @@
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
         ldap: ldapFromForm(),
+        meshtastic: Object.assign({}, mt, {
+          enabled: val(form, "mt_on"),
+          brokerPort: num(form, "mt_port"),
+          brokerAnonymous: val(form, "mt_anon"),
+          upstream: val(form, "mt_up"),
+          root: val(form, "mt_root"),
+          channels: splitList(val(form, "mt_ch")).map((p) => {
+            const i = p.indexOf("=");
+            return i < 0 ? { name: p, key: "AQ==" } : { name: p.slice(0, i).trim(), key: p.slice(i + 1).trim() };
+          }),
+          downlink: val(form, "mt_down"),
+          downlinkChannel: val(form, "mt_dch"),
+          intervalSec: num(form, "mt_int"),
+          group: val(form, "mt_group"),
+        }),
         feeds: {
           adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),
           ais: Object.assign({}, fs, { enabled: val(form, "fs_on"), username: val(form, "fs_user"), south: num(form, "fs_s"), west: num(form, "fs_w"), north: num(form, "fs_n"), east: num(form, "fs_e"), mmsi: val(form, "fs_mmsi"), intervalSec: num(form, "fs_int"), group: val(form, "fs_group") }),

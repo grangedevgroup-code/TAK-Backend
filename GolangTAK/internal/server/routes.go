@@ -178,6 +178,7 @@ func (s *Server) routes() *http.ServeMux {
 	a("GET /api/federation", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, s.federationStatus()) })
 	a("GET /api/feeds", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, s.feedStatus()) })
 	a("POST /api/ldap/test", s.apiLDAPTest)
+	a("GET /api/meshtastic", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, s.meshStatus()) })
 
 	mux.HandleFunc("/Marti/", s.martiUnknown)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

@@ -98,6 +98,13 @@ func TestFirewallRules(t *testing.T) {
 	if strings.Contains(got, "9000/tcp") {
 		t.Fatal("federation port opened while federation is off")
 	}
+	if strings.Contains(got, "1883/tcp") {
+		t.Fatal("MQTT port opened while Meshtastic is off")
+	}
+	cfg.Meshtastic.Enabled = true
+	if !strings.Contains(strings.Join(ruleStrings(firewallRules(cfg)), " "), "1883/tcp") {
+		t.Fatal("MQTT port not opened for Meshtastic")
+	}
 	cfg.Federation.Enabled = true
 	cfg.Ports.Federation = 9000
 	if !strings.Contains(strings.Join(ruleStrings(firewallRules(cfg)), " "), "9000/tcp") {

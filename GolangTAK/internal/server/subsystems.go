@@ -83,6 +83,7 @@ func (s *Server) startSubsystems() error {
 		return err
 	}
 	s.startFeeds()
+	s.startMeshtastic()
 	s.histStop = make(chan struct{})
 	s.wg.Add(1)
 	go func() {

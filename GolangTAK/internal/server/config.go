@@ -119,6 +119,25 @@ type LDAPConfig struct {
 	CallsignAttribute string `json:"callsignAttribute"`
 }
 
+type MeshtasticChannel struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+type MeshtasticConfig struct {
+	Enabled         bool                `json:"enabled"`
+	BrokerPort      int                 `json:"brokerPort"`
+	BrokerAnonymous bool                `json:"brokerAnonymous"`
+	Upstream        string              `json:"upstream"`
+	Root            string              `json:"root"`
+	Channels        []MeshtasticChannel `json:"channels"`
+	Group           string              `json:"group"`
+	Downlink        bool                `json:"downlink"`
+	DownlinkChannel string              `json:"downlinkChannel"`
+	NodeNum         uint32              `json:"nodeNum"`
+	IntervalSec     int                 `json:"intervalSec"`
+}
+
 type FeedsConfig struct {
 	ADSB ADSBFeed `json:"adsb"`
 	AIS  AISFeed  `json:"ais"`
@@ -162,6 +181,7 @@ type Config struct {
 	Peers          []PeerConfig     `json:"peers"`
 	Feeds          FeedsConfig      `json:"feeds"`
 	LDAP           LDAPConfig       `json:"ldap"`
+	Meshtastic     MeshtasticConfig `json:"meshtastic"`
 	TileURL        string           `json:"tileUrl"`
 	LogLevel       string           `json:"logLevel"`
 	ACMEEmail      string           `json:"acmeEmail"`
@@ -225,6 +245,12 @@ func DefaultConfig() Config {
 			MaxHops: 4,
 		},
 		LDAP: LDAPConfig{UserFilter: "(|(uid={user})(sAMAccountName={user})(userPrincipalName={user}))"},
+		Meshtastic: MeshtasticConfig{
+			BrokerPort:  1883,
+			Root:        "msh/US",
+			Channels:    []MeshtasticChannel{{Name: "LongFast", Key: "AQ=="}},
+			IntervalSec: 60,
+		},
 		Feeds: FeedsConfig{
 			ADSB: ADSBFeed{URL: "https://api.airplanes.live/v2/point", RadiusNM: 25, IntervalSec: 30},
 			AIS:  AISFeed{South: -90, West: -180, North: 90, East: 180, IntervalSec: 120},
@@ -301,6 +327,20 @@ func (c *Config) fill() {
 	}
 	if c.LogLevel == "" {
 		c.LogLevel = "info"
+	}
+	if c.Meshtastic.Root == "" {
+		c.Meshtastic.Root = d.Meshtastic.Root
+	}
+	if len(c.Meshtastic.Channels) == 0 {
+		c.Meshtastic.Channels = d.Meshtastic.Channels
+	}
+	if c.Meshtastic.IntervalSec < 10 {
+		c.Meshtastic.IntervalSec = d.Meshtastic.IntervalSec
+	}
+	if c.Meshtastic.NodeNum == 0 {
+		var b [4]byte
+		rand.Read(b[:])
+		c.Meshtastic.NodeNum = (uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])) | 0x10000000
 	}
 	if c.Feeds.ADSB.URL == "" {
 		c.Feeds.ADSB.URL = d.Feeds.ADSB.URL

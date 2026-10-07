@@ -67,6 +67,7 @@ The same is available from a terminal: `golangtak qr USER` prints enrollment QR 
 | OpenTAKServer, FreeTAKServer | TCP or TLS links in both directions; GolangTAK also serves the FreeTAKServer REST API on port 19023 |
 | zyrntopo-tak-server and browser software | CoT over WebSocket on port 8090, links to WebSocket servers |
 | Mesh and radio gateways | Multicast situational awareness (239.2.3.1:6969 and 224.10.10.1:17012), UDP input |
+| Meshtastic | Gateway nodes connect to the built-in MQTT broker on port 1883 (when enabled), or both sides share an MQTT broker |
 | Scripts and integrations | REST API with tokens, CoT over HTTP, live event stream over WebSocket |
 
 Every link is bidirectional: traffic from devices on GolangTAK reaches the other side and traffic from the other side reaches GolangTAK devices, with loop protection so nothing echoes back.
@@ -79,6 +80,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Data**: data packages and the Data Sync API, missions with subscriptions, roles, passwords, invitations and change notifications, ExCheck checklists, CI-TRAP reports, video feeds, KML export, track history.
 - **Administration**: web dashboard (map, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation.
+- **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
 - **Data feeds**: live aircraft from ADS-B exchanges (airplanes.live, adsb.lol and compatible services) and ships from AISHub, sent to everyone or to one group.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
 
@@ -96,6 +98,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 | 8090 | TCP | CoT over WebSocket |
 | 19023 | TCP | FreeTAKServer-compatible REST API |
 | 9000 | TCP | Federation (off by default) |
+| 1883 | TCP | MQTT broker for Meshtastic gateway nodes (off by default) |
 | 6969, 17012 | UDP | Multicast situational awareness (mesh) |
 
 Set any port to 0 to turn that service off.

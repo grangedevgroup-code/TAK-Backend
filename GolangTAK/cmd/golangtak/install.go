@@ -163,6 +163,9 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 	if cfg.Federation.Enabled {
 		rules = append(rules, firewall.Rule{Port: p.Federation, Proto: "tcp"}, firewall.Rule{Port: p.FederationV2, Proto: "tcp"})
 	}
+	if cfg.Meshtastic.Enabled && cfg.Meshtastic.BrokerPort > 0 {
+		rules = append(rules, firewall.Rule{Port: cfg.Meshtastic.BrokerPort, Proto: "tcp"})
+	}
 	rules = append(rules, firewall.Rule{Port: p.UDP, Proto: "udp"})
 	if cfg.Mesh.Enabled {
 		for _, g := range cfg.Mesh.Groups {

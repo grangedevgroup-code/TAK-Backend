@@ -2,6 +2,7 @@ package server
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -776,7 +777,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, err)
 		return
 	}
-	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send ||
+	mb, _ := json.Marshal(before.Meshtastic)
+	mn, _ := json.Marshal(next.Meshtastic)
+	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
 		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled
 	if before.Address != next.Address || strings.Join(before.ExtraNames, ",") != strings.Join(next.ExtraNames, ",") {
 		if err := s.pki.EnsureServer(next); err != nil {
@@ -846,6 +849,36 @@ func validateConfig(c *Config) error {
 		}
 		if l.UserDN == "" && l.BaseDN == "" {
 			return errors.New("LDAP needs a base DN or a user DN template")
+		}
+	}
+	if m := c.Meshtastic; m.Enabled {
+		if m.BrokerPort < 0 || m.BrokerPort > 65535 {
+			return errors.New("the Meshtastic broker port is out of range")
+		}
+		if m.BrokerPort > 0 {
+			if other, ok := seen["tcp/"+itoa(m.BrokerPort)]; ok {
+				return fmt.Errorf("the Meshtastic broker and %s both use tcp/%d", other, m.BrokerPort)
+			}
+		}
+		if m.BrokerPort == 0 && m.Upstream == "" {
+			return errors.New("the Meshtastic bridge needs the built-in broker or an upstream broker")
+		}
+		if m.Upstream != "" && !strings.HasPrefix(m.Upstream, "mqtt://") && !strings.HasPrefix(m.Upstream, "mqtts://") {
+			return errors.New("the upstream broker URL must start with mqtt:// or mqtts://")
+		}
+		if _, _, err := meshKeys(m); err != nil {
+			return err
+		}
+		if m.DownlinkChannel != "" {
+			found := false
+			for _, ch := range m.Channels {
+				if ch.Name == m.DownlinkChannel {
+					found = true
+				}
+			}
+			if !found {
+				return errors.New("the Meshtastic downlink channel is not in the channel list")
+			}
 		}
 	}
 	if a := c.Feeds.AIS; a.Enabled {

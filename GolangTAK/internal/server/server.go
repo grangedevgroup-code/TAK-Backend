@@ -63,6 +63,7 @@ type Server struct {
 	fed      *Federation
 	reports  *Reports
 	feeds    *feedState
+	mesh     *meshBridge
 	control  string
 	lock     *flock.Lock
 	localMux http.Handler
