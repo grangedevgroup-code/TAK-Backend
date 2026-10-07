@@ -396,12 +396,12 @@ func (ca *CA) IssueSubordinate(cn string, key crypto.Signer, validity time.Durat
 }
 
 func ParseCSR(body []byte) (*x509.CertificateRequest, error) {
+	if csr, err := x509.ParseCertificateRequest(body); err == nil {
+		return checkCSR(csr, nil)
+	}
 	body = bytes.TrimSpace(body)
 	if blk, _ := pem.Decode(body); blk != nil {
 		return checkCSR(x509.ParseCertificateRequest(blk.Bytes))
-	}
-	if csr, err := x509.ParseCertificateRequest(body); err == nil {
-		return checkCSR(csr, nil)
 	}
 	s := string(body)
 	for _, marker := range []string{"-----BEGIN CERTIFICATE REQUEST-----", "-----END CERTIFICATE REQUEST-----", "-----BEGIN NEW CERTIFICATE REQUEST-----", "-----END NEW CERTIFICATE REQUEST-----"} {

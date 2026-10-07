@@ -1,6 +1,8 @@
 package pki
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +88,31 @@ func TestServerAndClientCerts(t *testing.T) {
 	tampered[len(tampered)-5] ^= 0xff
 	if _, err := ParseCSR(tampered); err == nil {
 		t.Fatal("bad signature accepted")
+	}
+}
+
+func TestParseCSRWithWhitespaceBytes(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for i := 0; i < 5000 && found < 3; i++ {
+		der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{Subject: pkix.Name{CommonName: "user" + strconv.Itoa(i)}}, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last := der[len(der)-1]
+		if last != ' ' && (last < 0x09 || last > 0x0d) {
+			continue
+		}
+		found++
+		if _, err := ParseCSR(der); err != nil {
+			t.Fatalf("binary request ending in byte %#x rejected: %v", last, err)
+		}
+	}
+	if found == 0 {
+		t.Fatal("no request ending in a whitespace byte was generated")
 	}
 }
 
