@@ -31,7 +31,7 @@ func TestOtherServiceFiles(t *testing.T) {
 	if s := sysvScript(c); !strings.Contains(s, "'/opt/Golang TAK/golangtak' supervise run --service") {
 		t.Fatalf("sysv:\n%s", s)
 	}
-	if r := rcdScript(c); !strings.Contains(r, "daemon -r -R 3") {
+	if r := rcdScript(c); !strings.Contains(r, `command="/usr/sbin/daemon"`) || !strings.Contains(r, `command_args="-r -R 3 -P ${pidfile}`) || !strings.Contains(r, "'/opt/Golang TAK/golangtak' run --service") {
 		t.Fatalf("rc.d:\n%s", r)
 	}
 	if l := cronLine(c); !strings.HasPrefix(l, "@reboot '/opt/Golang TAK/golangtak' supervise run") || !strings.HasSuffix(l, "# golangtak") {
