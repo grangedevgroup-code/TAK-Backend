@@ -163,4 +163,4 @@ sh scripts/build.sh 1.0.0
 
 ## License
 
-GolangTAK is open source under the [Apache License 2.0](LICENSE).
+GolangTAK is open source under the [Apache License 2.0](LICENSE). The dashboard embeds the Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono fonts, which are licensed under the SIL Open Font License 1.1 (see `web/static/fonts`).

@@ -194,6 +194,9 @@ func (s *Server) routes() *http.ServeMux {
 func noCache(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
+		if strings.HasSuffix(r.URL.Path, ".woff2") {
+			w.Header().Set("Content-Type", "font/woff2")
+		}
 		h.ServeHTTP(w, r)
 	})
 }

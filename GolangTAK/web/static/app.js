@@ -11,6 +11,7 @@
     wsDelay: 1000,
     cleanup: null,
     page: "",
+    modals: new Set(),
   };
 
   const root = document.getElementById("app");
@@ -163,7 +164,7 @@
   }
 
   function table(cols, rows, empty, onRow) {
-    if (!rows.length) return h("p", { class: "muted" }, empty || "Nothing here yet.");
+    if (!rows.length) return h("div", { class: "empty" }, empty || "Nothing here yet.");
     return h(
       "div",
       { class: "table-wrap" },
@@ -197,8 +198,12 @@
     );
   }
 
-  function btn(label, onclick, cls) {
-    return h("button", { type: "button", class: cls || "", onclick: onclick }, label);
+  function btn(label, onclick, cls, ic) {
+    return h("button", { type: "button", class: cls || "", onclick: onclick }, ic ? icon(ic, 16) : null, ic ? h("span", { class: "bl" }, label) : label);
+  }
+
+  function linkBtn(label, href, cls, ic) {
+    return h("a", { class: "button" + (cls ? " " + cls : ""), href: href }, ic ? icon(ic, 16) : null, label);
   }
 
   function modal(title, body, actions) {
@@ -206,10 +211,12 @@
     const close = () => {
       back.remove();
       document.removeEventListener("keydown", onKey);
+      S.modals.delete(close);
     };
     const onKey = (ev) => {
       if (ev.key === "Escape") close();
     };
+    S.modals.add(close);
     document.addEventListener("keydown", onKey);
     back.addEventListener("mousedown", (ev) => {
       if (ev.target === back) close();
@@ -229,7 +236,7 @@
               fail(e);
             }
           },
-          a.primary ? "primary" : ""
+          [a.primary ? "primary" : "", a.left ? "left" : ""].join(" ").trim()
         )
       );
     }
@@ -244,8 +251,30 @@
     modal(title, h("p", null, text), [{ label: "Cancel" }, { label: label || "Confirm", primary: true, run: run }]);
   }
 
+  function pageHead(main, title, lead, ...actions) {
+    const acts = actions.flat().filter(Boolean);
+    main.append(h("div", { class: "page-head" }, h("div", { class: "text" }, h("h1", null, title), lead ? h("p", { class: "lead" }, lead) : null), acts.length ? h("div", { class: "page-actions" }, acts) : null));
+  }
+
+  function go(hash) {
+    return () => {
+      location.hash = hash;
+    };
+  }
+
+  function searchBox(box, placeholder) {
+    const q = h("input", { type: "search", placeholder: placeholder || "Filter", "aria-label": placeholder || "Filter", autocomplete: "off" });
+    const apply = () => {
+      const f = q.value.trim().toLowerCase();
+      for (const tr of box.querySelectorAll("tbody tr")) tr.style.display = !f || tr.textContent.toLowerCase().includes(f) ? "" : "none";
+    };
+    q.addEventListener("input", apply);
+    return { el: q, apply: apply };
+  }
+
   function field(label, input, hint) {
-    return [h("label", { for: input.id || undefined }, label), h("div", null, input, hint ? h("div", { class: "muted small" }, hint) : null)];
+    const target = input.id ? input : input.querySelector && input.querySelector("input,select,textarea");
+    return [h("label", { for: target && target.id ? target.id : undefined }, label), h("div", null, input, hint ? h("div", { class: "hint" }, hint) : null)];
   }
 
   function input(id, value, attrs) {
@@ -321,6 +350,11 @@
     theme();
   }
 
+  function alertName(type) {
+    const names = { "b-a-o-tbl": "911 alert", "b-a-o-pan": "Ring the bell", "b-a-o-opn": "Troops in contact", "b-a-o-c": "Custom alert", "b-a-g": "Geofence breach" };
+    return names[type] || type;
+  }
+
   function isLive(v) {
     return !v.stale || new Date(v.stale).getTime() > Date.now();
   }
@@ -381,6 +415,7 @@
     S.ws = ws;
     ws.onopen = () => {
       S.wsDelay = 1000;
+      setLive(true);
       refreshEvents();
     };
     ws.onmessage = (ev) => {
@@ -390,6 +425,7 @@
     };
     ws.onclose = () => {
       S.ws = null;
+      setLive(false);
       if (!S.me) return;
       setTimeout(connectStream, S.wsDelay);
       S.wsDelay = Math.min(S.wsDelay * 2, 30000);
@@ -406,72 +442,189 @@
   }
 
   const PAGES = [
-    { id: "overview", title: "Overview", render: pageOverview },
-    { id: "connect", title: "Connect a device", render: pageConnect },
-    { id: "map", title: "Map", render: pageMap },
-    { id: "chat", title: "Chat", render: pageChat },
-    { id: "clients", title: "Connected clients", render: pageClients },
-    { id: "devices", title: "Devices", render: pageDevices },
-    { sep: true },
-    { id: "files", title: "Files", render: pageFiles },
-    { id: "missions", title: "Missions", render: pageMissions },
-    { id: "video", title: "Video feeds", render: pageVideo },
-    { sep: true, admin: true },
-    { id: "users", title: "Users", admin: true, render: pageUsers },
-    { id: "groups", title: "Groups", admin: true, render: pageGroups },
-    { id: "links", title: "Server links", admin: true, render: pageLinks },
-    { id: "plugins", title: "Plugins and profiles", admin: true, render: pagePlugins },
-    { id: "settings", title: "Settings", admin: true, render: pageSettings },
-    { id: "logs", title: "Logs", admin: true, render: pageLogs },
-    { sep: true },
-    { id: "tokens", title: "API tokens", render: pageTokens },
-    { id: "account", title: "My account", render: pageAccount },
+    { group: "Operations" },
+    { id: "overview", title: "Overview", icon: "overview", render: pageOverview, keys: "home status dashboard" },
+    { id: "map", title: "Map", icon: "map", render: pageMap, keys: "markers positions tracks" },
+    { id: "chat", title: "Chat", icon: "chat", render: pageChat, keys: "messages" },
+    { group: "Devices" },
+    { id: "connect", title: "Connect a device", icon: "connect", render: pageConnect, keys: "qr code enroll package atak itak wintak" },
+    { id: "clients", title: "Online now", icon: "online", render: pageClients, count: true, keys: "connected clients disconnect" },
+    { id: "devices", title: "All devices", icon: "devices", render: pageDevices, keys: "history forget" },
+    { group: "Shared data" },
+    { id: "files", title: "Files", icon: "files", render: pageFiles, keys: "data packages upload" },
+    { id: "missions", title: "Missions", icon: "missions", render: pageMissions, keys: "data sync" },
+    { id: "video", title: "Video feeds", icon: "video", render: pageVideo, keys: "rtsp camera" },
+    { group: "Administration", admin: true },
+    { id: "users", title: "Users", icon: "users", admin: true, render: pageUsers, keys: "accounts passwords certificates" },
+    { id: "groups", title: "Groups", icon: "groups", admin: true, render: pageGroups, keys: "channels teams" },
+    { id: "links", title: "Server links", icon: "links", admin: true, render: pageLinks, keys: "federation peers tak server opentakserver freetakserver" },
+    { id: "plugins", title: "Plugins and profiles", icon: "plugins", admin: true, render: pagePlugins, keys: "apk update server preferences" },
+    { id: "settings", title: "Settings", icon: "settings", admin: true, render: pageSettings, keys: "configuration" },
+    { id: "logs", title: "Logs", icon: "logs", admin: true, render: pageLogs, keys: "errors" },
+    { group: "Account" },
+    { id: "tokens", title: "API tokens", icon: "tokens", render: pageTokens, keys: "bearer scripts" },
+    { id: "account", title: "My account", icon: "account", render: pageAccount, keys: "password theme dark light sign out" },
   ];
 
   let alertEl = null;
+  let countEl = null;
+  let countTimer = null;
+
+  let liveEl = null;
+
+  function setLive(on) {
+    if (!liveEl) return;
+    liveEl.classList.toggle("off", !on);
+    liveEl.title = on ? "Receiving live updates from the server" : "Live updates paused. Reconnecting to the server.";
+    clear(liveEl).append(h("span", { class: "dot", "aria-hidden": "true" }), h("span", { class: "lt" }, on ? "Live" : "Reconnecting"));
+  }
 
   function updateAlert() {
     if (!alertEl) return;
     const n = emergencies().length;
     alertEl.style.display = n ? "" : "none";
-    alertEl.textContent = n === 1 ? "1 EMERGENCY" : n + " EMERGENCIES";
+    clear(alertEl).append(icon("alert", 16), n === 1 ? "1 emergency" : n + " emergencies");
   }
+
+  async function updateCount() {
+    if (!countEl || !S.me) return;
+    try {
+      const list = await api("GET", "/api/clients");
+      countEl.textContent = String(list.filter((c) => !c.internal).length);
+    } catch (e) {}
+  }
+
+  function openPalette() {
+    if (document.querySelector(".palette")) return;
+    const items = [];
+    for (const p of PAGES) {
+      if (!p.id || (p.admin && !S.me.admin)) continue;
+      items.push({ title: p.title, where: "Page", hash: "#/" + p.id, keys: p.keys || "" });
+    }
+    if (S.me.admin) for (const s of SETTINGS_SECTIONS) items.push({ title: s.title, where: "Settings", hash: "#/settings/" + s.id, keys: s.keys || "" });
+    const q = h("input", { type: "text", placeholder: "Go to a page or setting", "aria-label": "Go to a page or setting", autocomplete: "off", spellcheck: "false" });
+    const list = h("ul", { role: "listbox" });
+    const back = h("div", { class: "modal-back" });
+    const box = h("div", { class: "modal palette", role: "dialog", "aria-modal": "true", "aria-label": "Go to" }, q, list);
+    let shown = [];
+    let at = 0;
+    const close = () => {
+      back.remove();
+      document.removeEventListener("keydown", onKey, true);
+      S.modals.delete(close);
+    };
+    S.modals.add(close);
+    const pick = (it) => {
+      close();
+      if (it) location.hash = it.hash;
+    };
+    const draw = () => {
+      const f = q.value.trim().toLowerCase();
+      shown = items.filter((it) => !f || (it.title + " " + it.where + " " + it.keys).toLowerCase().includes(f));
+      shown.sort((a, b) => Number(!a.title.toLowerCase().startsWith(f)) - Number(!b.title.toLowerCase().startsWith(f)));
+      at = Math.min(at, Math.max(0, shown.length - 1));
+      clear(list);
+      if (!shown.length) list.append(h("li", { class: "none" }, "Nothing matches \"" + q.value.trim() + "\"."));
+      shown.forEach((it, i) => list.append(h("li", { class: i === at ? "on" : "", role: "option", onmousedown: (ev) => (ev.preventDefault(), pick(it)) }, h("span", null, it.title), h("span", { class: "where" }, it.where))));
+      const on = list.querySelector(".on");
+      if (on) on.scrollIntoView({ block: "nearest" });
+    };
+    const onKey = (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close();
+      } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (shown.length) at = (at + (ev.key === "ArrowDown" ? 1 : shown.length - 1)) % shown.length;
+        draw();
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        pick(shown[at]);
+      }
+    };
+    q.addEventListener("input", () => {
+      at = 0;
+      draw();
+    });
+    document.addEventListener("keydown", onKey, true);
+    back.addEventListener("mousedown", (ev) => {
+      if (ev.target === back) close();
+    });
+    back.append(box);
+    document.body.append(back);
+    draw();
+    q.focus();
+  }
+
+  document.addEventListener("keydown", (ev) => {
+    if (!S.me || !document.getElementById("main")) return;
+    const typing = ev.target.closest && ev.target.closest("input,textarea,select,[contenteditable]");
+    if ((ev.key === "k" && (ev.ctrlKey || ev.metaKey)) || (ev.key === "/" && !typing && !ev.ctrlKey && !ev.metaKey && !ev.altKey)) {
+      ev.preventDefault();
+      openPalette();
+    }
+  });
 
   function layout() {
     clear(root);
-    const side = h("nav", { class: "side", "aria-label": "Sections" });
+    const side = h("nav", { class: "side", id: "side", "aria-label": "Sections" });
     alertEl = h("a", { class: "alert", href: "#/map", style: "display:none" });
+    liveEl = h("span", { class: "live", role: "status" });
+    setLive(!!(S.ws && S.ws.readyState === 1));
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    const menuBtn = btn("Menu", () => {
+      const open = side.classList.toggle("open");
+      menuBtn.setAttribute("aria-expanded", String(open));
+    }, "menu", "menu");
+    menuBtn.setAttribute("aria-controls", "side");
+    menuBtn.setAttribute("aria-label", "Menu");
+    menuBtn.setAttribute("aria-expanded", "false");
+    const serverName = S.me.server && S.me.server !== "GolangTAK" ? S.me.server : "";
     const top = h(
       "header",
       { class: "top" },
-      btn("Menu", () => side.classList.toggle("open"), "menu"),
-      h("span", { class: "brand" }, "GolangTAK"),
-      h("span", { class: "server" }, S.me.server || ""),
+      h("a", { class: "skip", href: "#main", onclick: (ev) => (ev.preventDefault(), document.getElementById("main").focus()) }, "Skip to content"),
+      menuBtn,
+      h("a", { class: "brand", href: "#/overview" }, "GolangTAK"),
+      serverName ? h("span", { class: "server" }, serverName) : null,
       h("span", { class: "spacer" }),
       alertEl,
-      h("span", { class: "who" }, S.me.user + (S.me.admin ? " (admin)" : "")),
-      btn("Sign out", signOut)
+      liveEl,
+      h("button", { type: "button", class: "find", onclick: openPalette, "aria-label": "Go to a page or setting" }, h("span", { class: "fl" }, icon("search", 16), h("span", { class: "label" }, "Search pages and settings"), h("span", { class: "short" }, "Search")), h("kbd", null, mac ? "⌘K" : "Ctrl K")),
+      h("a", { class: "who", href: "#/account", title: "My account" }, S.me.user + (S.me.admin ? " (administrator)" : "")),
+      btn("Sign out", signOut, "signout", "signout")
     );
+    countEl = null;
     for (const p of PAGES) {
       if (p.admin && !S.me.admin) continue;
-      if (p.sep) {
-        side.append(h("div", { class: "sep" }));
+      if (p.group) {
+        side.append(h("div", { class: "group" }, p.group));
         continue;
       }
-      side.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => side.classList.remove("open") }, p.title));
+      const count = p.count ? h("span", { class: "count", title: "Connected now" }) : null;
+      if (count) countEl = count;
+      side.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => side.classList.remove("open") }, icon(p.icon), h("span", { class: "t" }, p.title), count));
     }
-    const main = h("main", { id: "main" });
+    const main = h("main", { id: "main", tabindex: "-1", onmousedown: () => {
+      if (side.classList.contains("open")) {
+        side.classList.remove("open");
+        menuBtn.setAttribute("aria-expanded", "false");
+      }
+    } });
     root.append(top, h("div", { class: "layout" }, side, main));
     updateAlert();
+    clearInterval(countTimer);
+    countTimer = setInterval(updateCount, 10000);
+    updateCount();
   }
 
   async function route() {
     if (!S.me) return;
     const hash = location.hash.replace(/^#\/?/, "");
     const [id, ...rest] = hash.split("/");
-    let page = PAGES.find((p) => p.id === id && !p.sep && (!p.admin || S.me.admin));
+    let page = PAGES.find((p) => p.id && p.id === id && (!p.admin || S.me.admin));
     if (!page) {
-      page = PAGES[0];
+      page = PAGES.find((p) => p.id);
       if (id) {
         location.replace("#/" + page.id);
         return;
@@ -484,11 +637,17 @@
       S.cleanup = null;
     }
     S.listeners.clear();
+    for (const close of Array.from(S.modals)) close();
     if (!document.getElementById("main")) layout();
     const side = document.querySelector(".side");
     if (side) side.classList.remove("open");
-    for (const a of document.querySelectorAll(".side a")) a.classList.toggle("active", a.dataset.page === page.id);
+    for (const a of document.querySelectorAll(".side a")) {
+      a.classList.toggle("active", a.dataset.page === page.id);
+      if (a.dataset.page === page.id) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    }
     const main = clear(document.getElementById("main"));
+    if (S.page !== page.id) window.scrollTo(0, 0);
     S.page = page.id;
     document.title = page.title + " - GolangTAK";
     try {
@@ -501,6 +660,7 @@
 
   function showLogin(message) {
     disconnectStream();
+    clearInterval(countTimer);
     S.me = null;
     S.csrf = "";
     if (S.cleanup) {
@@ -515,6 +675,7 @@
       "form",
       { class: "login", autocomplete: "on" },
       h("h1", null, "GolangTAK"),
+      h("p", { class: "lead" }, "Sign in to manage this server."),
       h("label", { for: "u" }, "User name"),
       h("input", { id: "u", name: "username", autocomplete: "username", required: true, autocapitalize: "none", spellcheck: "false" }),
       h("label", { for: "p" }, "Password"),
@@ -533,7 +694,7 @@
         err.textContent = e.message === "invalid credentials" ? "Wrong user name or password." : e.message;
       }
     });
-    root.append(form);
+    root.append(h("div", { class: "login-wrap" }, form));
     form.querySelector("#u").focus();
   }
 
@@ -559,37 +720,115 @@
   }
 
   async function pageOverview(main) {
-    const st = await api("GET", "/api/status");
-    main.append(h("h1", null, "Overview"), h("p", { class: "lead" }, st.name + " is running. Version " + st.version + ", up " + fmtDuration(st.uptimeSeconds) + "."));
-    if (S.me.initialPassword) {
-      main.append(h("div", { class: "notice inv" }, "You are signed in with the generated administrator password. ", h("a", { href: "#/account" }, "Change it now"), "."));
+    const [st, em, clients] = await Promise.all([api("GET", "/api/status"), api("GET", "/api/emergencies").catch(() => []), api("GET", "/api/clients").catch(() => [])]);
+    const online = clients.filter((c) => !c.internal);
+    pageHead(main, "Overview", st.name + " has been running for " + fmtDuration(st.uptimeSeconds) + ". Version " + st.version + ".", btn("Connect a device", go("#/connect"), "primary", "connect"), btn("Open map", go("#/map"), "", "map"));
+
+    if (S.me.admin) {
+      const loopback = !st.address || /^(127\.|localhost$|::1$)/.test(st.address);
+      const steps = [
+        { done: !S.me.initialPassword, what: "Change the generated administrator password", hash: "#/account", action: "Change password" },
+        { done: !loopback, what: "Set the address devices use to reach this server (now " + (st.address || "not set") + ")", hash: "#/settings/general", action: "Set address" },
+        { done: st.users > 1, what: "Add a user for each person or team", hash: "#/users", action: "Add users" },
+        { done: st.devices > 0, what: "Connect the first device", hash: "#/connect", action: "Connect a device" },
+      ];
+      const left = steps.filter((s) => !s.done).length;
+      if (left) {
+        main.append(
+          h(
+            "div",
+            { class: "checklist" },
+            h("div", { class: "head" }, "Finish setting up", h("span", null, steps.length - left + " of " + steps.length + " done")),
+            h(
+              "ol",
+              null,
+              steps.map((s) => h("li", { class: s.done ? "done" : "" }, h("span", { class: "box", "aria-hidden": "true" }), h("span", { class: "what" }, s.what, h("span", { class: "skip" }, s.done ? " (done)" : " (to do)")), s.done ? null : h("a", { class: "button small", href: s.hash }, s.action)))
+            )
+          )
+        );
+      }
     }
-    const cards = [
-      ["Connected", st.clients],
-      ["Users", st.users],
-      ["Devices", st.devices],
-      ["Missions", st.missions],
-      ["Files", st.files],
-      ["Events", st.events],
-      ["Emergencies", st.emergencies],
-      ["Memory", fmtBytes(st.memoryBytes)],
-    ];
-    main.append(h("div", { class: "cards" }, cards.map(([l, n]) => h("div", { class: "card" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l)))));
-    const kinds = Object.entries(st.clientsByKind || {}).map(([k, v]) => k + " " + v).join(", ");
+
+    const stat = (n, label, hash, ic, inv) => h(hash ? "a" : "div", { class: "stat" + (inv ? " inv" : ""), href: hash || undefined }, h("div", { class: "sh" }, h("span", { class: "n" }, n), icon(ic, 20)), h("div", { class: "l" }, label));
     main.append(
-      h("h2", null, "Server"),
-      kv([
-        ["Name", st.name],
-        ["Address", st.address],
-        ["Certificate names", joined(st.serverNames)],
-        ["Host", st.hostname + " (" + st.os + "/" + st.arch + ", " + st.cpus + " CPU)"],
-        ["Started", fmtTime(st.started)],
-        ["Clients by type", kinds || "none"],
-        ["Data directory", h("span", { class: "mono" }, st.dataDir)],
-        ["Stored files", fmtBytes(st.filesBytes) + " in " + st.files + " files"],
-        ["History", fmtBytes(st.historyBytes) + " over " + st.historyDays + " days"],
-      ])
+      h(
+        "div",
+        { class: "stats" },
+        stat(online.length, "Online now", "#/clients", "online"),
+        stat(st.devices, "Devices seen", "#/devices", "devices"),
+        stat(em.length, em.length === 1 ? "Emergency" : "Emergencies", "#/map", "alert", em.length > 0),
+        S.me.admin ? stat(st.users, st.users === 1 ? "User" : "Users", "#/users", "users") : null,
+        stat(st.missions, st.missions === 1 ? "Mission" : "Missions", "#/missions", "missions"),
+        stat(st.files, st.files === 1 ? "File" : "Files", "#/files", "files")
+      )
     );
+
+    online.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
+    const name = (c) => (c.info && c.info.callsign) || c.name || c.remote;
+    main.append(
+      h(
+        "div",
+        { class: "cols" },
+        h(
+          "section",
+          null,
+          h("h2", null, "Online now", online.length > 8 ? h("a", { class: "aside", href: "#/clients" }, "View all " + online.length) : null),
+          online.length
+            ? table(
+                [
+                  { title: "Callsign", render: (r) => h("b", null, name(r)) },
+                  { title: "Software", render: (r) => (r.info ? [r.info.platform, r.info.version].filter(Boolean).join(" ") : "") || r.kind },
+                  { title: "Last seen", cls: "nowrap", render: (r) => fmtAgo(r.lastSeen) },
+                ],
+                online.slice(0, 8),
+                "",
+                () => (location.hash = "#/clients")
+              )
+            : h("div", { class: "empty" }, "No devices are connected. ", h("a", { href: "#/connect" }, "Connect a device"), " to get started.")
+        ),
+        h(
+          "section",
+          null,
+          h("h2", null, "Active emergencies"),
+          table(
+            [
+              { title: "Callsign", render: (r) => h("b", null, r.callsign || "-") },
+              { title: "Alert", render: (r) => alertName(r.type) },
+              { title: "Position", render: (r) => h("span", { class: "mono small" }, fmtCoord(r.lat, r.lon)) },
+              { title: "Since", cls: "nowrap", render: (r) => fmtAgo(r.time) },
+            ],
+            em,
+            "No active emergencies.",
+            () => (location.hash = "#/map")
+          )
+        )
+      )
+    );
+
+    const links = [];
+    for (const p of st.peers || []) links.push({ name: p.name, kind: "Server link", state: p.state, detail: p.error || p.url, hash: "#/links" });
+    if (st.federation && st.federation.enabled) links.push({ name: "Federation", kind: "TAK Server federation", state: "listening", detail: "port " + (st.ports || {}).federation, hash: "#/links" });
+    const mesh = st.meshtastic || {};
+    if (mesh.enabled) {
+      const state = mesh.brokerError || mesh.upstreamError ? "problem" : "running";
+      links.push({ name: "Meshtastic", kind: "LoRa mesh", state: state, detail: (mesh.nodes || []).length + " nodes heard, " + mesh.packetsIn + " packets in, " + mesh.packetsOut + " out" + (mesh.brokerError ? ". " + mesh.brokerError : "") + (mesh.upstreamError ? ". " + mesh.upstreamError : ""), hash: "#/settings/meshtastic" });
+    }
+    for (const f of (st.feeds || []).filter((x) => x.enabled)) links.push({ name: f.name === "adsb" ? "ADS-B aircraft" : "AIS ships", kind: "Data feed", state: f.error ? "problem" : "running", detail: f.error || f.items + " items, updated " + fmtAgo(f.lastOk), hash: "#/settings/feeds" });
+    main.append(
+      h("h2", null, "Links and integrations"),
+      table(
+        [
+          { title: "Name", render: (r) => h("b", null, r.name) },
+          { title: "Kind", key: "kind" },
+          { title: "State", render: (r) => h("span", { class: "badge" + (r.state === "connected" || r.state === "running" || r.state === "listening" ? "" : " inv") }, r.state || "-") },
+          { title: "Detail", render: (r) => h("span", { class: "small" }, r.detail || "-") },
+        ],
+        links,
+        S.me.admin ? h("span", null, "Nothing linked yet. Connect other servers under ", h("a", { href: "#/links" }, "Server links"), ", or turn on Meshtastic and data feeds in ", h("a", { href: "#/settings/meshtastic" }, "Settings"), ".") : "No links to other servers.",
+        S.me.admin ? (r) => (location.hash = r.hash) : null
+      )
+    );
+
     const p = st.ports || {};
     const portRows = [
       ["TAK SSL (TLS)", p.tls, "ATAK, WinTAK, iTAK, TAK Aware with certificates"],
@@ -602,39 +841,44 @@
       ["WebSocket CoT", p.websocket, "Browser and TAK-compatible software"],
       ["FreeTAKServer API", p.api, "REST API compatible with FreeTAKServer"],
       ["Federation", st.federation && st.federation.enabled ? p.federation : 0, "Server-to-server"],
+      ["Meshtastic MQTT", mesh.enabled ? mesh.brokerPort : 0, "Meshtastic gateway nodes"],
     ].filter((r) => r[1] > 0);
-    main.append(h("h2", null, "Ports"), table([{ title: "Service", render: (r) => r[0] }, { title: "Port", render: (r) => h("span", { class: "mono" }, r[1]) }, { title: "Used by", render: (r) => r[2] }], portRows));
+    const kinds = Object.entries(st.clientsByKind || {}).map(([k, v]) => k + " " + v).join(", ");
+    const more = (title, ...body) => h("details", { class: "more" }, h("summary", null, title), h("div", { class: "inner" }, body));
     main.append(
-      h("h2", null, "Certificates"),
-      kv([
-        ["Certificate authority", st.caSubject],
-        ["Fingerprint (SHA-256)", h("span", { class: "mono break" }, st.caFingerprint)],
-        ["Authority valid until", fmtDate(st.caExpires)],
-        ["Server certificate valid until", fmtDate(st.serverCertExpires)],
-      ])
-    );
-    const mesh = st.meshtastic || {};
-    if (mesh.enabled) {
-      main.append(
-        h("h2", null, "Meshtastic"),
+      more("Ports", table([{ title: "Service", render: (r) => r[0] }, { title: "Port", render: (r) => h("span", { class: "mono" }, r[1]) }, { title: "Used by", render: (r) => r[2] }], portRows)),
+      more(
+        "Server details",
         kv([
-          ["Gateway node", h("span", { class: "mono" }, mesh.gatewayId || "-")],
-          ["Built-in broker", mesh.brokerPort ? "port " + mesh.brokerPort + ", " + mesh.brokerClients + " node(s) connected" + (mesh.brokerError ? " (" + mesh.brokerError + ")" : "") : "off"],
-          mesh.upstream ? ["Upstream", mesh.upstream + ": " + (mesh.upstreamState || "-") + (mesh.upstreamError ? " (" + mesh.upstreamError + ")" : "")] : null,
-          ["Packets", mesh.packetsIn + " received, " + mesh.packetsOut + " sent, " + mesh.undecryptable + " not readable"],
-        ]),
-        table([{ title: "Node", render: (r) => r.callsign || r.name || r.id }, { title: "ID", render: (r) => h("span", { class: "mono small" }, r.id) }, { title: "Position", render: (r) => h("span", { class: "mono small" }, fmtCoord(r.lat, r.lon)) }, { title: "Battery", render: (r) => (r.battery ? r.battery + "%" : "-") }, { title: "Last heard", render: (r) => fmtAgo(r.lastSeen) }], mesh.nodes || [], "No mesh nodes heard yet.")
-      );
-    }
-    const feeds = (st.feeds || []).filter((f) => f.enabled);
-    if (feeds.length) {
-      main.append(h("h2", null, "Data feeds"), table([{ title: "Feed", render: (r) => (r.name === "adsb" ? "ADS-B aircraft" : "AIS ships") }, { title: "Items", key: "items" }, { title: "Last update", render: (r) => fmtAgo(r.lastOk) }, { title: "Problem", render: (r) => r.error || "-" }], feeds));
-    }
-    if (st.peers && st.peers.length) {
-      main.append(h("h2", null, "Server links"), table([{ title: "Name", key: "name" }, { title: "URL", render: (r) => h("span", { class: "mono" }, r.url) }, { title: "State", render: (r) => r.state + (r.error ? " (" + r.error + ")" : "") }], st.peers));
-    }
-    const em = await api("GET", "/api/emergencies");
-    main.append(h("h2", null, "Active emergencies"), table([{ title: "Callsign", key: "callsign" }, { title: "Type", key: "type" }, { title: "Position", render: (r) => fmtCoord(r.lat, r.lon) }, { title: "Time", render: (r) => fmtTime(r.time) }], em, "No active emergencies."));
+          ["Name", st.name],
+          ["Address", st.address],
+          ["Certificate names", joined(st.serverNames)],
+          ["Host", st.hostname + " (" + st.os + "/" + st.arch + ", " + st.cpus + " CPU)"],
+          ["Started", fmtTime(st.started)],
+          ["Connections by type", kinds || "none"],
+          ["Events handled", String(st.events)],
+          ["Memory in use", fmtBytes(st.memoryBytes)],
+          ["Data directory", h("span", { class: "mono" }, st.dataDir)],
+          ["Stored files", fmtBytes(st.filesBytes) + " in " + st.files + " files"],
+          ["History", fmtBytes(st.historyBytes) + " over " + st.historyDays + " days"],
+        ])
+      ),
+      more(
+        "Certificates",
+        kv([
+          ["Certificate authority", st.caSubject],
+          ["Fingerprint (SHA-256)", h("span", { class: "mono break" }, st.caFingerprint)],
+          ["Authority valid until", fmtDate(st.caExpires)],
+          ["Server certificate valid until", fmtDate(st.serverCertExpires)],
+        ])
+      ),
+      mesh.enabled
+        ? more(
+            "Meshtastic nodes",
+            table([{ title: "Node", render: (r) => r.callsign || r.name || r.id }, { title: "ID", render: (r) => h("span", { class: "mono small" }, r.id) }, { title: "Position", render: (r) => h("span", { class: "mono small" }, fmtCoord(r.lat, r.lon)) }, { title: "Battery", render: (r) => (r.battery ? r.battery + "%" : "-") }, { title: "Last heard", render: (r) => fmtAgo(r.lastSeen) }], mesh.nodes || [], "No mesh nodes heard yet.")
+          )
+        : null
+    );
   }
 
   async function pageConnect(main) {
@@ -646,7 +890,7 @@
       } catch (e) {}
     }
     const hosts = Array.from(new Set([info.host].concat(info.hosts || []))).filter(Boolean);
-    main.append(h("h1", null, "Connect a device"), h("p", { class: "lead" }, "Choose the address devices use to reach this server, then scan a QR code, download a connection package, or enter the settings by hand."));
+    pageHead(main, "Connect a device", "Pick the address and account, then scan a QR code on the device, copy a connection package to it, or enter the settings by hand.");
     const hostSel = select("host", hosts, info.host);
     const userSel = select("cuser", users.map((u) => u.name), users.some((u) => u.name === S.me.user) ? S.me.user : users[0] && users[0].name);
     main.append(h("form", { class: "inline", onsubmit: (e) => e.preventDefault() }, h("label", { for: "host" }, "Server address"), hostSel, S.me.admin ? [h("label", { for: "cuser" }, "Account"), userSel] : null));
@@ -670,7 +914,7 @@
           } catch (e) {
             fail(e);
           }
-        }, "primary")
+        }, "primary", "connect")
       );
       const linkBox = h("div", { class: "qr" }, h("h3", null, "Download link QR code"), h("p", { class: "muted small" }, "A single-use link to a complete connection package with a certificate for " + user + ". Scan it with ATAK, or open it on the device."));
       const linkOut = h("div");
@@ -685,10 +929,10 @@
           } catch (e) {
             fail(e);
           }
-        }, "primary")
+        }, "primary", "connect")
       );
       body.append(
-        h("h2", null, "QR codes"),
+        h("h2", null, "Scan a QR code"),
         h(
           "div",
           { class: "qr-grid" },
@@ -699,18 +943,18 @@
       );
       const pkg = (type) => "/api/package?type=" + type + "&user=" + enc(user) + "&host=" + enc(host);
       body.append(
-        h("h2", null, "Connection packages"),
+        h("h2", null, "Or copy a connection package"),
         h("p", null, "Copy a package to the device and import it (ATAK: Import, Local SD; iTAK: Settings, Network, Servers, Upload server package; WinTAK: Import)."),
         h(
           "div",
           { class: "toolbar" },
-          h("a", { class: "button primary", href: pkg("cert") }, "Certificate package for " + user),
-          h("a", { class: "button", href: pkg("enroll") }, "Enrollment package (signs in with password)"),
-          info.ports.tcp || info.ports.tcpAlt ? h("a", { class: "button", href: pkg("tcp") }, "TCP package (unencrypted)") : null
+          linkBtn("Certificate package for " + user, pkg("cert"), "primary", "download"),
+          linkBtn("Enrollment package (signs in with password)", pkg("enroll"), "", "download"),
+          info.ports.tcp || info.ports.tcpAlt ? linkBtn("TCP package (unencrypted)", pkg("tcp"), "", "download") : null
         )
       );
       body.append(
-        h("h2", null, "Manual setup"),
+        h("h2", null, "Or enter the settings by hand"),
         kv([
           ["Address", h("span", { class: "mono" }, host)],
           ["SSL port", h("span", { class: "mono" }, tls + "  (protocol SSL / TLS)")],
@@ -730,7 +974,7 @@
   }
 
   async function pageMap(main) {
-    main.append(h("h1", null, "Map"));
+    pageHead(main, "Map", "Live positions, markers and alerts from every connected device.");
     const coords = h("div", { class: "map-coords" }, "");
     const infoBox = h("div", { class: "map-info" });
     const canvas = h("canvas", { class: "gray" });
@@ -752,7 +996,7 @@
       h(
         "div",
         { class: "toolbar" },
-        btn("Show all", () => fitAll(true)),
+        btn("Show all", () => fitAll(true), "", "search"),
         addBtn,
         checkbox("tracks", false, "Tracks (last hour)"),
         checkbox("color", !gray, "Color map"),
@@ -901,14 +1145,16 @@
   }
 
   async function pageChat(main, params) {
-    main.append(h("h1", null, "Chat"), h("p", { class: "lead" }, "Messages from the last 24 hours. Messages you send appear on TAK devices under the room or contact you choose."));
+    pageHead(main, "Chat", "Messages from the last 24 hours. What you send appears on TAK devices in the room or contact you choose.");
     const log = h("div", { class: "chat-log", "aria-live": "polite" });
     const seen = new Set();
     const add = (v) => {
       if (!v.chat || seen.has(v.uid)) return;
       seen.add(v.uid);
+      const none = log.querySelector(".none");
+      if (none) none.remove();
       const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
-      log.append(h("div", { class: "msg" }, h("div", { class: "meta" }, fmtTime(v.time) + "  " + (v.callsign || "?") + " to " + (v.to || "All Chat Rooms")), h("div", { class: "body" }, v.chat)));
+      log.append(h("div", { class: "msg" }, h("div", { class: "meta" }, h("b", null, v.callsign || "Unknown"), " to " + (v.to || "All Chat Rooms") + ", " + fmtTime(v.time)), h("div", { class: "body" }, v.chat)));
       if (atBottom) log.scrollTop = log.scrollHeight;
     };
     let history = [];
@@ -928,8 +1174,8 @@
       if (![...to.options].some((o) => o.value === params[0])) to.append(h("option", { value: params[0] }, params[0]));
       to.value = params[0];
     }
-    const msg = h("input", { id: "msg", placeholder: "Message", autocomplete: "off", style: "flex:1;min-width:200px" });
-    const form = h("form", { class: "inline" }, h("label", { for: "to" }, "To"), to, msg, h("button", { type: "submit", class: "primary" }, "Send"));
+    const msg = h("input", { id: "msg", placeholder: "Write a message", autocomplete: "off" });
+    const form = h("form", { class: "chat-form" }, h("label", { for: "to", class: "skip" }, "Send to"), to, h("label", { for: "msg", class: "skip" }, "Message"), msg, h("button", { type: "submit", class: "primary" }, icon("send", 16), "Send"));
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const text = msg.value.trim();
@@ -941,6 +1187,7 @@
         fail(e);
       }
     });
+    if (!seen.size) log.append(h("div", { class: "none" }, "No messages in the last 24 hours."));
     main.append(log, form);
     log.scrollTop = log.scrollHeight;
     S.listeners.add((v) => {
@@ -950,9 +1197,10 @@
   }
 
   async function pageClients(main) {
-    main.append(h("h1", null, "Connected clients"), h("p", { class: "lead" }, "Devices and links connected right now. Updates every 5 seconds."));
+    pageHead(main, "Online now", "Devices and server links connected right now. Updates every 5 seconds.", btn("Connect a device", go("#/connect"), "primary", "connect"));
     const box = h("div");
-    main.append(box);
+    const search = searchBox(box, "Filter by callsign, user or address");
+    main.append(h("div", { class: "toolbar" }, search.el), box);
     const load = async () => {
       const list = await api("GET", "/api/clients");
       list.sort((a, b) => ((a.info && a.info.callsign) || a.remote).localeCompare((b.info && b.info.callsign) || b.remote));
@@ -984,9 +1232,10 @@
               : null,
           ].filter(Boolean),
           list,
-          "No clients are connected."
+          h("span", null, "No devices are connected. ", h("a", { href: "#/connect" }, "Connect a device"), ".")
         )
       );
+      search.apply();
     };
     await load();
     const t = setInterval(() => load().catch(() => {}), 5000);
@@ -994,9 +1243,10 @@
   }
 
   async function pageDevices(main) {
-    main.append(h("h1", null, "Devices"), h("p", { class: "lead" }, "Every device that has connected, with its last known position."));
+    pageHead(main, "All devices", "Every device that has connected, with its last known position.");
     const box = h("div");
-    main.append(box);
+    const search = searchBox(box, "Filter by callsign, user or software");
+    main.append(h("div", { class: "toolbar" }, search.el), box);
     const load = async () => {
       const list = await api("GET", "/api/devices");
       list.sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen));
@@ -1026,9 +1276,10 @@
               : null,
           ].filter(Boolean),
           list,
-          "No devices have connected yet."
+          h("span", null, "No devices have connected yet. ", h("a", { href: "#/connect" }, "Connect a device"), ".")
         )
       );
+      search.apply();
     };
     await load();
   }
@@ -1042,9 +1293,9 @@
   }
 
   async function pageFiles(main) {
-    main.append(h("h1", null, "Files"), h("p", { class: "lead" }, "Data packages and files shared with TAK devices (Data Sync and data package server)."));
+    pageHead(main, "Files", "Data packages and files shared with TAK devices through Data Sync and the data package server.");
     const fileInput = h("input", { type: "file", id: "upfile", multiple: true });
-    const groups = input("upgroups", "", { placeholder: "Groups (optional, comma separated)" });
+    const groups = input("upgroups", "", { placeholder: "Groups (optional)" });
     const kw = input("upkw", "", { placeholder: "Keywords (optional)" });
     const box = h("div");
     const upload = async () => {
@@ -1060,7 +1311,8 @@
       fileInput.value = "";
       load().catch(fail);
     };
-    main.append(h("form", { class: "inline", onsubmit: (e) => e.preventDefault() }, fileInput, groups, kw, btn("Upload", upload, "primary")), box);
+    const search = searchBox(box, "Filter files");
+    main.append(h("h2", null, "Upload"), h("form", { class: "inline", onsubmit: (e) => e.preventDefault() }, fileInput, groups, kw, btn("Upload", upload, "primary", "upload")), h("h2", null, "Shared files"), h("div", { class: "toolbar" }, search.el), box);
     const load = async () => {
       const list = await api("GET", "/api/files");
       list.sort((a, b) => new Date(b.submitted) - new Date(a.submitted));
@@ -1093,6 +1345,7 @@
           "No files yet. Upload one above, or share a data package from a TAK device."
         )
       );
+      search.apply();
     };
     const shareFile = async (r) => {
       const clients = await api("GET", "/api/clients");
@@ -1142,9 +1395,9 @@
 
   async function pageMissions(main, params) {
     if (params[0]) return missionDetail(main, params[0]);
-    main.append(h("h1", null, "Missions"), h("p", { class: "lead" }, "Data Sync missions: shared collections of map items and files that devices subscribe to."));
+    pageHead(main, "Missions", "Data Sync missions: shared collections of map items and files that devices subscribe to.", btn("New mission", () => createMission(), "primary", "plus"));
     const box = h("div");
-    main.append(h("div", { class: "toolbar" }, btn("New mission", () => createMission(), "primary")), box);
+    main.append(box);
     const load = async () => {
       const list = await api("GET", "/api/missions");
       list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -1160,7 +1413,7 @@
             { title: "Created", cls: "nowrap", render: (r) => fmtDate(r.createTime) },
           ],
           list,
-          "No missions yet.",
+          "No missions yet. Create one here or from a TAK device.",
           (r) => (location.hash = "#/missions/" + enc(r.name))
         )
       );
@@ -1195,9 +1448,10 @@
   async function missionDetail(main, name) {
     const m = await api("GET", "/api/missions/" + enc(name));
     main.append(
-      h("p", null, h("a", { href: "#/missions" }, "Missions")),
+      h("p", { class: "crumb" }, h("a", { href: "#/missions" }, "Missions"), " / " + m.name),
       h("h1", null, m.name),
-      h("p", { class: "lead" }, m.description || ""),
+      m.description ? h("p", { class: "lead" }, m.description) : null,
+      h("h2", null, "Details"),
       kv([
         ["Created", fmtTime(m.createTime)],
         ["Creator", m.creatorUid],
@@ -1227,9 +1481,9 @@
   }
 
   async function pageVideo(main) {
-    main.append(h("h1", null, "Video feeds"), h("p", { class: "lead" }, "Video streams listed for TAK devices (RTSP, RTMP, SRT, UDP, HTTP)."));
+    pageHead(main, "Video feeds", "Video streams listed for TAK devices: RTSP, RTMP, SRT, UDP and HTTP.", btn("Add feed", () => addFeed(), "primary", "plus"));
     const box = h("div");
-    main.append(h("div", { class: "toolbar" }, btn("Add feed", () => addFeed(), "primary")), box);
+    main.append(box);
     const load = async () => {
       const list = await api("GET", "/api/video");
       clear(box).append(
@@ -1291,9 +1545,10 @@
   }
 
   async function pageUsers(main) {
-    main.append(h("h1", null, "Users"), h("p", { class: "lead" }, "Accounts for people and devices. Users sign in to TAK clients with their name and password, or with a certificate from a connection package."));
+    pageHead(main, "Users", "Accounts for people and devices. Users sign in to TAK clients with their name and password, or with a certificate from a connection package.", btn("Add user", () => addUser(), "primary", "plus"));
     const box = h("div");
-    main.append(h("div", { class: "toolbar" }, btn("Add user", () => addUser(), "primary")), box);
+    const search = searchBox(box, "Filter users");
+    main.append(h("div", { class: "toolbar" }, search.el), box);
     const load = async () => {
       const users = await api("GET", "/api/users");
       users.sort((a, b) => a.name.localeCompare(b.name));
@@ -1311,13 +1566,14 @@
             {
               title: "",
               cls: "actions",
-              render: (r) => [btn("QR", () => enrollQR(r.name)), h("a", { class: "button", href: "/api/package?type=cert&user=" + enc(r.name) }, "Package"), btn("Edit", () => editUser(r)), btn("Password", () => setPassword(r))],
+              render: (r) => [btn("Enroll QR", () => enrollQR(r.name), "small"), h("a", { class: "button small", href: "/api/package?type=cert&user=" + enc(r.name) }, "Package"), btn("Password", () => setPassword(r), "small"), btn("Edit", () => editUser(r), "small")],
             },
           ],
           users,
           "No users."
         )
       );
+      search.apply();
     };
     const enrollQR = async (name) => {
       try {
@@ -1428,11 +1684,11 @@
   }
 
   async function pageGroups(main) {
-    main.append(h("h1", null, "Groups"), h("p", { class: "lead" }, "Groups (channels) decide who sees whose traffic. Users receive from their receive groups and send to their send groups."));
+    pageHead(main, "Groups", "Groups (channels) decide who sees whose traffic. Users receive from their receive groups and send to their send groups.");
     const box = h("div");
     const name = input("gname", "", { placeholder: "Group name" });
     const desc = input("gdesc", "", { placeholder: "Description" });
-    const form = h("form", { class: "inline" }, name, desc, h("button", { type: "submit", class: "primary" }, "Add group"));
+    const form = h("form", { class: "inline" }, name, desc, h("button", { type: "submit", class: "primary" }, icon("plus", 16), "Add group"));
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       try {
@@ -1443,7 +1699,7 @@
         fail(e);
       }
     });
-    main.append(form, box);
+    main.append(h("h2", null, "Add a group"), form, h("h2", null, "Groups"), box);
     const load = async () => {
       const list = await api("GET", "/api/groups");
       clear(box).append(
@@ -1475,13 +1731,10 @@
   }
 
   async function pageLinks(main) {
-    main.append(
-      h("h1", null, "Server links"),
-      h("p", { class: "lead" }, "Exchange traffic with other servers in both directions: TAK Server, OpenTAKServer, FreeTAKServer, zyrntopo-tak-server, another GolangTAK, or any software that speaks CoT over TCP, TLS, UDP or WebSocket.")
-    );
+    pageHead(main, "Server links", "Exchange traffic in both directions with TAK Server, OpenTAKServer, FreeTAKServer, zyrntopo-tak-server, another GolangTAK, or any software that speaks CoT over TCP, TLS, UDP or WebSocket.", btn("Add link", () => editPeer(null), "primary", "plus"));
     const box = h("div");
     const fedBox = h("div");
-    main.append(h("div", { class: "toolbar" }, btn("Add link", () => editPeer(null), "primary")), box, h("h2", null, "Federation"), fedBox);
+    main.append(h("h2", null, "Links"), box, h("h2", null, "Federation"), fedBox);
     let cfg;
     const save = async (peers) => {
       const r = await api("PUT", "/api/settings", { peers: peers });
@@ -1595,7 +1848,7 @@
   }
 
   async function pagePlugins(main) {
-    main.append(h("h1", null, "Plugins and profiles"), h("p", { class: "lead" }, "Publish ATAK plugins through the update server and push settings and files to devices when they enroll or connect."));
+    pageHead(main, "Plugins and profiles", "Publish ATAK plugins through the update server, and push settings to devices when they enroll or connect.");
     const cfg = await api("GET", "/api/connect");
     const url = "https://" + (cfg.host.includes(":") ? "[" + cfg.host + "]" : cfg.host) + ":" + cfg.ports.https + "/api/packages";
     main.append(h("h2", null, "Update server"), h("p", null, "In ATAK: Settings, Plugins (or Tool Preferences, Package Management), Update Server URL: ", h("span", { class: "mono" }, url)));
@@ -1617,7 +1870,7 @@
           } catch (e) {
             fail(e);
           }
-        }, "primary")
+        }, "primary", "upload")
       ),
       pbox
     );
@@ -1650,7 +1903,7 @@
       );
     };
     const prbox = h("div");
-    main.append(h("h2", null, "Device profile"), h("p", null, "Settings sent to devices as a data package. Choose whether each applies at enrollment, at every connection, or both."), h("div", { class: "toolbar" }, btn("Add setting", () => addPref(), "primary")), prbox);
+    main.append(h("h2", null, "Device profile"), h("p", null, "Settings sent to devices as a data package. Choose whether each applies at enrollment, at every connection, or both."), h("div", { class: "toolbar" }, btn("Add setting", () => addPref(), "primary", "plus")), prbox);
     const loadProfiles = async () => {
       const list = await api("GET", "/api/profiles");
       clear(prbox).append(
@@ -1703,145 +1956,253 @@
     await Promise.all([loadPlugins(), loadProfiles()]);
   }
 
-  async function pageSettings(main) {
+  const SETTINGS_SECTIONS = [
+    { id: "general", title: "General", keys: "name address dns bind listen map tiles log level" },
+    { id: "access", title: "Access and groups", keys: "anonymous unsigned default group strict channels protobuf replay" },
+    { id: "ports", title: "Ports", keys: "tcp ssl tls udp http https enrollment websocket" },
+    { id: "mesh", title: "Mesh and alerts", keys: "multicast sa emergency repeater ttl" },
+    { id: "meshtastic", title: "Meshtastic", keys: "lora mqtt broker radio" },
+    { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
+    { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
+    { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
+    { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload" },
+    { id: "maintenance", title: "Maintenance", keys: "restart renew backup" },
+    { id: "advanced", title: "Advanced (JSON)", keys: "config.json raw" },
+  ];
+
+  async function pageSettings(main, params) {
     const cfg = await api("GET", "/api/settings");
-    main.append(h("h1", null, "Settings"), h("p", { class: "lead" }, "Changes to ports, the bind address, mesh or federation need a restart; the server offers it after saving."));
-    const actions = h(
-      "div",
-      { class: "toolbar" },
-      btn("Restart server", () => confirmAction("Restart", "Restart the server now? Devices reconnect automatically.", "Restart", restart)),
-      btn("Renew server certificate", async () => {
-        try {
-          await api("POST", "/api/certs/server/renew");
-          toast("Server certificate renewed");
-        } catch (e) {
-          fail(e);
-        }
-      }),
-      h("a", { class: "button", href: "/api/backup" }, "Download backup"),
-      h("a", { class: "button", href: "/api/backup?files=1" }, "Backup with files")
-    );
-    main.append(actions);
+    pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
-    const form = h(
-      "form",
-      { class: "grid" },
-      h("h2", { class: "full" }, "General"),
-      field("Server name", input("name", cfg.name)),
-      field("Public address", input("address", cfg.address), "Address devices use. Used in QR codes, packages and the server certificate."),
-      field("Other names", input("extra", (cfg.extraNames || []).join(", ")), "More DNS names or IPs for the server certificate."),
-      field("Listen on", input("bind", cfg.bind, { placeholder: "all addresses" })),
-      field("Map tiles", input("tile", cfg.tileUrl), "Tile URL with {z}, {x}, {y}. Point it at a local tile server for networks without internet."),
-      field("Log level", select("loglevel", ["debug", "info", "warn", "error"], cfg.logLevel)),
-      h("h2", { class: "full" }, "Access"),
-      field("Unsigned clients", checkbox("anon", cfg.allowAnonymous, "Allow plain TCP, UDP and anonymous connections")),
-      field("Default group", input("anongroup", cfg.anonymousGroup)),
-      field("Strict groups", checkbox("strict", cfg.strictGroups, "Never deliver traffic outside a client's groups")),
-      field("Channels", checkbox("channels", cfg.channels, "Let devices choose active groups")),
-      field("TAK protocol", checkbox("proto", cfg.protobuf, "Offer TAK Protocol version 1 (protobuf) to clients")),
-      field("Replay to new clients", select("replay", [["all", "All current items"], ["sa", "Positions only"], ["none", "Nothing"]], cfg.replay)),
-      h("h2", { class: "full" }, "Ports (0 disables)"),
-      field("TAK TCP", n("p_tcp", p.tcp)),
-      field("TAK TCP second port", n("p_tcpalt", p.tcpAlt)),
-      field("TAK SSL", n("p_tls", p.tls)),
-      field("UDP", n("p_udp", p.udp)),
-      field("HTTP", n("p_http", p.http)),
-      field("HTTPS", n("p_https", p.https)),
-      field("Enrollment", n("p_enroll", p.enroll)),
-      field("WebSocket", n("p_ws", p.websocket)),
-      field("FreeTAKServer API", n("p_api", p.api)),
-      h("h2", { class: "full" }, "Mesh (multicast SA)"),
-      field("Receive", checkbox("mesh", m.enabled, "Listen to multicast situational awareness")),
-      field("Send", checkbox("meshsend", m.send, "Repeat server traffic to multicast")),
-      field("Groups", input("meshgroups", (m.groups || []).join(", "))),
-      field("Interface", input("meshif", m.interface, { placeholder: "all" })),
-      field("TTL", n("meshttl", m.ttl)),
-      h("h2", { class: "full" }, "Emergency repeater"),
-      field("Repeat alerts", checkbox("rep", cfg.repeater.enabled, "Resend active emergencies to everyone")),
-      field("Every (seconds)", n("repint", cfg.repeater.intervalSec)),
-      h("h2", { class: "full" }, "Retention (days, 0 keeps forever)"),
-      field("History", n("rhist", r.historyDays)),
-      field("Offline chat", n("rchat", r.chatDays)),
-      field("Files", n("rfile", r.fileDays)),
-      field("Missions", n("rmis", r.missionDays)),
-      h("h2", { class: "full" }, "Limits"),
-      field("Clients", n("lmax", l.maxClients)),
-      field("Clients per address", n("lip", l.maxPerIP)),
-      field("Largest message (bytes)", n("lmsg", l.maxMessageBytes)),
-      field("Largest upload (MB)", n("lup", l.maxUploadMB)),
-      field("Idle timeout (seconds)", n("lidle", l.idleTimeoutSec)),
-      field("Items replayed", n("lrep", l.replayLimit)),
-      h("h2", { class: "full" }, "Directory sign-in (LDAP or Active Directory)"),
-      field("Enabled", checkbox("ld_on", ld.enabled, "Let directory users sign in with their directory password")),
-      field("Server URL", input("ld_url", ld.url, { placeholder: "ldaps://dc.example.org" })),
-      field("StartTLS", checkbox("ld_tls", ld.startTls, "Upgrade ldap:// connections to TLS")),
-      field("Skip certificate check", checkbox("ld_ins", ld.insecure, "Do not verify the directory server certificate")),
-      field("Trusted CA file", input("ld_ca", ld.trustFile), "Path on this server to the directory's CA certificate (PEM)."),
-      field("Service account DN", input("ld_bind", ld.bindDn, { autocomplete: "off" })),
-      field("Service account password", input("ld_bpw", ld.bindPassword, { type: "password", autocomplete: "new-password" })),
-      field("Base DN", input("ld_base", ld.baseDn, { placeholder: "dc=example,dc=org" })),
-      field("User filter", input("ld_filter", ld.userFilter), "{user} is replaced by the sign-in name."),
-      field("User DN template", input("ld_udn", ld.userDn, { placeholder: "uid={user},ou=people,dc=example,dc=org" }), "Optional. Signs in directly without a service account."),
-      field("Group filter", input("ld_gfilter", ld.groupFilter, { placeholder: "(&(objectClass=groupOfNames)(member={dn}))" }), "Optional. Without it the memberOf attribute is used."),
-      field("Group base DN", input("ld_gbase", ld.groupBaseDn)),
-      field("Group prefix", input("ld_gprefix", ld.groupPrefix, { placeholder: "tak_" }), "Only directory groups starting with this become TAK groups (prefix removed)."),
-      field("Administrator group", input("ld_admin", ld.adminGroup)),
-      field("Callsign attribute", input("ld_cs", ld.callsignAttribute)),
-      h("div", { class: "full" }, btn("Test directory sign-in", () => {
-        const f = h("form", { class: "grid" }, field("User name", input("tu", "", { autocomplete: "off" })), field("Password", input("tp", "", { type: "password", autocomplete: "off" })));
-        modal("Test directory sign-in", f, [
-          { label: "Cancel" },
-          {
-            label: "Test",
-            primary: true,
-            run: async () => {
-              const r = await api("POST", "/api/ldap/test", { username: val(f, "tu"), password: f.querySelector("#tp").value, config: ldapFromForm() });
-              toast("Signed in. Groups: " + (r.groups.join(", ") || "none") + (r.admin ? ". Administrator." : ".") + (r.callsign ? " Callsign " + r.callsign + "." : ""));
-              return true;
-            },
-          },
-        ]);
-      })),
-      h("h2", { class: "full" }, "Meshtastic (LoRa mesh radios)"),
-      field("Enabled", checkbox("mt_on", mt.enabled, "Bridge Meshtastic nodes and TAK in both directions")),
-      field("Built-in MQTT port", n("mt_port", mt.brokerPort), "Point each gateway node's MQTT setting at this server and port. 0 turns the built-in broker off."),
-      field("Open broker", checkbox("mt_anon", mt.brokerAnonymous, "Accept nodes without a GolangTAK user name and password")),
-      field("Upstream broker", input("mt_up", mt.upstream, { placeholder: "mqtt://user:password@mqtt.example.org:1883" }), "Optional. Also exchange traffic through another MQTT broker."),
-      field("Topic root", input("mt_root", mt.root), "Must match the nodes' MQTT root topic, for example msh/US or msh/EU_868."),
-      field("Channels", input("mt_ch", (mt.channels || []).map((c) => c.name + "=" + c.key).join(", ")), "name=key pairs. The default channel is LongFast=AQ==."),
-      field("Send TAK traffic to the mesh", checkbox("mt_down", mt.downlink, "Positions and All Chat Rooms messages (nodes need downlink enabled)")),
-      field("Downlink channel", input("mt_dch", mt.downlinkChannel, { placeholder: "first channel" })),
-      field("Seconds between positions", n("mt_int", mt.intervalSec), "Per TAK user, to protect the mesh's airtime."),
-      field("Group", input("mt_group", mt.group, { placeholder: "everyone" }), "Mesh traffic goes to this group; only its traffic goes to the mesh. Empty means everyone."),
-      h("h2", { class: "full" }, "ADS-B aircraft feed"),
-      field("Enabled", checkbox("fa_on", fa.enabled, "Show aircraft from an ADS-B exchange on all devices")),
-      field("Center latitude", input("fa_lat", fa.lat)),
-      field("Center longitude", input("fa_lon", fa.lon)),
-      field("Radius (nautical miles)", n("fa_rad", fa.radiusNm)),
-      field("Update every (seconds)", n("fa_int", fa.intervalSec)),
-      field("Group", input("fa_group", fa.group, { placeholder: "everyone" }), "Only members of this group see the aircraft. Empty sends to everyone."),
-      field("Source URL", input("fa_url", fa.url), "airplanes.live, adsb.lol or any service with the same /point/lat/lon/radius API."),
-      field("API key", input("fa_key", fa.apiKey, { autocomplete: "off" })),
-      h("h2", { class: "full" }, "AIS ship feed (AISHub)"),
-      field("Enabled", checkbox("fs_on", fs.enabled, "Show ships from AISHub on all devices")),
-      field("AISHub user name", input("fs_user", fs.username, { autocomplete: "off" })),
-      field("South", input("fs_s", fs.south)),
-      field("West", input("fs_w", fs.west)),
-      field("North", input("fs_n", fs.north)),
-      field("East", input("fs_e", fs.east)),
-      field("MMSI list", input("fs_mmsi", fs.mmsi), "Optional, comma separated."),
-      field("Update every (seconds)", n("fs_int", fs.intervalSec), "AISHub allows one request per minute."),
-      field("Group", input("fs_group", fs.group, { placeholder: "everyone" })),
-      h("h2", { class: "full" }, "Certificates"),
-      field("Organization", input("corg", c.organization)),
-      field("Unit", input("cunit", c.unit)),
-      field("Package password", input("cpw", c.password), "Password of the .p12 files in connection packages."),
-      field("Client validity (days)", n("cdays", c.clientDays)),
-      field("Server validity (days)", n("sdays", c.serverDays)),
-      h("div", { class: "full" }, h("button", { type: "submit", class: "primary" }, "Save settings"))
-    );
+    const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
+    const content = {
+      general: [
+        "The basics devices and people see.",
+        field("Server name", input("name", cfg.name), "Shown in TAK clients and connection packages."),
+        field("Public address", input("address", cfg.address), "Address devices use. Used in QR codes, packages and the server certificate."),
+        field("Other names", input("extra", (cfg.extraNames || []).join(", ")), "More DNS names or IP addresses for the server certificate, comma separated."),
+        field("Listen on", input("bind", cfg.bind, { placeholder: "all addresses" }), "Leave empty to accept connections on every network interface."),
+        field("Map tiles", input("tile", cfg.tileUrl), "Tile URL with {z}, {x} and {y}. Point it at a local tile server for networks without internet."),
+        field("Log level", select("loglevel", [["debug", "Debug (everything)"], ["info", "Info"], ["warn", "Warnings and errors"], ["error", "Errors only"]], cfg.logLevel)),
+      ],
+      access: [
+        "Who can connect and who sees whose traffic.",
+        field("Unsigned clients", checkbox("anon", cfg.allowAnonymous, "Allow plain TCP, UDP and anonymous connections")),
+        field("Default group", input("anongroup", cfg.anonymousGroup), "Group for connections without an account."),
+        field("Strict groups", checkbox("strict", cfg.strictGroups, "Never deliver traffic outside a client's groups")),
+        field("Channels", checkbox("channels", cfg.channels, "Let devices choose their active groups")),
+        field("TAK protocol", checkbox("proto", cfg.protobuf, "Offer TAK Protocol version 1 (protobuf) to clients")),
+        field("Replay to new clients", select("replay", [["all", "All current items"], ["sa", "Positions only"], ["none", "Nothing"]], cfg.replay), "What a device receives when it connects."),
+      ],
+      ports: [
+        "Set a port to 0 to turn that service off.",
+        field("TAK SSL (TLS)", n("p_tls", p.tls)),
+        field("TAK TCP", n("p_tcp", p.tcp)),
+        field("TAK TCP second port", n("p_tcpalt", p.tcpAlt)),
+        field("UDP", n("p_udp", p.udp)),
+        field("Certificate enrollment", n("p_enroll", p.enroll)),
+        field("HTTPS", n("p_https", p.https)),
+        field("HTTP", n("p_http", p.http)),
+        field("WebSocket", n("p_ws", p.websocket)),
+        field("FreeTAKServer API", n("p_api", p.api)),
+      ],
+      mesh: [
+        "Multicast situational awareness for radios and devices on the same network, and the emergency repeater.",
+        sub("Multicast mesh"),
+        field("Receive", checkbox("mesh", m.enabled, "Listen to multicast situational awareness")),
+        field("Send", checkbox("meshsend", m.send, "Repeat server traffic to multicast")),
+        field("Groups", input("meshgroups", (m.groups || []).join(", ")), "Multicast addresses as address:port, comma separated."),
+        field("Interface", input("meshif", m.interface, { placeholder: "all" })),
+        field("TTL", n("meshttl", m.ttl)),
+        sub("Emergency repeater"),
+        field("Repeat alerts", checkbox("rep", cfg.repeater.enabled, "Resend active emergencies to everyone")),
+        field("Every (seconds)", n("repint", cfg.repeater.intervalSec)),
+      ],
+      meshtastic: [
+        "Bridge Meshtastic LoRa radios and TAK in both directions through MQTT.",
+        field("Enabled", checkbox("mt_on", mt.enabled, "Bridge Meshtastic nodes and TAK")),
+        field("Built-in MQTT port", n("mt_port", mt.brokerPort), "Point each gateway node's MQTT setting at this server and port. 0 turns the built-in broker off."),
+        field("Open broker", checkbox("mt_anon", mt.brokerAnonymous, "Accept nodes without a GolangTAK user name and password")),
+        field("Upstream broker", input("mt_up", mt.upstream, { placeholder: "mqtt://user:password@mqtt.example.org:1883" }), "Optional. Also exchange traffic through another MQTT broker."),
+        field("Topic root", input("mt_root", mt.root), "Must match the nodes' MQTT root topic, for example msh/US or msh/EU_868."),
+        field("Channels", input("mt_ch", (mt.channels || []).map((c) => c.name + "=" + c.key).join(", ")), "name=key pairs. The default channel is LongFast=AQ==."),
+        field("Send TAK traffic to the mesh", checkbox("mt_down", mt.downlink, "Positions and All Chat Rooms messages (nodes need downlink enabled)")),
+        field("Downlink channel", input("mt_dch", mt.downlinkChannel, { placeholder: "first channel" })),
+        field("Seconds between positions", n("mt_int", mt.intervalSec), "Per TAK user, to protect the mesh's airtime."),
+        field("Group", input("mt_group", mt.group, { placeholder: "everyone" }), "Mesh traffic goes to this group, and only its traffic goes to the mesh. Empty means everyone."),
+      ],
+      feeds: [
+        "Live aircraft and ships shown on every device's map.",
+        sub("ADS-B aircraft"),
+        field("Enabled", checkbox("fa_on", fa.enabled, "Show aircraft from an ADS-B exchange")),
+        field("Center latitude", input("fa_lat", fa.lat)),
+        field("Center longitude", input("fa_lon", fa.lon)),
+        field("Radius (nautical miles)", n("fa_rad", fa.radiusNm)),
+        field("Update every (seconds)", n("fa_int", fa.intervalSec)),
+        field("Group", input("fa_group", fa.group, { placeholder: "everyone" }), "Only members of this group see the aircraft. Empty sends to everyone."),
+        field("Source URL", input("fa_url", fa.url), "airplanes.live, adsb.lol or any service with the same /point/lat/lon/radius API."),
+        field("API key", input("fa_key", fa.apiKey, { autocomplete: "off" })),
+        sub("AIS ships (AISHub)"),
+        field("Enabled", checkbox("fs_on", fs.enabled, "Show ships from AISHub")),
+        field("AISHub user name", input("fs_user", fs.username, { autocomplete: "off" })),
+        field("South", input("fs_s", fs.south)),
+        field("West", input("fs_w", fs.west)),
+        field("North", input("fs_n", fs.north)),
+        field("East", input("fs_e", fs.east)),
+        field("MMSI list", input("fs_mmsi", fs.mmsi), "Optional, comma separated."),
+        field("Update every (seconds)", n("fs_int", fs.intervalSec), "AISHub allows one request per minute."),
+        field("Group", input("fs_group", fs.group, { placeholder: "everyone" })),
+      ],
+      directory: [
+        "Let people sign in with LDAP or Active Directory accounts. Directory groups become TAK groups.",
+        field("Enabled", checkbox("ld_on", ld.enabled, "Let directory users sign in with their directory password")),
+        field("Server URL", input("ld_url", ld.url, { placeholder: "ldaps://dc.example.org" })),
+        field("StartTLS", checkbox("ld_tls", ld.startTls, "Upgrade ldap:// connections to TLS")),
+        field("Skip certificate check", checkbox("ld_ins", ld.insecure, "Do not verify the directory server certificate")),
+        field("Trusted CA file", input("ld_ca", ld.trustFile), "Path on this server to the directory's CA certificate (PEM)."),
+        field("Service account DN", input("ld_bind", ld.bindDn, { autocomplete: "off" })),
+        field("Service account password", input("ld_bpw", ld.bindPassword, { type: "password", autocomplete: "new-password" })),
+        field("Base DN", input("ld_base", ld.baseDn, { placeholder: "dc=example,dc=org" })),
+        field("User filter", input("ld_filter", ld.userFilter), "{user} is replaced by the sign-in name."),
+        field("User DN template", input("ld_udn", ld.userDn, { placeholder: "uid={user},ou=people,dc=example,dc=org" }), "Optional. Signs in directly without a service account."),
+        field("Group filter", input("ld_gfilter", ld.groupFilter, { placeholder: "(&(objectClass=groupOfNames)(member={dn}))" }), "Optional. Without it the memberOf attribute is used."),
+        field("Group base DN", input("ld_gbase", ld.groupBaseDn)),
+        field("Group prefix", input("ld_gprefix", ld.groupPrefix, { placeholder: "tak_" }), "Only directory groups starting with this become TAK groups, with the prefix removed."),
+        field("Administrator group", input("ld_admin", ld.adminGroup)),
+        field("Callsign attribute", input("ld_cs", ld.callsignAttribute)),
+        h("div", { class: "full" }, btn("Test directory sign-in", () => testLdap())),
+      ],
+      certs: [
+        "Values used for new client certificates and connection packages.",
+        field("Organization", input("corg", c.organization)),
+        field("Unit", input("cunit", c.unit)),
+        field("Package password", input("cpw", c.password), "Password of the .p12 files in connection packages."),
+        field("Client validity (days)", n("cdays", c.clientDays)),
+        field("Server validity (days)", n("sdays", c.serverDays)),
+      ],
+      storage: [
+        "How long data is kept, and limits that protect the server.",
+        sub("Keep for (days, 0 keeps forever)"),
+        field("History", n("rhist", r.historyDays)),
+        field("Offline chat", n("rchat", r.chatDays)),
+        field("Files", n("rfile", r.fileDays)),
+        field("Missions", n("rmis", r.missionDays)),
+        sub("Limits"),
+        field("Clients", n("lmax", l.maxClients)),
+        field("Clients per address", n("lip", l.maxPerIP)),
+        field("Largest message (bytes)", n("lmsg", l.maxMessageBytes)),
+        field("Largest upload (MB)", n("lup", l.maxUploadMB)),
+        field("Idle timeout (seconds)", n("lidle", l.idleTimeoutSec)),
+        field("Items replayed", n("lrep", l.replayLimit)),
+      ],
+    };
+    const form = h("form", { novalidate: true });
+    const sectionEls = {};
+    for (const s of SETTINGS_SECTIONS) {
+      let el;
+      if (content[s.id]) {
+        const [intro, ...fields] = content[s.id];
+        el = h("div", { class: "section", "data-sec": s.id }, h("h2", null, s.title), h("p", { class: "intro" }, intro), h("div", { class: "grid" }, fields));
+        form.append(el);
+      } else if (s.id === "maintenance") {
+        const row = (title, text, action) => h("div", { class: "row" }, h("div", null, h("b", null, title), h("p", null, text)), action);
+        el = h(
+          "div",
+          { class: "section", "data-sec": s.id },
+          h("h2", null, s.title),
+          h(
+            "div",
+            { class: "action-list" },
+            row("Restart the server", "Applies changes that need a restart. Devices reconnect by themselves.", btn("Restart", () => confirmAction("Restart", "Restart the server now? Devices reconnect automatically.", "Restart", restart), "", "restart")),
+            row("Renew the server certificate", "Issues a new certificate for the current address and names.", btn("Renew certificate", async () => {
+              try {
+                await api("POST", "/api/certs/server/renew");
+                toast("Server certificate renewed");
+              } catch (e) {
+                fail(e);
+              }
+            })),
+            row("Download a backup", "Settings, users, certificates, missions and the certificate authority. Keep it somewhere safe.", linkBtn("Download backup", "/api/backup", "", "download")),
+            row("Download a full backup", "Everything above plus all stored files. Can be large.", linkBtn("Download with files", "/api/backup?files=1", "", "download"))
+          )
+        );
+      } else {
+        const raw = h("textarea", { id: "raw", style: "min-height:420px", "aria-label": "All settings as JSON" });
+        raw.value = JSON.stringify(cfg, null, 2);
+        el = h(
+          "div",
+          { class: "section", "data-sec": s.id },
+          h("h2", null, s.title),
+          h("p", { class: "intro" }, "Every option in config.json. Peer passwords are shown as ********; leave them as they are to keep them."),
+          raw,
+          h(
+            "div",
+            { class: "toolbar" },
+            btn("Save JSON", async () => {
+              let obj;
+              try {
+                obj = JSON.parse(raw.value);
+              } catch (e) {
+                return toast("Not valid JSON: " + e.message, true);
+              }
+              try {
+                const res = await api("PUT", "/api/settings", obj);
+                if (res.restartRequired) confirmAction("Restart required", "Restart now to apply?", "Restart", restart);
+                else toast("Settings saved");
+              } catch (e) {
+                fail(e);
+              }
+            }, "primary")
+          )
+        );
+      }
+      sectionEls[s.id] = el;
+    }
+    const state = h("span", { class: "state" }, "No unsaved changes");
+    const saveBtn = h("button", { type: "submit", class: "primary" }, "Save settings");
+    const discard = btn("Discard changes", () => route());
+    discard.disabled = true;
+    const bar = h("div", { class: "savebar" }, state, discard, saveBtn);
+    form.append(bar);
+    let dirty = false;
+    const setDirty = (d) => {
+      dirty = d;
+      bar.classList.toggle("dirty", d);
+      state.textContent = d ? "Unsaved changes" : "No unsaved changes";
+      discard.disabled = !d;
+    };
+    form.addEventListener("input", () => setDirty(true));
+    form.addEventListener("change", () => setDirty(true));
+    const beforeUnload = (ev) => {
+      if (dirty) {
+        ev.preventDefault();
+        ev.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+
+    const nav = h("nav", { class: "subnav", "aria-label": "Settings sections" });
+    const show = (id) => {
+      if (!sectionEls[id]) id = "general";
+      for (const [k, el] of Object.entries(sectionEls)) el.hidden = k !== id;
+      bar.hidden = !content[id];
+      for (const a of nav.querySelectorAll("a")) {
+        a.classList.toggle("active", a.dataset.sec === id);
+        if (a.dataset.sec === id) a.setAttribute("aria-current", "true");
+        else a.removeAttribute("aria-current");
+      }
+      history.replaceState(null, "", "#/settings/" + id);
+    };
+    for (const s of SETTINGS_SECTIONS) {
+      nav.append(
+        h("a", { href: "#/settings/" + s.id, "data-sec": s.id, onclick: (ev) => (ev.preventDefault(), show(s.id), window.scrollTo(0, 0)) }, s.title)
+      );
+    }
+    main.append(h("div", { class: "settings" }, nav, h("div", null, form, sectionEls.maintenance, sectionEls.advanced)));
+    show(params[0] || "general");
+
     const ldapFromForm = () =>
       Object.assign({}, ld, {
         enabled: val(form, "ld_on"),
@@ -1860,6 +2221,21 @@
         adminGroup: val(form, "ld_admin"),
         callsignAttribute: val(form, "ld_cs"),
       });
+    const testLdap = () => {
+      const f = h("form", { class: "grid" }, field("User name", input("tu", "", { autocomplete: "off" })), field("Password", input("tp", "", { type: "password", autocomplete: "off" })));
+      modal("Test directory sign-in", f, [
+        { label: "Cancel" },
+        {
+          label: "Test",
+          primary: true,
+          run: async () => {
+            const r = await api("POST", "/api/ldap/test", { username: val(f, "tu"), password: f.querySelector("#tp").value, config: ldapFromForm() });
+            toast("Signed in. Groups: " + (r.groups.join(", ") || "none") + (r.admin ? ". Administrator." : ".") + (r.callsign ? " Callsign " + r.callsign + "." : ""));
+            return true;
+          },
+        },
+      ]);
+    };
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const next = {
@@ -1904,6 +2280,7 @@
       };
       try {
         const res = await api("PUT", "/api/settings", next);
+        setDirty(false);
         if (res.restartRequired) {
           confirmAction("Restart required", "The new settings take effect after a restart. Restart now?", "Restart", restart);
         } else {
@@ -1913,33 +2290,7 @@
         fail(e);
       }
     });
-    main.append(form);
-    const raw = h("textarea", { id: "raw", style: "min-height:320px" });
-    raw.value = JSON.stringify(cfg, null, 2);
-    main.append(
-      h("h2", null, "Advanced: all settings as JSON"),
-      h("p", { class: "muted" }, "Every option in config.json. Peer passwords are shown as ********; leave them as they are to keep them."),
-      raw,
-      h(
-        "div",
-        { class: "toolbar" },
-        btn("Save JSON", async () => {
-          let obj;
-          try {
-            obj = JSON.parse(raw.value);
-          } catch (e) {
-            return toast("Not valid JSON: " + e.message, true);
-          }
-          try {
-            const res = await api("PUT", "/api/settings", obj);
-            if (res.restartRequired) confirmAction("Restart required", "Restart now to apply?", "Restart", restart);
-            else toast("Settings saved");
-          } catch (e) {
-            fail(e);
-          }
-        }, "primary")
-      )
-    );
+    return () => window.removeEventListener("beforeunload", beforeUnload);
   }
 
   async function restart() {
@@ -1966,9 +2317,9 @@
   }
 
   async function pageLogs(main) {
-    main.append(h("h1", null, "Logs"));
+    pageHead(main, "Logs", "The server log, live. Warnings are bold and errors are highlighted.");
     const view = h("div", { class: "log-view", role: "log" });
-    const filter = input("lfilter", "", { placeholder: "Filter" });
+    const filter = h("input", { type: "search", id: "lfilter", placeholder: "Filter the log", "aria-label": "Filter the log" });
     let paused = false;
     const pauseBtn = btn("Pause", () => {
       paused = !paused;
@@ -2018,9 +2369,9 @@
   }
 
   async function pageTokens(main) {
-    main.append(h("h1", null, "API tokens"), h("p", { class: "lead" }, "Tokens let scripts and other software use the API without a password: send them as \"Authorization: Bearer TOKEN\"."));
+    pageHead(main, "API tokens", "Tokens let scripts and other software use the API without a password. Send them as \"Authorization: Bearer TOKEN\".", btn("New token", () => create(), "primary", "plus"));
     const box = h("div");
-    main.append(h("div", { class: "toolbar" }, btn("New token", () => create(), "primary")), box);
+    main.append(box);
     const load = async () => {
       const list = await api("GET", "/api/tokens");
       clear(box).append(
@@ -2046,7 +2397,7 @@
             },
           ],
           list,
-          "No tokens."
+          "No tokens yet."
         )
       );
     };
@@ -2069,7 +2420,9 @@
   }
 
   async function pageAccount(main) {
-    main.append(h("h1", null, "My account"), kv([["User", S.me.user], ["Role", S.me.admin ? "administrator" : "user"], ["Groups", joined(S.me.groups)], ["Server", S.me.server + " " + (S.me.version || "")]]));
+    pageHead(main, "My account", null, btn("Sign out", signOut, "", "signout"));
+    if (S.me.initialPassword) main.append(h("div", { class: "notice inv" }, "You are signed in with the generated password. Choose your own below."));
+    main.append(h("h2", null, "Account"), kv([["User", S.me.user], ["Role", S.me.admin ? "administrator" : "user"], ["Groups", joined(S.me.groups)], ["Server", S.me.server + " " + (S.me.version || "")]]));
     const f = h(
       "form",
       { class: "grid" },
@@ -2094,7 +2447,7 @@
     const t = theme();
     const themeSel = select("theme", [["auto", "Follow the system"], ["light", "Light"], ["dark", "Dark"]], t);
     themeSel.addEventListener("change", () => setTheme(themeSel.value));
-    main.append(f, h("h2", null, "Display"), h("form", { class: "grid" }, field("Theme", themeSel)), h("h2", null, "Session"), h("div", { class: "toolbar" }, btn("Sign out", signOut)));
+    main.append(f, h("h2", null, "Display"), h("form", { class: "grid" }, field("Theme", themeSel)));
   }
 
   window.addEventListener("hashchange", route);
