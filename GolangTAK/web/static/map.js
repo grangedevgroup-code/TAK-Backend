@@ -394,6 +394,21 @@
       }
     }
 
+    leader(x, y, r, course, pal) {
+      const ctx = this.ctx;
+      const a = ((course - 90) * Math.PI) / 180;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * (r + 1), y + Math.sin(a) * (r + 1));
+      ctx.lineTo(x + Math.cos(a) * (r + 18), y + Math.sin(a) * (r + 18));
+      ctx.lineCap = "round";
+      ctx.strokeStyle = pal.halo;
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.strokeStyle = pal.text;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     drawMarkers() {
       const ctx = this.ctx;
       const pal = this.palette();
@@ -408,7 +423,9 @@
         if (!Number.isFinite(m.lat) || !Number.isFinite(m.lon)) continue;
         const [x, y] = this.toScreen(m.lat, m.lon);
         if (x < -50 || y < -50 || x > this.width + 50 || y > this.height + 50) continue;
-        const r = m.kind === "emergency" ? 8 : 6;
+        const typ = m.type || (m.v && m.v.type) || "";
+        const milsym = this.symbology !== "simple" && window.MilSym && (m.kind === "friend" || m.kind === "hostile" || m.kind === "neutral" || m.kind === "unknown") && typ.startsWith("a-");
+        const r = m.kind === "emergency" ? 8 : milsym ? 11 : 6;
         if (m.kind === "shape") {
           if (m.label) labels.push({ m: m, x: x + 6, y: y, r: 0, p: m.uid === this.selected ? -1 : 3 });
           continue;
@@ -421,6 +438,12 @@
           ctx.setLineDash([4, 3]);
           ctx.stroke();
           ctx.setLineDash([]);
+        }
+        if (milsym) {
+          MilSym.draw(ctx, typ, x, y, 8, pal.ink);
+          if (Number.isFinite(m.course) && m.speed > 0.5) this.leader(x, y, r, m.course, pal);
+          if (m.label) labels.push({ m: m, x: x + r + 6, y: y, r: r, p: m.uid === this.selected ? -1 : rank[m.kind] ?? 3 });
+          continue;
         }
         this.shape(m.kind, x, y, r);
         if (m.kind === "point") {
@@ -458,15 +481,7 @@
             ctx.fillText("?", x, y + 0.5);
             ctx.font = "600 12px " + font;
           }
-          if (Number.isFinite(m.course) && m.speed > 0.5) {
-            const a = ((m.course - 90) * Math.PI) / 180;
-            ctx.beginPath();
-            ctx.moveTo(x + Math.cos(a) * (r + 1), y + Math.sin(a) * (r + 1));
-            ctx.lineTo(x + Math.cos(a) * (r + 12), y + Math.sin(a) * (r + 12));
-            ctx.strokeStyle = pal.text;
-            ctx.lineWidth = 2;
-            ctx.stroke();
-          }
+          if (Number.isFinite(m.course) && m.speed > 0.5) this.leader(x, y, r, m.course, pal);
         }
         if (m.label) labels.push({ m: m, x: x + r + 6, y: y, r: r, p: m.uid === this.selected ? -1 : rank[m.kind] ?? 3 });
       }

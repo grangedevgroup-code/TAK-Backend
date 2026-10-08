@@ -428,6 +428,8 @@ type eventView struct {
 	Lat      float64   `json:"lat"`
 	Lon      float64   `json:"lon"`
 	Hae      float64   `json:"hae"`
+	Course   *float64  `json:"course,omitempty"`
+	Speed    *float64  `json:"speed,omitempty"`
 	Time     time.Time `json:"time"`
 	Stale    time.Time `json:"stale"`
 	Team     string    `json:"team,omitempty"`
@@ -446,6 +448,14 @@ func viewOf(m *Message, withXML bool) eventView {
 	e := m.Event
 	v := eventView{UID: e.UID, Type: e.Type, Callsign: e.Callsign(), Lat: e.Point.Lat, Lon: e.Point.Lon, Hae: e.Point.Hae, Time: e.Time, Stale: e.Stale, Remarks: e.Remarks()}
 	v.Team, _ = e.Team()
+	if tr := e.D("track"); tr != nil {
+		if c, err := strconv.ParseFloat(tr.Attr("course"), 64); err == nil && c >= 0 && c <= 360 {
+			v.Course = &c
+		}
+		if sp, err := strconv.ParseFloat(tr.Attr("speed"), 64); err == nil && sp >= 0 && sp < 1e5 {
+			v.Speed = &sp
+		}
+	}
 	v.Shape = shapeOf(e)
 	v.Medevac = medevacOf(e)
 	if n := e.D("image"); n != nil && strings.TrimSpace(n.Text) != "" {

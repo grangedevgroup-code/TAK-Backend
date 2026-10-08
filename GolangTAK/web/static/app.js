@@ -1535,6 +1535,10 @@
     const wrap = h("div", { class: "map-wrap" }, canvas, infoBox, coords, h("div", { class: "map-attr" }, S.me.tileUrl && S.me.tileUrl.includes("openstreetmap") ? "Map data © OpenStreetMap contributors" : ""));
     let addMode = false;
     let showTracks = false;
+    let symbology = "2525";
+    try {
+      symbology = localStorage.getItem("golangtak-map-symbols") || "2525";
+    } catch (e) {}
     const addBtn = btn("Add marker", () => {
       addMode = !addMode;
       addBtn.classList.toggle("primary", addMode);
@@ -1548,6 +1552,7 @@
         btn("Show all", () => fitAll(true), "", "overview"),
         addBtn,
         checkbox("tracks", false, "Tracks (last hour)"),
+        checkbox("milsym", symbology !== "simple", "MIL-STD-2525 symbols"),
         h("span", { class: "grow" }),
         countEl,
         styleSel
@@ -1561,6 +1566,15 @@
     );
     const [tf, dk] = mapLook();
     const map = new SlippyMap(canvas, { tileUrl: S.me.tileUrl, lat: 20, lon: 0, zoom: 3, tileFilter: tf, dark: dk });
+    map.symbology = symbology;
+    main.querySelector("#milsym").addEventListener("change", (ev) => {
+      symbology = ev.target.checked ? "2525" : "simple";
+      map.symbology = symbology;
+      try {
+        localStorage.setItem("golangtak-map-symbols", symbology);
+      } catch (e) {}
+      map.draw();
+    });
     const tools = h("div", { class: "map-tools" }, btn("+", () => map.zoomAt(1)), btn("-", () => map.zoomAt(-1)));
     wrap.append(tools);
     map.onmove = (lat, lon) => {
@@ -1574,7 +1588,7 @@
         if (v.lat === 0 && v.lon === 0 && !(pts && pts.length)) continue;
         if (!v.type || v.type.startsWith("t-") || v.type.startsWith("b-t-f") || v.type.startsWith("b-f-t")) continue;
         const [lat, lon] = v.lat === 0 && v.lon === 0 ? pts[0] : [v.lat, v.lon];
-        out.push({ uid: v.uid, lat: lat, lon: lon, label: v.callsign || "", kind: v.shape ? "shape" : SlippyMap.affiliation(v.type), shape: v.shape, v: v });
+        out.push({ uid: v.uid, lat: lat, lon: lon, label: v.callsign || "", kind: v.shape ? "shape" : SlippyMap.affiliation(v.type), shape: v.shape, type: v.type, course: v.course, speed: v.speed, v: v });
       }
       return out;
     };
