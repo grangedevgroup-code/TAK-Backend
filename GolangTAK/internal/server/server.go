@@ -66,6 +66,8 @@ type Server struct {
 	mesh     *meshBridge
 	perf     *perfSampler
 	plugins  *pluginManager
+	fig2     *fig2Server
+	fig2Out  sync.Map
 	control  string
 	lock     *flock.Lock
 	localMux http.Handler

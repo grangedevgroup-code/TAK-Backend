@@ -1035,7 +1035,7 @@
 
     const links = [];
     for (const p of st.peers || []) links.push({ name: p.name, kind: "Server link", state: p.state, detail: p.error || p.url, hash: "#/links" });
-    if (st.federation && st.federation.enabled) links.push({ name: "Federation", kind: "TAK Server federation", state: "listening", detail: "Port " + (st.ports || {}).federation, hash: "#/links" });
+    if (st.federation && st.federation.enabled) links.push({ name: "Federation", kind: "TAK Server federation", state: "listening", detail: [(st.ports || {}).federation ? "v1 port " + st.ports.federation : "", (st.ports || {}).federationV2 ? "v2 port " + st.ports.federationV2 : ""].filter(Boolean).join(", "), hash: "#/links" });
     const mesh = st.meshtastic || {};
     if (mesh.enabled) {
       const problem = mesh.brokerError || mesh.upstreamError;
@@ -1080,7 +1080,8 @@
       ["Web and API (HTTP)", p.http, "Marti API and this dashboard"],
       ["WebSocket CoT", p.websocket, "Browser and TAK-compatible software"],
       ["FreeTAKServer API", p.api, "REST API compatible with FreeTAKServer"],
-      ["Federation", st.federation && st.federation.enabled ? p.federation : 0, "Server-to-server"],
+      ["Federation v1", st.federation && st.federation.enabled ? p.federation : 0, "TAK Server federation"],
+      ["Federation v2", st.federation && st.federation.enabled ? p.federationV2 : 0, "TAK Server federation (gRPC)"],
       ["Meshtastic MQTT", mesh.enabled ? mesh.brokerPort : 0, "Meshtastic gateway nodes"],
     ].filter((r) => r[1] > 0);
     const kinds = Object.entries(st.clientsByKind || {}).map(([k, v]) => k + " " + v).join(", ");
@@ -2132,14 +2133,17 @@
       const form = h(
         "form",
         { class: "grid" },
-        field("Enabled", checkbox("fen", f.enabled, "Accept TAK Server federation (v1) connections on port " + cfg.ports.federation)),
-        field("Port", input("fport", cfg.ports.federation || 9000, { type: "number", min: 0, max: 65535 })),
+        field("Enabled", checkbox("fen", f.enabled, "Accept TAK Server federation connections")),
+        field("Federation v1 port", input("fport", cfg.ports.federation || 9000, { type: "number", min: 0, max: 65535 }), "TAK Server protocol version 1. 0 turns it off."),
+        field("Federation v2 port", input("fport2", cfg.ports.federationV2 || 9001, { type: "number", min: 0, max: 65535 }), "TAK Server protocol version 2 (gRPC). 0 turns it off."),
+        field("Missions", checkbox("fmis", !f.disableMissionFederation, "Share public missions, their files and logs over federation v2")),
+        field("Deletes", checkbox("fdel", f.allowFederatedDelete, "Let federates delete shared missions and mission content")),
         field("Groups", input("fgroups", (f.groups || []).join(", ")), "Traffic from these groups is shared with federates."),
         field("Trusted CAs", h("textarea", { id: "fcas" }, (f.trustedCAs || []).join("\n")), "PEM certificates of the federates' certificate authorities."),
         h("div", { class: "full" }, btn("Save federation settings", async () => {
           try {
             const pems = (val(form, "fcas").match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || []);
-            const r = await api("PUT", "/api/settings", { federation: { enabled: val(form, "fen"), groups: splitList(val(form, "fgroups")), trustedCAs: pems }, ports: Object.assign({}, cfg.ports, { federation: num(form, "fport") }) });
+            const r = await api("PUT", "/api/settings", { federation: Object.assign({}, f, { enabled: val(form, "fen"), groups: splitList(val(form, "fgroups")), trustedCAs: pems, disableMissionFederation: !val(form, "fmis"), allowFederatedDelete: val(form, "fdel") }), ports: Object.assign({}, cfg.ports, { federation: num(form, "fport"), federationV2: num(form, "fport2") }) });
             toast(r.restartRequired ? "Saved. Restart the server under Settings to apply." : "Saved");
           } catch (e) {
             fail(e);
@@ -2147,8 +2151,8 @@
         }, "primary"))
       );
       clear(fedBox).append(
-        h("p", null, "Federation shares traffic with TAK Server instances that connect with mutual TLS. Give the other side this server's CA certificate (", h("a", { href: "/api/ca.pem" }, "download"), ") and add theirs below. To connect out to a federation server, add a link with a fed:// URL."),
-        table([{ title: "Federate", key: "name" }, { title: "Address", key: "remote" }, { title: "Since", render: (r) => fmtAgo(r.since) }], (fed && fed.federates) || [], "No federates connected."),
+        h("p", null, "Federation shares traffic with TAK Server instances that connect with mutual TLS. Give the other side this server's CA certificate (", h("a", { href: "/api/ca.pem" }, "download"), ") and add theirs below. To connect out to a federation server, add a link with a fed:// URL for version 1 or fed2:// for version 2."),
+        table([{ title: "Federate", key: "name" }, { title: "Address", key: "remote" }, { title: "Protocol", render: (r) => h("span", { class: "pill" }, r.version || "v1") }, { title: "Direction", key: "direction" }, { title: "Contacts", key: "contacts" }, { title: "Since", render: (r) => fmtAgo(r.since) }], (fed && fed.federates) || [], "No federates connected."),
         form
       );
     };
@@ -2212,17 +2216,19 @@
     };
     const kinds = [
       ["golangtak", "Another GolangTAK", "tls://HOST:8089", "Easiest: use a link code instead. Otherwise sign in with a user name and password from the other server."],
-      ["takserver", "TAK Server", "tls://HOST:8089", "Use a client certificate (.p12) issued by the TAK Server and its truststore. For federation use fed://HOST:9000 and give each side the other's CA."],
+      ["takserver", "TAK Server", "tls://HOST:8089", "Use a client certificate (.p12) issued by the TAK Server and its truststore. For federation use fed2://HOST:9001 (version 2) or fed://HOST:9000 (version 1) and give each side the other's CA."],
+      ["takfed2", "TAK Server federation v2", "fed2://HOST:9001", "TAK Server federation version 2 over gRPC. This server presents its own certificate; give the TAK Server this server's CA and add the TAK Server's CA under Federation."],
+      ["takfed1", "TAK Server federation v1", "fed://HOST:9000", "TAK Server federation version 1. This server presents its own certificate; exchange CA certificates with the other side."],
       ["ots", "OpenTAKServer", "tls://HOST:8089", "Use a certificate from OpenTAKServer, or tcp://HOST:8088 for its unencrypted port on a trusted network."],
       ["fts", "FreeTAKServer", "tcp://HOST:8087", "FreeTAKServer accepts CoT on TCP 8087, or SSL on 8089 with a certificate."],
       ["ws", "zyrntopo-tak-server or WebSocket software", "wss://HOST/", "One CoT XML event per WebSocket message. Use ws:// for unencrypted connections."],
-      ["other", "Other CoT software", "tcp://HOST:PORT", "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation)."],
+      ["other", "Other CoT software", "tcp://HOST:PORT", "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation v1), fed2:// (federation v2)."],
     ];
     const editPeer = (p) => {
       const isNew = !p;
       p = p || { enabled: true, direction: "both", groups: [] };
       const urlInput = input("purl", p.url, { required: true, placeholder: "tls://tak.example.org:8089" });
-      const urlField = field("URL", urlInput, "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation).");
+      const urlField = field("URL", urlInput, "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation v1), fed2:// (federation v2).");
       const hint = urlField[1].querySelector(".hint");
       let template = "";
       const kindSel = select("pkind", kinds.map((k) => [k[0], k[1]]), "golangtak");

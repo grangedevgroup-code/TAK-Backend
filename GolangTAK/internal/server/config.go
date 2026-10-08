@@ -75,6 +75,9 @@ type FederationConfig struct {
 	Groups   []string `json:"groups"`
 	TrustPEM []string `json:"trustedCAs"`
 	MaxHops  int      `json:"maxHops"`
+
+	NoMissions  bool `json:"disableMissionFederation"`
+	AllowDelete bool `json:"allowFederatedDelete"`
 }
 
 type ADSBFeed struct {

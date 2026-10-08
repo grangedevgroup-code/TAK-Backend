@@ -135,7 +135,7 @@ The same is available from a terminal: `golangtak qr USER` prints enrollment QR 
 | WinTAK | SSL, TCP, connection packages, Data Sync |
 | iTAK | SSL with quick connect QR and enrollment, TCP, server packages |
 | TAK Aware and other CoT apps | SSL, TCP, UDP, connection packages |
-| TAK Server | Federation (version 1) in both directions, or a TCP or TLS link |
+| TAK Server | Federation version 1 and version 2 (gRPC) in both directions, including mission, file and log sharing over version 2, or a TCP or TLS link |
 | OpenTAKServer, FreeTAKServer | TCP or TLS links in both directions; GolangTAK also serves the FreeTAKServer REST API on port 19023 |
 | zyrntopo-tak-server and browser software | CoT over WebSocket on port 8090, links to WebSocket servers |
 | Mesh and radio gateways | Multicast situational awareness (239.2.3.1:6969 and 224.10.10.1:17012), UDP input |
@@ -151,7 +151,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Certificates**: built-in certificate authority, certificate enrollment (signClient v1 and v2, JSON and XML), one-time enrollment codes, revocation, server certificate that renews itself when the address changes, import of an existing CA.
 - **Data**: data packages and the Data Sync API, missions with subscriptions, roles, passwords, invitations and change notifications, ExCheck checklists, CI-TRAP reports, video feeds, KML export, track history.
 - **Administration**: web dashboard (map, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs, and a performance page with CPU, memory, disk, load and message rates over the last ten minutes), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
-- **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation.
+- **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation, version 1 and version 2.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
 - **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
@@ -178,11 +178,19 @@ The code carries the address, a client certificate and the certificate authority
 
 | Other side | Link |
 | --- | --- |
-| TAK Server | Federation: turn it on under Server links and exchange CA certificates, or `fed://HOST:9000` to connect out. Or a TLS link to its port 8089 with a client certificate it issued. |
+| TAK Server | Federation: turn it on under Server links and exchange CA certificates, or connect out with `fed2://HOST:9001` (version 2) or `fed://HOST:9000` (version 1). Or a TLS link to its port 8089 with a client certificate it issued. |
 | OpenTAKServer | `tls://HOST:8089` with a certificate from OpenTAKServer, or `tcp://HOST:8088` on a trusted network |
 | FreeTAKServer | `tcp://HOST:8087`, or `tls://HOST:8089` with a certificate |
 | zyrntopo-tak-server and WebSocket software | `wss://HOST/` or `ws://HOST:PORT/` |
 | Anything else that speaks CoT | `tcp://`, `tls://`, `udp://` or `ws://` |
+
+**TAK Server federation.** To accept federates on both protocol versions:
+
+```sh
+golangtak config set federation.enabled true ports.federation 9000 ports.federationV2 9001
+```
+
+Give the other server this server's CA (`/api/ca.pem`) and add its CA under **Server links**, **Federation**. Version 2 also shares public missions, their files, logs, parent missions and expiration with TAK Server, both ways and including missions that existed before the link. Federated deletes are off unless you allow them (`federation.allowFederatedDelete`), and `federation.disableMissionFederation` turns mission sharing off.
 
 ## Server plugins
 
@@ -225,7 +233,8 @@ The dashboard (**Plugins and profiles**) shows each plugin's state, process and 
 | 8080 | TCP | HTTP API and the dashboard |
 | 8090 | TCP | CoT over WebSocket |
 | 19023 | TCP | FreeTAKServer-compatible REST API |
-| 9000 | TCP | Federation (off by default) |
+| 9000 | TCP | Federation version 1 (off by default) |
+| 9001 | TCP | Federation version 2, gRPC (off by default) |
 | 1883 | TCP | MQTT broker for Meshtastic gateway nodes (off by default) |
 | 6969, 17012 | UDP | Multicast situational awareness (mesh) |
 

@@ -305,9 +305,11 @@ func (pm *PeerManager) connect(ctx context.Context, l *peerLink) error {
 		return pm.connectUDP(ctx, l, u)
 	case "fed", "federation":
 		return pm.s.connectFederation(ctx, l, u)
+	case "fed2", "fedv2", "federation2":
+		return pm.s.connectFederationV2(ctx, l, u)
 	case "tcp", "tls", "ssl", "stcp":
 	default:
-		return fmt.Errorf("unsupported peer URL scheme %q (use tcp, tls, ws, wss, udp or fed)", u.Scheme)
+		return fmt.Errorf("unsupported peer URL scheme %q (use tcp, tls, ws, wss, udp, fed for federation v1 or fed2 for federation v2)", u.Scheme)
 	}
 	host := u.Hostname()
 	port := u.Port()

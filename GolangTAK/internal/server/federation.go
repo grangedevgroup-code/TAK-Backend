@@ -265,21 +265,9 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 		}
 		return bw.Flush()
 	}
-	prov := takproto.Provenance{ServerID: s.Config().NodeID, ServerName: s.Config().Name}
-	for _, lc := range s.hub.Clients() {
-		if lc.Relay || !lc.InMask().Intersects(c.OutMask()) {
-			continue
-		}
-		info := lc.Info()
-		if info.UID == "" {
-			continue
-		}
-		groups := intersectNames(s.dir.Names(lc.InMask()), allowed)
-		if err := send(takproto.FedEvent{Contact: &takproto.ContactEntry{Operation: takproto.CRUDCreate, UID: info.UID, Callsign: info.Callsign}, Groups: groups}); err != nil {
-			return err
-		}
+	if err := s.fedInitial(c, allowed, send); err != nil {
+		return err
 	}
-	s.hub.Replay(c, "sa", cfg.Limits.ReplayLimit)
 	errc := make(chan error, 2)
 	go func() {
 		for {
@@ -291,29 +279,9 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 				errc <- errors.New("federate closed")
 				return
 			case m := <-c.out:
-				if m.ForceXML || m.SwitchProto {
+				f, ok := s.fedOutEvent(m, allowed)
+				if !ok {
 					continue
-				}
-				groups := s.fedGroups(m, allowed)
-				var f takproto.FedEvent
-				if m.Disconnect {
-					links := m.Event.Links()
-					if len(links) == 0 {
-						continue
-					}
-					f = takproto.FedEvent{Contact: &takproto.ContactEntry{Operation: takproto.CRUDDelete, UID: links[0].UID, Callsign: links[0].Type}, Groups: groups}
-				} else if m.Announce != "" {
-					f = takproto.FedEvent{Contact: &takproto.ContactEntry{Operation: takproto.CRUDCreate, UID: m.Event.UID, Callsign: m.Announce}, Groups: groups}
-				} else {
-					e := m.Event.Clone()
-					e.AddFlowTag(s.FlowKey(), time.Now())
-					f = takproto.FedEvent{Event: e, Groups: groups, Provenance: []takproto.Provenance{prov}, MaxHops: int64(cfg.Federation.MaxHops), CurrentHops: 1}
-					if m.Hops > 0 {
-						f.CurrentHops = m.Hops + 1
-					}
-					if f.CurrentHops > f.MaxHops {
-						continue
-					}
 				}
 				if err := send(f); err != nil {
 					errc <- err
@@ -358,6 +326,52 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 		return errors.New("federate closed the connection")
 	}
 	return err
+}
+
+func (s *Server) fedInitial(c *Client, allowed []string, send func(takproto.FedEvent) error) error {
+	for _, lc := range s.hub.Clients() {
+		if lc.Relay || !lc.InMask().Intersects(c.OutMask()) {
+			continue
+		}
+		info := lc.Info()
+		if info.UID == "" {
+			continue
+		}
+		groups := intersectNames(s.dir.Names(lc.InMask()), allowed)
+		if err := send(takproto.FedEvent{Contact: &takproto.ContactEntry{Operation: takproto.CRUDCreate, UID: info.UID, Callsign: info.Callsign}, Groups: groups}); err != nil {
+			return err
+		}
+	}
+	s.hub.Replay(c, "sa", s.Config().Limits.ReplayLimit)
+	return nil
+}
+
+func (s *Server) fedOutEvent(m *Message, allowed []string) (takproto.FedEvent, bool) {
+	if m.ForceXML || m.SwitchProto {
+		return takproto.FedEvent{}, false
+	}
+	cfg := s.Config()
+	groups := s.fedGroups(m, allowed)
+	if m.Disconnect {
+		links := m.Event.Links()
+		if len(links) == 0 {
+			return takproto.FedEvent{}, false
+		}
+		return takproto.FedEvent{Contact: &takproto.ContactEntry{Operation: takproto.CRUDDelete, UID: links[0].UID, Callsign: links[0].Type}, Groups: groups}, true
+	}
+	if m.Announce != "" {
+		return takproto.FedEvent{Contact: &takproto.ContactEntry{Operation: takproto.CRUDCreate, UID: m.Event.UID, Callsign: m.Announce}, Groups: groups}, true
+	}
+	e := m.Event.Clone()
+	e.AddFlowTag(s.FlowKey(), time.Now())
+	f := takproto.FedEvent{Event: e, Groups: groups, Provenance: []takproto.Provenance{{ServerID: cfg.NodeID, ServerName: cfg.Name}}, MaxHops: int64(cfg.Federation.MaxHops), CurrentHops: 1}
+	if m.Hops > 0 {
+		f.CurrentHops = m.Hops + 1
+	}
+	if f.CurrentHops > f.MaxHops {
+		return takproto.FedEvent{}, false
+	}
+	return f, true
 }
 
 func intersectNames(a, b []string) []string {

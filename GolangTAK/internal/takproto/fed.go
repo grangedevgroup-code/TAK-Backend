@@ -1,6 +1,7 @@
 package takproto
 
 import (
+	"encoding/base64"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,7 @@ type FedEvent struct {
 	Provenance  []Provenance
 	MaxHops     int64
 	CurrentHops int64
+	HopLimits   []byte
 }
 
 func appendInt(b []byte, field int, v int64) []byte {
@@ -100,6 +102,13 @@ func MarshalGeoEvent(e *cot.Event) []byte {
 		d.Remove(pl)
 		ploc, palt = pl.Attr("geopointsrc"), pl.Attr("altsrc")
 	}
+	var image []byte
+	if im := d.Child("image"); im != nil {
+		if raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(im.Text)); err == nil && len(raw) > 0 {
+			image = raw
+			im.Text = ""
+		}
+	}
 	var ptpUIDs, ptpCallsigns, missions []string
 	for _, dest := range e.Dests() {
 		if dest.UID != "" {
@@ -118,6 +127,9 @@ func MarshalGeoEvent(e *cot.Event) []byte {
 	b = appendString(b, 15, palt)
 	b = appendDouble(b, 20, cot.Finite(speed, 0))
 	b = appendDouble(b, 21, cot.Finite(course, 0))
+	if image != nil {
+		b = appendBytes(b, 22, MarshalBlob(Blob{Type: BlobImage, Data: image}))
+	}
 	b = appendRepeated(b, 23, ptpUIDs)
 	b = appendRepeated(b, 24, ptpCallsigns)
 	b = appendRepeated(b, 26, missions)
@@ -155,6 +167,9 @@ func MarshalFed(f FedEvent) []byte {
 		hb = appendInt(hb, 2, f.CurrentHops)
 		b = appendBytes(b, 5, hb)
 	}
+	if len(f.HopLimits) > 0 {
+		b = appendBytes(b, 6, f.HopLimits)
+	}
 	return b
 }
 
@@ -167,6 +182,7 @@ type geo struct {
 	speed, course                   float64
 	ptpUIDs, ptpCallsigns, missions []string
 	access, caveat, releasable      string
+	image                           []byte
 }
 
 func UnmarshalFed(b []byte) (*FedEvent, error) {
@@ -235,6 +251,10 @@ func UnmarshalFed(b []byte) (*FedEvent, error) {
 			}); err != nil {
 				return err
 			}
+		case 6:
+			if fd.wire == wireBytes {
+				f.HopLimits = append([]byte(nil), fd.bytes...)
+			}
 		}
 		return nil
 	})
@@ -282,6 +302,12 @@ func unmarshalGeo(b []byte) (*cot.Event, error) {
 			g.speed = f.double()
 		case 21:
 			g.course = f.double()
+		case 22:
+			if f.wire == wireBytes {
+				if bl, err := UnmarshalBlob(f.bytes); err == nil && bl.Type == BlobImage {
+					g.image = bl.Data
+				}
+			}
 		case 23:
 			g.ptpUIDs = append(g.ptpUIDs, f.str())
 		case 24:
@@ -334,6 +360,9 @@ func unmarshalGeo(b []byte) (*cot.Event, error) {
 		if g.palt != "" {
 			pl.SetAttr("altsrc", g.palt)
 		}
+	}
+	if im := d.Child("image"); im != nil && len(g.image) > 0 {
+		im.Text = base64.StdEncoding.EncodeToString(g.image)
 	}
 	e.Detail = d
 	if len(e.Dests()) == 0 && (len(g.ptpUIDs) > 0 || len(g.ptpCallsigns) > 0 || len(g.missions) > 0) {

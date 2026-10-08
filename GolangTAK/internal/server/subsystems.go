@@ -82,6 +82,9 @@ func (s *Server) startSubsystems() error {
 	if err := s.startFederation(); err != nil {
 		return err
 	}
+	if err := s.startFederationV2(); err != nil {
+		return err
+	}
 	s.startFeeds()
 	s.startMeshtastic()
 	s.histStop = make(chan struct{})

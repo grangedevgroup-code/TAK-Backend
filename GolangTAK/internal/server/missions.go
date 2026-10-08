@@ -130,6 +130,7 @@ type Mission struct {
 	Changes        []MissionChange  `json:"changes"`
 	ExternalData   []map[string]any `json:"externalData"`
 	Parent         string           `json:"parent,omitempty"`
+	Origin         string           `json:"federatedFrom,omitempty"`
 	NextSeq        int64            `json:"nextSeq"`
 }
 
@@ -1166,6 +1167,7 @@ func (s *Server) missionLogCreate(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 		out = append(out, s.logJSON(m, entry))
+		s.rolMissionLog(m, entry, false)
 		e := s.missionEvent(m, "t-x-m-c-l", "CHANGE", body.CreatorUID)
 		s.sendToSubscribers(m, e, "")
 	}
@@ -1192,6 +1194,7 @@ func (s *Server) missionLogDelete(w http.ResponseWriter, r *http.Request) {
 				x.Logs = slices.DeleteFunc(x.Logs, func(l MissionLog) bool { return l.ID == id })
 				return nil
 			})
+			s.rolMissionLog(m, MissionLog{ID: id}, true)
 			found = true
 		}
 	}
@@ -1300,10 +1303,12 @@ func (s *Server) missionExpiration(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expiration must be seconds since 1970 or -1"})
 		return
 	}
-	s.missions.Update(m.Name, func(x *Mission) error {
+	if m, err := s.missions.Update(m.Name, func(x *Mission) error {
 		x.Expiration = exp
 		return nil
-	})
+	}); err == nil {
+		s.rolMissionExpiration(m)
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -1520,10 +1525,12 @@ func (s *Server) missionSetParent(w http.ResponseWriter, r *http.Request) {
 	} else {
 		parent = ""
 	}
-	s.missions.Update(m.Name, func(x *Mission) error {
+	if m, err := s.missions.Update(m.Name, func(x *Mission) error {
 		x.Parent = parent
 		return nil
-	})
+	}); err == nil {
+		s.rolMissionParent(m)
+	}
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -1685,12 +1692,27 @@ func (s *Server) changeXML(m Mission, typ, author string, res *Resource, it *Mis
 }
 
 func (s *Server) notifyMissionChange(m Mission, typ, author string, res *Resource, it *MissionItem) {
+	s.notifyMissionChangeLocal(m, typ, author, res, it)
+	s.rolMissionChanged(m, typ, author, res, it)
+}
+
+func (s *Server) notifyMissionChangeLocal(m Mission, typ, author string, res *Resource, it *MissionItem) {
 	e := s.missionEvent(m, "t-x-m-c", "CHANGE", author)
 	e.Detail.Child("mission").AddNew("MissionChanges").Add(s.changeXML(m, typ, author, res, it))
 	s.sendToSubscribers(m, e, "")
 }
 
 func (s *Server) notifyMissionAll(m Mission, cotType, msgType, author string) {
+	s.notifyMissionAllLocal(m, cotType, msgType, author)
+	switch msgType {
+	case "CREATE":
+		s.rolMissionCreated(m)
+	case "DELETE":
+		s.rolMissionDeleted(m, author)
+	}
+}
+
+func (s *Server) notifyMissionAllLocal(m Mission, cotType, msgType, author string) {
 	e := s.missionEvent(m, cotType, msgType, author)
 	msg := NewMessage(e, nil, s.dir.Mask(m.Groups))
 	msg.NoReplay = true
