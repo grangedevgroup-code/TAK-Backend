@@ -37,6 +37,10 @@ window.ICONS = {
   shield: "M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z",
   radio: "M6 9h12v11H6z M9 9l7-5 M12 13.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
   plane: "M12 3v18 M3 13l9-4 9 4 M8 21l4-2 4 2",
+  pulse: "M3 12h4l3-7 4 14 3-7h4",
+  cpu: "M7 7h10v10H7z M10 10h4v4h-4z M10 3v4 M14 3v4 M10 17v4 M14 17v4 M3 10h4 M3 14h4 M17 10h4 M17 14h4",
+  memory: "M3 7h18v10H3z M7 11v2 M11 11v2 M15 11v2 M6 17v3 M18 17v3",
+  disk: "M4 5h16v14H4z M4 14h16 M16.5 16.5h.5",
   external: "M14 4h6v6 M20 4l-9 9 M18 14v6H4V6h6",
 };
 

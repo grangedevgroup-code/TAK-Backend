@@ -455,6 +455,7 @@
     { id: "missions", title: "Missions", icon: "missions", render: pageMissions, keys: "data sync" },
     { id: "video", title: "Video feeds", icon: "video", render: pageVideo, keys: "rtsp camera" },
     { group: "Administration", admin: true },
+    { id: "performance", title: "Performance", icon: "pulse", admin: true, render: pagePerformance, keys: "cpu memory ram disk load health resources" },
     { id: "users", title: "Users", icon: "users", admin: true, render: pageUsers, keys: "accounts passwords certificates" },
     { id: "groups", title: "Groups", icon: "groups", admin: true, render: pageGroups, keys: "channels teams" },
     { id: "links", title: "Server links", icon: "links", admin: true, render: pageLinks, keys: "federation peers tak server opentakserver freetakserver" },
@@ -469,8 +470,30 @@
   let alertEl = null;
   let countEl = null;
   let countTimer = null;
-
   let liveEl = null;
+  let crumbEl = null;
+
+  function mark(size) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    const s = String(size || 28);
+    svg.setAttribute("width", s);
+    svg.setAttribute("height", s);
+    svg.setAttribute("viewBox", "0 0 32 32");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("class", "mark");
+    const bg = document.createElementNS(ns, "rect");
+    bg.setAttribute("width", "32");
+    bg.setAttribute("height", "32");
+    bg.setAttribute("fill", "currentColor");
+    const g = document.createElementNS(ns, "path");
+    g.setAttribute("d", "M10 10h12v12H10z M16 4v6 M16 22v6 M4 16h6 M22 16h6");
+    g.setAttribute("fill", "none");
+    g.style.stroke = "var(--canvas)";
+    g.setAttribute("stroke-width", "2.4");
+    svg.append(bg, g);
+    return svg;
+  }
 
   function setLive(on) {
     if (!liveEl) return;
@@ -481,9 +504,12 @@
 
   function updateAlert() {
     if (!alertEl) return;
-    const n = emergencies().length;
-    alertEl.style.display = n ? "" : "none";
-    clear(alertEl).append(icon("alert", 16), n === 1 ? "1 emergency" : n + " emergencies");
+    const list = emergencies();
+    alertEl.style.display = list.length ? "" : "none";
+    if (!list.length) return;
+    const first = list[0];
+    const text = list.length === 1 ? "Emergency: " + (first.callsign || first.uid) + ", " + alertName(first.type) : list.length + " active emergencies";
+    clear(alertEl).append(icon("alert", 18), h("span", null, text), h("span", { class: "go" }, "View on map"));
   }
 
   async function updateCount() {
@@ -499,13 +525,19 @@
     const items = [];
     for (const p of PAGES) {
       if (!p.id || (p.admin && !S.me.admin)) continue;
-      items.push({ title: p.title, where: "Page", hash: "#/" + p.id, keys: p.keys || "" });
+      items.push({ title: p.title, where: "Page", icon: p.icon, hash: "#/" + p.id, keys: p.keys || "" });
     }
-    if (S.me.admin) for (const s of SETTINGS_SECTIONS) items.push({ title: s.title, where: "Settings", hash: "#/settings/" + s.id, keys: s.keys || "" });
+    if (S.me.admin) for (const s of SETTINGS_SECTIONS) items.push({ title: s.title, where: "Settings", icon: "settings", hash: "#/settings/" + s.id, keys: s.keys || "" });
     const q = h("input", { type: "text", placeholder: "Go to a page or setting", "aria-label": "Go to a page or setting", autocomplete: "off", spellcheck: "false" });
     const list = h("ul", { role: "listbox" });
     const back = h("div", { class: "modal-back" });
-    const box = h("div", { class: "modal palette", role: "dialog", "aria-modal": "true", "aria-label": "Go to" }, q, list);
+    const box = h(
+      "div",
+      { class: "modal palette", role: "dialog", "aria-modal": "true", "aria-label": "Go to" },
+      h("div", { class: "q" }, icon("search", 18), q),
+      list,
+      h("div", { class: "foot" }, h("span", null, h("kbd", null, "↑"), " ", h("kbd", null, "↓"), " to move"), h("span", null, h("kbd", null, "Enter"), " to open"), h("span", null, h("kbd", null, "Esc"), " to close"))
+    );
     let shown = [];
     let at = 0;
     const close = () => {
@@ -525,7 +557,9 @@
       at = Math.min(at, Math.max(0, shown.length - 1));
       clear(list);
       if (!shown.length) list.append(h("li", { class: "none" }, "Nothing matches \"" + q.value.trim() + "\"."));
-      shown.forEach((it, i) => list.append(h("li", { class: i === at ? "on" : "", role: "option", onmousedown: (ev) => (ev.preventDefault(), pick(it)) }, h("span", null, it.title), h("span", { class: "where" }, it.where))));
+      shown.forEach((it, i) =>
+        list.append(h("li", { class: i === at ? "on" : "", role: "option", "aria-selected": String(i === at), onmousemove: () => { if (at !== i) { at = i; draw(); } }, onmousedown: (ev) => (ev.preventDefault(), pick(it)) }, icon(it.icon, 16), h("span", { class: "t" }, it.title), h("span", { class: "where" }, it.where)))
+      );
       const on = list.querySelector(".on");
       if (on) on.scrollIntoView({ block: "nearest" });
     };
@@ -567,55 +601,81 @@
 
   function layout() {
     clear(root);
-    const side = h("nav", { class: "side", id: "side", "aria-label": "Sections" });
-    alertEl = h("a", { class: "alert", href: "#/map", style: "display:none" });
+    const side = h("aside", { class: "side", id: "side", "aria-label": "Navigation" });
+    alertEl = h("a", { class: "banner", href: "#/map", style: "display:none", role: "alert" });
     liveEl = h("span", { class: "live", role: "status" });
+    crumbEl = h("div", { class: "crumbs" });
     setLive(!!(S.ws && S.ws.readyState === 1));
     const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-    const menuBtn = btn("Menu", () => {
-      const open = side.classList.toggle("open");
+    const setOpen = (open) => {
+      side.classList.toggle("open", open);
       menuBtn.setAttribute("aria-expanded", String(open));
-    }, "menu", "menu");
+    };
+    const menuBtn = btn("Menu", () => setOpen(!side.classList.contains("open")), "menu icon-only ghost", "menu");
     menuBtn.setAttribute("aria-controls", "side");
     menuBtn.setAttribute("aria-label", "Menu");
     menuBtn.setAttribute("aria-expanded", "false");
-    const serverName = S.me.server && S.me.server !== "GolangTAK" ? S.me.server : "";
-    const top = h(
-      "header",
-      { class: "top" },
-      h("a", { class: "skip", href: "#main", onclick: (ev) => (ev.preventDefault(), document.getElementById("main").focus()) }, "Skip to content"),
-      menuBtn,
-      h("a", { class: "brand", href: "#/overview" }, "GolangTAK"),
-      serverName ? h("span", { class: "server" }, serverName) : null,
-      h("span", { class: "spacer" }),
-      alertEl,
-      liveEl,
-      h("button", { type: "button", class: "find", onclick: openPalette, "aria-label": "Go to a page or setting" }, h("span", { class: "fl" }, icon("search", 16), h("span", { class: "label" }, "Search pages and settings"), h("span", { class: "short" }, "Search")), h("kbd", null, mac ? "⌘K" : "Ctrl K")),
-      h("a", { class: "who", href: "#/account", title: "My account" }, S.me.user + (S.me.admin ? " (administrator)" : "")),
-      btn("Sign out", signOut, "signout", "signout")
-    );
+    const findMobile = btn("Search", openPalette, "mfind icon-only ghost", "search");
+    findMobile.setAttribute("aria-label", "Go to a page or setting");
+    const serverName = S.me.server || "GolangTAK";
+    const nav = h("nav", { "aria-label": "Sections" });
     countEl = null;
     for (const p of PAGES) {
       if (p.admin && !S.me.admin) continue;
       if (p.group) {
-        side.append(h("div", { class: "group" }, p.group));
+        nav.append(h("div", { class: "group" }, p.group));
         continue;
       }
       const count = p.count ? h("span", { class: "count", title: "Connected now" }) : null;
       if (count) countEl = count;
-      side.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => side.classList.remove("open") }, icon(p.icon), h("span", { class: "t" }, p.title), count));
+      nav.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => setOpen(false) }, icon(p.icon), h("span", { class: "t" }, p.title), count));
     }
-    const main = h("main", { id: "main", tabindex: "-1", onmousedown: () => {
-      if (side.classList.contains("open")) {
-        side.classList.remove("open");
-        menuBtn.setAttribute("aria-expanded", "false");
-      }
-    } });
-    root.append(top, h("div", { class: "layout" }, side, main));
+    const signOutBtn = btn("Sign out", signOut, "icon-only ghost", "signout");
+    signOutBtn.setAttribute("aria-label", "Sign out");
+    signOutBtn.title = "Sign out";
+    side.append(
+      h("a", { class: "brand", href: "#/overview" }, mark(30), h("span", null, h("span", { class: "name" }, "GolangTAK"), h("span", { class: "srv", title: serverName }, serverName))),
+      h("button", { type: "button", class: "find", onclick: openPalette, "aria-label": "Go to a page or setting" }, icon("search", 16), h("span", { class: "label" }, "Go to..."), h("kbd", null, mac ? "⌘K" : "Ctrl K")),
+      nav,
+      h(
+        "div",
+        { class: "me" },
+        h("a", { class: "who", href: "#/account", title: "My account", onclick: () => setOpen(false) }, h("span", { class: "avatar", "aria-hidden": "true" }, (S.me.user || "?").slice(0, 1)), h("span", { style: "min-width:0" }, h("b", null, S.me.user), h("small", null, S.me.admin ? "Administrator" : "User"))),
+        signOutBtn
+      )
+    );
+    const main = h("main", { id: "main", tabindex: "-1" });
+    const strip = h(
+      "div",
+      { class: "strip" },
+      h("a", { class: "skip", href: "#main", onclick: (ev) => (ev.preventDefault(), document.getElementById("main").focus()) }, "Skip to content"),
+      menuBtn,
+      h("a", { class: "mbrand", href: "#/overview" }, mark(22), "GolangTAK"),
+      crumbEl,
+      h("span", { class: "spacer" }),
+      liveEl,
+      findMobile
+    );
+    const column = h("div", { class: "main", onmousedown: () => side.classList.contains("open") && setOpen(false) }, strip, alertEl, main);
+    root.append(h("div", { class: "app" }, side, column));
     updateAlert();
     clearInterval(countTimer);
     countTimer = setInterval(updateCount, 10000);
     updateCount();
+  }
+
+  function setCrumbs(page, extra) {
+    if (!crumbEl) return;
+    let group = "";
+    for (const p of PAGES) {
+      if (p.group) group = p.group;
+      if (p === page) break;
+    }
+    const parts = [];
+    if (group) parts.push(h("span", null, group), h("span", { class: "sep" }, "/"));
+    if (extra) parts.push(h("a", { href: "#/" + page.id }, page.title), h("span", { class: "sep" }, "/"), h("b", null, extra));
+    else parts.push(h("b", null, page.title));
+    clear(crumbEl).append(...parts);
   }
 
   async function route() {
@@ -641,7 +701,8 @@
     if (!document.getElementById("main")) layout();
     const side = document.querySelector(".side");
     if (side) side.classList.remove("open");
-    for (const a of document.querySelectorAll(".side a")) {
+    setCrumbs(page, page.id === "missions" && rest[0] ? decodeURIComponent(rest[0]) : "");
+    for (const a of document.querySelectorAll(".side nav a")) {
       a.classList.toggle("active", a.dataset.page === page.id);
       if (a.dataset.page === page.id) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
@@ -674,8 +735,9 @@
     const form = h(
       "form",
       { class: "login", autocomplete: "on" },
-      h("h1", null, "GolangTAK"),
-      h("p", { class: "lead" }, "Sign in to manage this server."),
+      mark(40),
+      h("h1", null, "Sign in to GolangTAK"),
+      h("p", { class: "lead" }, "Manage devices, users and links on this server."),
       h("label", { for: "u" }, "User name"),
       h("input", { id: "u", name: "username", autocomplete: "username", required: true, autocapitalize: "none", spellcheck: "false" }),
       h("label", { for: "p" }, "Password"),
@@ -694,6 +756,7 @@
         err.textContent = e.message === "invalid credentials" ? "Wrong user name or password." : e.message;
       }
     });
+    form.append(h("div", { class: "foot" }, "GolangTAK is open source and not affiliated with tak.gov or the TAK Product Center."));
     root.append(h("div", { class: "login-wrap" }, form));
     form.querySelector("#u").focus();
   }
@@ -719,10 +782,174 @@
     await route();
   }
 
+  function panel(title, meta, ...body) {
+    const flush = body.length === 1 && body[0] && body[0].classList && (body[0].classList.contains("table-wrap") || body[0].classList.contains("empty"));
+    return h("section", { class: "panel" }, h("header", null, h("h2", null, title), meta || null), h("div", { class: "pb" + (flush ? " flush" : "") }, body));
+  }
+
+  function pill(state, text) {
+    const s = String(state || "").toLowerCase();
+    let cls = "";
+    if (/^(connected|running|listening|online|ok|healthy|enabled)/.test(s)) cls = "ok";
+    else if (/(connecting|starting|waiting|reconnect|retry|idle)/.test(s)) cls = "warn";
+    else if (/(problem|error|fail|refused|down|stopped|disconnected|denied)/.test(s)) cls = "bad";
+    return h("span", { class: "pill " + cls }, text || state || "unknown");
+  }
+
+  function fmtPct(v) {
+    return (Number(v) || 0).toFixed(Number(v) >= 10 ? 0 : 1) + "%";
+  }
+
+  function fmtRate(v, unit) {
+    v = Number(v) || 0;
+    if (unit === "B") return fmtBytes(v) + "/s";
+    return (v >= 100 ? Math.round(v) : v.toFixed(1)) + " " + unit + "/s";
+  }
+
+  function level(pct) {
+    return pct >= 90 ? "bad" : pct >= 75 ? "warn" : "";
+  }
+
+  function meter(label, used, total, detail) {
+    const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+    const lv = level(pct);
+    return h(
+      "div",
+      { class: "meter " + lv, role: "meter", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": pct.toFixed(0) },
+      h("div", { class: "row" }, h("span", null, label, lv ? h("span", { class: "state" }, lv === "bad" ? "  Critical" : "  High") : null), h("span", null, fmtPct(pct))),
+      h("div", { class: "track" }, h("div", { class: "fill", style: "width:" + pct.toFixed(1) + "%" })),
+      h("div", { class: "row small" }, h("span", { class: "muted" }, detail || ""), h("span", null, ""))
+    );
+  }
+
+  function lineChart(points, opts) {
+    const ns = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs) => {
+      const e = document.createElementNS(ns, tag);
+      for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, String(v));
+      return e;
+    };
+    const wrap = h("div", { class: "chart" });
+    const tip = h("div", { class: "tip" });
+    let lastW = 0;
+    const build = () => {
+    const W = Math.max(240, Math.round(wrap.clientWidth || 600)), H = 170, L = 44, R = 70, T = 8, B = 22;
+    if (W === lastW) return;
+    lastW = W;
+    const svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": opts.label });
+    const vals = points.map((p) => p.v);
+    let max = opts.max || Math.max(1, ...vals) * 1.15;
+    const step = opts.bytes ? byteStep(max / 4) : niceStep(max / 4);
+    max = Math.max(step * 4, opts.max || 0);
+    const x = (i) => L + (points.length > 1 ? (i / (points.length - 1)) * (W - L - R) : 0);
+    const y = (v) => T + (1 - v / max) * (H - T - B);
+    for (let k = 0; k <= 4; k++) {
+      const v = (max / 4) * k;
+      svg.append(el("line", { class: "gl", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
+      const t = el("text", { class: "tick", x: L - 8, y: y(v) + 4, "text-anchor": "end" });
+      t.textContent = opts.fmtAxis(v);
+      svg.append(t);
+    }
+    if (points.length > 1) {
+      const secs = Math.round((points[points.length - 1].t - points[0].t) / 1000);
+      const t0 = el("text", { class: "tick", x: L, y: H - 4 });
+      t0.textContent = secs < 120 ? secs + " s ago" : Math.round(secs / 60) + " min ago";
+      const t1 = el("text", { class: "tick", x: W - R, y: H - 4, "text-anchor": "end" });
+      t1.textContent = "now";
+      svg.append(t0, t1);
+      const d = points.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.v).toFixed(1)).join(" ");
+      svg.append(el("path", { class: "area", d: d + " L" + x(points.length - 1).toFixed(1) + " " + y(0) + " L" + x(0) + " " + y(0) + " Z" }));
+      svg.append(el("path", { class: "line", d: d }));
+      const last = points[points.length - 1];
+      const lab = el("text", { class: "tick", x: x(points.length - 1) + 10, y: y(last.v) + 4, style: "fill:var(--text);font-weight:600" });
+      lab.textContent = opts.fmt(last.v);
+      svg.append(lab);
+    }
+    const xh = el("line", { class: "xh", y1: T, y2: H - B, style: "display:none" });
+    const dot = el("rect", { class: "end", width: 8, height: 8, style: "display:none" });
+    svg.append(xh, dot);
+    const hit = el("rect", { class: "hit", x: L, y: T, width: W - L - R, height: H - T - B, tabindex: "0" });
+    svg.append(hit);
+    const show = (i) => {
+      if (i < 0 || i >= points.length) return;
+      const p = points[i];
+      const px = x(i), py = y(p.v);
+      xh.setAttribute("x1", px);
+      xh.setAttribute("x2", px);
+      xh.style.display = "";
+      dot.setAttribute("x", px - 4);
+      dot.setAttribute("y", py - 4);
+      dot.style.display = "";
+      const r = svg.getBoundingClientRect();
+      clear(tip).append(h("b", null, opts.fmt(p.v)), h("span", null, fmtTime(p.t).slice(11)));
+      tip.style.left = px.toFixed(0) + "px";
+      tip.style.top = (py - 12).toFixed(0) + "px";
+      tip.style.display = "block";
+    };
+    const hide = () => {
+      xh.style.display = dot.style.display = "none";
+      tip.style.display = "none";
+    };
+    let cur = points.length - 1;
+    hit.addEventListener("pointermove", (ev) => {
+      const r = svg.getBoundingClientRect();
+      const vx = ev.clientX - r.left;
+      cur = Math.round(((vx - L) / (W - L - R)) * (points.length - 1));
+      show(Math.max(0, Math.min(points.length - 1, cur)));
+    });
+    hit.addEventListener("pointerleave", hide);
+    hit.addEventListener("focus", () => show((cur = points.length - 1)));
+    hit.addEventListener("blur", hide);
+    hit.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+        ev.preventDefault();
+        cur = Math.max(0, Math.min(points.length - 1, cur + (ev.key === "ArrowLeft" ? -1 : 1)));
+        show(cur);
+      }
+    });
+    clear(wrap).append(svg, tip);
+    };
+    requestAnimationFrame(build);
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => build());
+      ro.observe(wrap);
+    }
+    return wrap;
+  }
+
+  function byteStep(raw) {
+    let u = 1;
+    while (raw / u >= 1024) u *= 1024;
+    return niceStep(raw / u) * u;
+  }
+
+  function niceStep(raw) {
+    if (!(raw > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const n = raw / p;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p;
+  }
+
+  function perfMeters(pf) {
+    const sys = pf.system || {}, cur = pf.current || {};
+    const out = [];
+    if (pf.process && pf.process.cpuMeasured) out.push(meter("GolangTAK CPU", cur.cpu || 0, 100, "of " + sys.cpus + " CPU cores"));
+    if (sys.cpuMeasured) out.push(meter("System CPU", cur.systemCpu || 0, 100, "all processes"));
+    if (sys.memoryTotal && sys.memoryAvailable !== undefined) out.push(meter("System memory", sys.memoryTotal - sys.memoryAvailable, sys.memoryTotal, fmtBytes(sys.memoryTotal - sys.memoryAvailable) + " of " + fmtBytes(sys.memoryTotal)));
+    else if (sys.memoryTotal) out.push(meter("GolangTAK memory", pf.process.memory, sys.memoryTotal, fmtBytes(pf.process.memory) + " of " + fmtBytes(sys.memoryTotal)));
+    if (sys.disk) out.push(meter("Disk", sys.disk.total - sys.disk.free, sys.disk.total, fmtBytes(sys.disk.free) + " free of " + fmtBytes(sys.disk.total)));
+    return out;
+  }
+
   async function pageOverview(main) {
-    const [st, em, clients] = await Promise.all([api("GET", "/api/status"), api("GET", "/api/emergencies").catch(() => []), api("GET", "/api/clients").catch(() => [])]);
+    const [st, em, clients, pf] = await Promise.all([
+      api("GET", "/api/status"),
+      api("GET", "/api/emergencies").catch(() => []),
+      api("GET", "/api/clients").catch(() => []),
+      S.me.admin ? api("GET", "/api/performance").catch(() => null) : null,
+    ]);
     const online = clients.filter((c) => !c.internal);
-    pageHead(main, "Overview", st.name + " has been running for " + fmtDuration(st.uptimeSeconds) + ". Version " + st.version + ".", btn("Connect a device", go("#/connect"), "primary", "connect"), btn("Open map", go("#/map"), "", "map"));
+    pageHead(main, "Overview", st.name + " is running. Up " + fmtDuration(st.uptimeSeconds) + ", version " + st.version + ".", btn("Open map", go("#/map"), "", "map"), btn("Connect a device", go("#/connect"), "primary", "connect"));
 
     if (S.me.admin) {
       const loopback = !st.address || /^(127\.|localhost$|::1$)/.test(st.address);
@@ -732,34 +959,34 @@
         { done: st.users > 1, what: "Add a user for each person or team", hash: "#/users", action: "Add users" },
         { done: st.devices > 0, what: "Connect the first device", hash: "#/connect", action: "Connect a device" },
       ];
-      const left = steps.filter((s) => !s.done).length;
-      if (left) {
+      const done = steps.filter((s) => s.done).length;
+      if (done < steps.length) {
         main.append(
           h(
             "div",
             { class: "checklist" },
-            h("div", { class: "head" }, "Finish setting up", h("span", null, steps.length - left + " of " + steps.length + " done")),
+            h("div", { class: "head" }, h("b", null, "Finish setting up"), h("span", { class: "meter" }, h("span", { class: "bar" }, h("span", { style: "width:" + (done / steps.length) * 100 + "%" })), done + " of " + steps.length + " done")),
             h(
               "ol",
               null,
-              steps.map((s) => h("li", { class: s.done ? "done" : "" }, h("span", { class: "box", "aria-hidden": "true" }), h("span", { class: "what" }, s.what, h("span", { class: "skip" }, s.done ? " (done)" : " (to do)")), s.done ? null : h("a", { class: "button small", href: s.hash }, s.action)))
+              steps.map((s) => h("li", { class: s.done ? "done" : "" }, h("span", { class: "box", "aria-hidden": "true" }, s.done ? icon("check", 13) : null), h("span", { class: "what" }, s.what, h("span", { class: "sr" }, s.done ? " (done)" : " (to do)")), s.done ? null : h("a", { class: "button small", href: s.hash }, s.action)))
             )
           )
         );
       }
     }
 
-    const stat = (n, label, hash, ic, inv) => h(hash ? "a" : "div", { class: "stat" + (inv ? " inv" : ""), href: hash || undefined }, h("div", { class: "sh" }, h("span", { class: "n" }, n), icon(ic, 20)), h("div", { class: "l" }, label));
+    const stat = (n, label, hash, ic, sub, bad) => h(hash ? "a" : "div", { class: "stat" + (bad ? " bad" : ""), href: hash || undefined }, h("div", { class: "sh" }, h("span", null, label), icon(ic, 16)), h("div", { class: "n" }, n), sub ? h("div", { class: "sub" }, sub) : null);
+    const cur = pf && pf.current;
     main.append(
       h(
         "div",
         { class: "stats" },
-        stat(online.length, "Online now", "#/clients", "online"),
-        stat(st.devices, "Devices seen", "#/devices", "devices"),
-        stat(em.length, em.length === 1 ? "Emergency" : "Emergencies", "#/map", "alert", em.length > 0),
-        S.me.admin ? stat(st.users, st.users === 1 ? "User" : "Users", "#/users", "users") : null,
-        stat(st.missions, st.missions === 1 ? "Mission" : "Missions", "#/missions", "missions"),
-        stat(st.files, st.files === 1 ? "File" : "Files", "#/files", "files")
+        stat(online.length, "Online now", "#/clients", "online", st.devices + " devices seen in total"),
+        stat(em.length, "Emergencies", "#/map", "alert", em.length ? "Active now" : "None active", em.length > 0),
+        stat(st.missions, "Missions", "#/missions", "missions", st.files + " shared files"),
+        cur ? stat(fmtPct(cur.cpu), "Server CPU", "#/performance", "cpu", fmtRate(cur.messages, "msg")) : stat(st.users, "Users", S.me.admin ? "#/users" : null, "users"),
+        cur ? stat(fmtBytes(cur.memory), "Server memory", "#/performance", "memory", pf.system.memoryTotal ? "of " + fmtBytes(pf.system.memoryTotal) + " installed" : "in use") : null
       )
     );
 
@@ -769,27 +996,24 @@
       h(
         "div",
         { class: "cols" },
-        h(
-          "section",
-          null,
-          h("h2", null, "Online now", online.length > 8 ? h("a", { class: "aside", href: "#/clients" }, "View all " + online.length) : null),
-          online.length
-            ? table(
-                [
-                  { title: "Callsign", render: (r) => h("b", null, name(r)) },
-                  { title: "Software", render: (r) => (r.info ? [r.info.platform, r.info.version].filter(Boolean).join(" ") : "") || r.kind },
-                  { title: "Last seen", cls: "nowrap", render: (r) => fmtAgo(r.lastSeen) },
-                ],
-                online.slice(0, 8),
-                "",
-                () => (location.hash = "#/clients")
-              )
-            : h("div", { class: "empty" }, "No devices are connected. ", h("a", { href: "#/connect" }, "Connect a device"), " to get started.")
+        panel(
+          "Online now",
+          h("a", { class: "meta", href: "#/clients" }, online.length > 8 ? "View all " + online.length : "View list"),
+          table(
+            [
+              { title: "Callsign", render: (r) => h("b", null, name(r)) },
+              { title: "Software", render: (r) => (r.info ? [r.info.platform, r.info.version].filter(Boolean).join(" ") : "") || r.kind },
+              { title: "Battery", cls: "num", render: (r) => (r.info && r.info.battery ? r.info.battery + "%" : "-") },
+              { title: "Last seen", cls: "nowrap", render: (r) => fmtAgo(r.lastSeen) },
+            ],
+            online.slice(0, 8),
+            h("span", null, "No devices are connected. ", h("a", { href: "#/connect" }, "Connect a device"), " to get started."),
+            () => (location.hash = "#/clients")
+          )
         ),
-        h(
-          "section",
-          null,
-          h("h2", null, "Active emergencies"),
+        panel(
+          "Active emergencies",
+          em.length ? pill("problem", em.length + " active") : pill("ok", "All clear"),
           table(
             [
               { title: "Callsign", render: (r) => h("b", null, r.callsign || "-") },
@@ -807,25 +1031,37 @@
 
     const links = [];
     for (const p of st.peers || []) links.push({ name: p.name, kind: "Server link", state: p.state, detail: p.error || p.url, hash: "#/links" });
-    if (st.federation && st.federation.enabled) links.push({ name: "Federation", kind: "TAK Server federation", state: "listening", detail: "port " + (st.ports || {}).federation, hash: "#/links" });
+    if (st.federation && st.federation.enabled) links.push({ name: "Federation", kind: "TAK Server federation", state: "listening", detail: "Port " + (st.ports || {}).federation, hash: "#/links" });
     const mesh = st.meshtastic || {};
     if (mesh.enabled) {
-      const state = mesh.brokerError || mesh.upstreamError ? "problem" : "running";
-      links.push({ name: "Meshtastic", kind: "LoRa mesh", state: state, detail: (mesh.nodes || []).length + " nodes heard, " + mesh.packetsIn + " packets in, " + mesh.packetsOut + " out" + (mesh.brokerError ? ". " + mesh.brokerError : "") + (mesh.upstreamError ? ". " + mesh.upstreamError : ""), hash: "#/settings/meshtastic" });
+      const problem = mesh.brokerError || mesh.upstreamError;
+      links.push({ name: "Meshtastic", kind: "LoRa mesh", state: problem ? "problem" : "running", detail: problem || (mesh.nodes || []).length + " nodes heard, " + mesh.packetsIn + " packets in, " + mesh.packetsOut + " out", hash: "#/settings/meshtastic" });
     }
     for (const f of (st.feeds || []).filter((x) => x.enabled)) links.push({ name: f.name === "adsb" ? "ADS-B aircraft" : "AIS ships", kind: "Data feed", state: f.error ? "problem" : "running", detail: f.error || f.items + " items, updated " + fmtAgo(f.lastOk), hash: "#/settings/feeds" });
+
+    const right = pf
+      ? panel("Server load", h("a", { class: "meta", href: "#/performance" }, "Details"), h("div", { class: "meters" }, perfMeters(pf)))
+      : panel("Server", null, kv([["Host", st.hostname], ["System", st.os + "/" + st.arch], ["Started", fmtTime(st.started)]]));
     main.append(
-      h("h2", null, "Links and integrations"),
-      table(
-        [
-          { title: "Name", render: (r) => h("b", null, r.name) },
-          { title: "Kind", key: "kind" },
-          { title: "State", render: (r) => h("span", { class: "badge" + (r.state === "connected" || r.state === "running" || r.state === "listening" ? "" : " inv") }, r.state || "-") },
-          { title: "Detail", render: (r) => h("span", { class: "small" }, r.detail || "-") },
-        ],
-        links,
-        S.me.admin ? h("span", null, "Nothing linked yet. Connect other servers under ", h("a", { href: "#/links" }, "Server links"), ", or turn on Meshtastic and data feeds in ", h("a", { href: "#/settings/meshtastic" }, "Settings"), ".") : "No links to other servers.",
-        S.me.admin ? (r) => (location.hash = r.hash) : null
+      h(
+        "div",
+        { class: "cols" },
+        panel(
+          "Links and integrations",
+          S.me.admin ? h("a", { class: "meta", href: "#/links" }, "Manage") : null,
+          table(
+            [
+              { title: "Name", render: (r) => h("b", null, r.name) },
+              { title: "Kind", key: "kind" },
+              { title: "State", render: (r) => pill(r.state) },
+              { title: "Detail", render: (r) => h("span", { class: "small muted" }, r.detail || "-") },
+            ],
+            links,
+            S.me.admin ? h("span", null, "Nothing linked yet. Connect other servers under ", h("a", { href: "#/links" }, "Server links"), ", or turn on ", h("a", { href: "#/settings/meshtastic" }, "Meshtastic"), " and ", h("a", { href: "#/settings/feeds" }, "data feeds"), ".") : "No links to other servers.",
+            S.me.admin ? (r) => (location.hash = r.hash) : null
+          )
+        ),
+        right
       )
     );
 
@@ -857,7 +1093,6 @@
           ["Started", fmtTime(st.started)],
           ["Connections by type", kinds || "none"],
           ["Events handled", String(st.events)],
-          ["Memory in use", fmtBytes(st.memoryBytes)],
           ["Data directory", h("span", { class: "mono" }, st.dataDir)],
           ["Stored files", fmtBytes(st.filesBytes) + " in " + st.files + " files"],
           ["History", fmtBytes(st.historyBytes) + " over " + st.historyDays + " days"],
@@ -879,6 +1114,70 @@
           )
         : null
     );
+  }
+
+  async function pagePerformance(main) {
+    pageHead(main, "Performance", "How hard this server is working. Sampled every few seconds, with the last ten minutes kept in memory.");
+    const body = h("div");
+    main.append(body);
+    const draw = (pf) => {
+      const sys = pf.system || {}, pr = pf.process || {}, rt = pf.runtime || {}, tr = pf.traffic || {};
+      const hist = pf.history || [];
+      const series = (key) => hist.map((s) => ({ t: s.t, v: Number(s[key]) || 0 }));
+      const cur = pf.current || {};
+      const chartPanel = (title, key, value, sub, opts) => panel(title, h("span", { class: "meta" }, sub), h("div", { class: "cbox" }, h("div", { class: "now" }, h("b", null, value), h("span", null, opts.caption || "")), hist.length > 1 ? lineChart(series(key), opts) : h("div", { class: "empty" }, "Collecting samples. The chart appears in a few seconds.")));
+      const pctOpts = (label) => ({ label: label, max: 100, fmt: fmtPct, fmtAxis: (v) => v.toFixed(0) + "%" });
+      const charts = [];
+      if (pr.cpuMeasured) charts.push(chartPanel("GolangTAK CPU", "cpu", fmtPct(cur.cpu), "share of all " + sys.cpus + " cores", Object.assign(pctOpts("GolangTAK CPU use over time"), { caption: "now" })));
+      if (sys.cpuMeasured) charts.push(chartPanel("System CPU", "systemCpu", fmtPct(cur.systemCpu), "every process on the machine", Object.assign(pctOpts("System CPU use over time"), { caption: "now" })));
+      charts.push(chartPanel("GolangTAK memory", "memory", fmtBytes(cur.memory || pr.memory), pr.memoryIsRss ? "resident in RAM" : "reserved by the Go runtime", { label: "GolangTAK memory over time", bytes: true, fmt: fmtBytes, fmtAxis: (v) => fmtBytes(v).replace(".0 ", " "), caption: "now" }));
+      charts.push(chartPanel("Messages", "messages", fmtRate(cur.messages, "msg"), "CoT events received", { label: "Messages per second over time", fmt: (v) => fmtRate(v, "msg"), fmtAxis: (v) => String(Math.round(v)), caption: "per second now" }));
+      charts.push(chartPanel("Data sent", "bytesOut", fmtRate(cur.bytesOut, "B"), "to devices and links", { label: "Bytes sent per second over time", bytes: true, fmt: (v) => fmtRate(v, "B"), fmtAxis: (v) => fmtBytes(v).replace(".0 ", " "), caption: "now" }));
+      charts.push(chartPanel("Connections", "clients", String(cur.clients || 0), "devices, links and listeners", { label: "Connections over time", fmt: (v) => String(Math.round(v)), fmtAxis: (v) => String(Math.round(v)), caption: "open now" }));
+      clear(body).append(
+        panel("Capacity", h("span", { class: "meta" }, sys.hostname + ", " + sys.os + "/" + sys.arch), h("div", { class: "meters" }, perfMeters(pf))),
+        h("div", { class: "perf" }, charts),
+        h(
+          "div",
+          { class: "cols" },
+          panel(
+            "Machine",
+            null,
+            kv([
+              ["Host", sys.hostname],
+              ["System", sys.os + " on " + sys.arch],
+              ["CPU cores", String(sys.cpus)],
+              ["Installed memory", sys.memoryTotal ? fmtBytes(sys.memoryTotal) : "not reported on this system"],
+              ["Available memory", sys.memoryAvailable !== undefined ? fmtBytes(sys.memoryAvailable) : "not reported on this system"],
+              ["Load average", sys.load ? sys.load.map((v) => v.toFixed(2)).join("  ") + "  (1, 5, 15 min)" : "not reported on this system"],
+              ["Data disk", sys.disk ? fmtBytes(sys.disk.free) + " free of " + fmtBytes(sys.disk.total) : "not reported on this system"],
+            ])
+          ),
+          panel(
+            "GolangTAK process",
+            null,
+            kv([
+              ["Process ID", h("span", { class: "mono" }, String(pr.pid))],
+              ["Running for", fmtDuration(pr.uptimeSeconds)],
+              ["Memory", fmtBytes(pr.memory) + (pr.memoryIsRss ? " resident" : " reserved")],
+              ["Go heap in use", fmtBytes(rt.heapInUse)],
+              ["Goroutines", String(rt.goroutines)],
+              ["Garbage collections", rt.gcCycles + ", " + (rt.gcPauseTotalMs || 0).toFixed(1) + " ms paused in total"],
+              ["Events received", String(tr.events)],
+              ["Deliveries", String(tr.delivered) + ", " + fmtBytes(tr.bytesOut) + " sent"],
+              ["Go version", rt.go],
+            ])
+          )
+        )
+      );
+    };
+    const load = async () => draw(await api("GET", "/api/performance"));
+    await load();
+    const timer = setInterval(() => {
+      if (document.querySelector(".chart .tip[style*='block']")) return;
+      load().catch(() => {});
+    }, 4000);
+    return () => clearInterval(timer);
   }
 
   async function pageConnect(main) {
@@ -977,35 +1276,49 @@
     pageHead(main, "Map", "Live positions, markers and alerts from every connected device.");
     const coords = h("div", { class: "map-coords" }, "");
     const infoBox = h("div", { class: "map-info" });
-    const canvas = h("canvas", { class: "gray" });
-    let gray = true;
+    const canvas = h("canvas");
+    let style = "auto";
     try {
-      gray = localStorage.getItem("golangtak-map-color") !== "1";
+      style = localStorage.getItem("golangtak-map-style") || "auto";
     } catch (e) {}
-    canvas.classList.toggle("gray", gray);
+    const isDark = () => getComputedStyle(document.documentElement).colorScheme === "dark";
+    const mapLook = () => {
+      const s = style === "auto" ? (isDark() ? "dark" : "light") : style;
+      if (s === "dark") return ["grayscale(1) invert(1) brightness(0.86) contrast(0.92)", true];
+      if (s === "light") return ["grayscale(1) contrast(1.02)", false];
+      return ["none", isDark()];
+    };
+    const styleSel = select("mapstyle", [["auto", "Match theme"], ["dark", "Dark"], ["light", "Light"], ["color", "Color"]], style);
+    styleSel.setAttribute("aria-label", "Map style");
     const wrap = h("div", { class: "map-wrap" }, canvas, infoBox, coords, h("div", { class: "map-attr" }, S.me.tileUrl && S.me.tileUrl.includes("openstreetmap") ? "Map data © OpenStreetMap contributors" : ""));
     let addMode = false;
     let showTracks = false;
     const addBtn = btn("Add marker", () => {
       addMode = !addMode;
       addBtn.classList.toggle("primary", addMode);
-      addBtn.textContent = addMode ? "Click the map to place the marker" : "Add marker";
-    });
+      addBtn.lastChild.textContent = addMode ? "Click the map to place it" : "Add marker";
+    }, "", "plus");
     const countEl = h("span", { class: "muted" });
     main.append(
       h(
         "div",
         { class: "toolbar" },
-        btn("Show all", () => fitAll(true), "", "search"),
+        btn("Show all", () => fitAll(true), "", "overview"),
         addBtn,
         checkbox("tracks", false, "Tracks (last hour)"),
-        checkbox("color", !gray, "Color map"),
         h("span", { class: "grow" }),
-        countEl
+        countEl,
+        styleSel
       ),
-      wrap
+      wrap,
+      h(
+        "div",
+        { class: "legend", style: "margin-top:12px" },
+        [["#80e0ff", "Friendly"], ["#ff8080", "Hostile"], ["#aaffaa", "Neutral"], ["#ffff80", "Unknown"], ["#ff4d4f", "Emergency"]].map(([c, t]) => h("span", null, h("i", { style: "background:" + c }), t))
+      )
     );
-    const map = new SlippyMap(canvas, { tileUrl: S.me.tileUrl, lat: 20, lon: 0, zoom: 3 });
+    const [tf, dk] = mapLook();
+    const map = new SlippyMap(canvas, { tileUrl: S.me.tileUrl, lat: 20, lon: 0, zoom: 3, tileFilter: tf, dark: dk });
     const tools = h("div", { class: "map-tools" }, btn("+", () => map.zoomAt(1)), btn("-", () => map.zoomAt(-1)));
     wrap.append(tools);
     map.onmove = (lat, lon) => {
@@ -1076,7 +1389,7 @@
       if (addMode) {
         addMode = false;
         addBtn.classList.remove("primary");
-        addBtn.textContent = "Add marker";
+        addBtn.lastChild.textContent = "Add marker";
         const f = h(
           "form",
           { class: "grid" },
@@ -1120,11 +1433,12 @@
       showTracks = tracksBox.checked;
       loadTracks();
     });
-    main.querySelector("#color").addEventListener("change", (ev) => {
-      canvas.classList.toggle("gray", !ev.target.checked);
+    styleSel.addEventListener("change", () => {
+      style = styleSel.value;
       try {
-        localStorage.setItem("golangtak-map-color", ev.target.checked ? "1" : "0");
+        localStorage.setItem("golangtak-map-style", style);
       } catch (e) {}
+      map.setStyle(...mapLook());
     });
     S.listeners.add((v) => {
       redraw();
@@ -1254,7 +1568,7 @@
         table(
           [
             { title: "Callsign", key: "callsign" },
-            { title: "Status", render: (r) => (r.lastStatus === "Connected" ? h("span", { class: "badge inv" }, "Connected") : r.lastStatus || "-") },
+            { title: "Status", render: (r) => (r.lastStatus === "Connected" ? pill("connected", "Connected") : h("span", { class: "pill" }, r.lastStatus || "Not seen")) },
             { title: "User", key: "user" },
             { title: "Software", render: (r) => [r.platform, r.version].filter(Boolean).join(" ") },
             { title: "Device", render: (r) => [r.device, r.os].filter(Boolean).join(" ") },
@@ -1757,8 +2071,8 @@
               title: "State",
               render: (r) => {
                 const s = status.find((x) => x.name === r.name);
-                if (!r.enabled) return "disabled";
-                return s ? s.state + (s.error ? " (" + s.error + ")" : "") : "-";
+                if (!r.enabled) return h("span", { class: "pill" }, "disabled");
+                return s ? h("div", null, pill(s.state), s.error ? h("div", { class: "small muted", style: "margin-top:4px" }, s.error) : null) : "-";
               },
             },
             {

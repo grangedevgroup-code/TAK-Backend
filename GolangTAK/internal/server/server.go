@@ -64,6 +64,7 @@ type Server struct {
 	reports  *Reports
 	feeds    *feedState
 	mesh     *meshBridge
+	perf     *perfSampler
 	control  string
 	lock     *flock.Lock
 	localMux http.Handler
@@ -128,6 +129,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 		return nil, err
 	}
 	s.hub = NewHub(s, s.log, cfg.Limits.QueueLength, cfg.Limits.MaxClients, cfg.Limits.CacheLimit)
+	s.perf = &perfSampler{}
 	s.dir.OnChange = s.refreshUser
 	s.dir.External = s.ldapAuth
 	if err := s.initSubsystems(); err != nil {
@@ -274,8 +276,9 @@ func (s *Server) Start(ctx context.Context) error {
 	if _, err := s.pki.SelfTestCert(); err != nil {
 		s.log.Warn("could not create the self-test certificate", "err", err)
 	}
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.maintenance()
+	go s.perfLoop()
 	s.log.Info("GolangTAK started", "version", s.Version, "address", cfg.Address, "data", s.DataDir,
 		"tcp", cfg.Ports.TCP, "tls", cfg.Ports.TLS, "http", cfg.Ports.HTTP, "https", cfg.Ports.HTTPS, "enroll", cfg.Ports.Enroll)
 	return nil

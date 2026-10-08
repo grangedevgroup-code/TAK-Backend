@@ -35,6 +35,8 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext("2d");
       this.tileUrl = opts.tileUrl || "";
+      this.tileFilter = opts.tileFilter || "none";
+      this.dark = !!opts.dark;
       this.lat = opts.lat ?? 20;
       this.lon = opts.lon ?? 0;
       this.zoom = opts.zoom ?? 3;
@@ -215,15 +217,17 @@
       const ctx = this.ctx;
       const w = this.width, h = this.height;
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      ctx.fillStyle = "#e9e9e9";
+      const pal = this.palette();
+      ctx.fillStyle = pal.empty;
       ctx.fillRect(0, 0, w, h);
+      ctx.filter = this.tileFilter;
       const z = this.zoom;
       const n = Math.pow(2, z);
       const [cx, cy] = this.center();
       const left = cx - w / 2, top = cy - h / 2;
       const x0 = Math.floor(left / TILE), x1 = Math.floor((left + w) / TILE);
       const y0 = Math.max(0, Math.floor(top / TILE)), y1 = Math.min(n - 1, Math.floor((top + h) / TILE));
-      ctx.strokeStyle = "#cfcfcf";
+      ctx.strokeStyle = pal.grid;
       ctx.lineWidth = 1;
       for (let ty = y0; ty <= y1; ty++) {
         for (let tx = x0; tx <= x1; tx++) {
@@ -237,12 +241,13 @@
           }
         }
       }
+      ctx.filter = "none";
       if (top < 0) {
-        ctx.fillStyle = "#d4d4d4";
+        ctx.fillStyle = pal.empty;
         ctx.fillRect(0, 0, w, -top);
       }
       if (top + h > n * TILE) {
-        ctx.fillStyle = "#d4d4d4";
+        ctx.fillStyle = pal.empty;
         ctx.fillRect(0, n * TILE - top, w, top + h - n * TILE);
       }
       this.drawTracks();
@@ -264,8 +269,21 @@
       ctx.strokeRect(sx + 0.5, sy + 0.5, TILE, TILE);
     }
 
+    palette() {
+      return this.dark
+        ? { empty: "#1a1a1d", grid: "#2a2a2e", halo: "rgba(17,17,19,0.92)", text: "#f2f2f2", ink: "#111113", track: "#7fd3df", select: "#f2f2f2" }
+        : { empty: "#e7e7e5", grid: "#d2d2d0", halo: "rgba(255,255,255,0.95)", text: "#161618", ink: "#161618", track: "#1f7f8c", select: "#161618" };
+    }
+
+    setStyle(tileFilter, dark) {
+      this.tileFilter = tileFilter || "none";
+      this.dark = !!dark;
+      this.draw();
+    }
+
     drawTracks() {
       const ctx = this.ctx;
+      const pal = this.palette();
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       for (const tr of this.tracks) {
@@ -276,10 +294,10 @@
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
-        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.strokeStyle = pal.halo;
         ctx.lineWidth = 5;
         ctx.stroke();
-        ctx.strokeStyle = "#000";
+        ctx.strokeStyle = pal.track;
         ctx.lineWidth = 2;
         ctx.stroke();
       }
@@ -312,7 +330,10 @@
 
     drawMarkers() {
       const ctx = this.ctx;
-      ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      const pal = this.palette();
+      const fill = { friend: "#80e0ff", hostile: "#ff8080", neutral: "#aaffaa", unknown: "#ffff80", emergency: "#ff4d4f" };
+      const font = "'Atkinson Hyperlegible Next', system-ui, sans-serif";
+      ctx.font = "600 12px " + font;
       ctx.textBaseline = "middle";
       const sorted = this.markers.slice().sort((a, b) => (a.kind === "emergency") - (b.kind === "emergency"));
       for (const m of sorted) {
@@ -322,62 +343,63 @@
         const r = m.kind === "emergency" ? 8 : 6;
         if (m.uid === this.selected) {
           ctx.beginPath();
-          ctx.arc(x, y, r + 6, 0, Math.PI * 2);
-          ctx.strokeStyle = "#000";
-          ctx.lineWidth = 2;
-          ctx.setLineDash([3, 3]);
+          ctx.rect(x - r - 6, y - r - 6, (r + 6) * 2, (r + 6) * 2);
+          ctx.strokeStyle = pal.select;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 3]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
         this.shape(m.kind, x, y, r);
         if (m.kind === "point") {
-          ctx.strokeStyle = "#fff";
+          ctx.strokeStyle = pal.halo;
           ctx.lineWidth = 5;
           ctx.stroke();
-          ctx.strokeStyle = "#000";
+          ctx.strokeStyle = pal.text;
           ctx.lineWidth = 2;
           ctx.stroke();
         } else {
-          ctx.fillStyle = m.kind === "emergency" || m.kind === "hostile" ? "#000" : "#fff";
+          ctx.fillStyle = fill[m.kind] || fill.unknown;
           ctx.fill();
-          ctx.strokeStyle = m.kind === "emergency" ? "#fff" : "#000";
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = pal.ink;
+          ctx.lineWidth = 1.5;
           ctx.stroke();
           if (m.kind === "emergency") {
             ctx.beginPath();
-            ctx.arc(x, y, r + 3, 0, Math.PI * 2);
-            ctx.strokeStyle = "#000";
+            ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+            ctx.strokeStyle = fill.emergency;
             ctx.lineWidth = 2;
             ctx.stroke();
-            ctx.fillStyle = "#fff";
+            ctx.fillStyle = "#ffffff";
             ctx.textAlign = "center";
-            ctx.font = "bold 11px system-ui, Arial, sans-serif";
+            ctx.font = "700 11px " + font;
             ctx.fillText("!", x, y + 0.5);
-            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+            ctx.font = "600 12px " + font;
           } else if (m.kind === "unknown") {
-            ctx.fillStyle = "#000";
+            ctx.fillStyle = pal.ink;
             ctx.textAlign = "center";
-            ctx.font = "bold 9px system-ui, Arial, sans-serif";
+            ctx.font = "700 9px " + font;
             ctx.fillText("?", x, y + 0.5);
-            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+            ctx.font = "600 12px " + font;
           }
           if (Number.isFinite(m.course) && m.speed > 0.5) {
             const a = ((m.course - 90) * Math.PI) / 180;
             ctx.beginPath();
             ctx.moveTo(x + Math.cos(a) * (r + 1), y + Math.sin(a) * (r + 1));
             ctx.lineTo(x + Math.cos(a) * (r + 12), y + Math.sin(a) * (r + 12));
-            ctx.strokeStyle = "#000";
+            ctx.strokeStyle = pal.text;
             ctx.lineWidth = 2;
             ctx.stroke();
           }
         }
         if (m.label) {
           ctx.textAlign = "left";
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = "rgba(255,255,255,0.95)";
-          ctx.strokeText(m.label, x + r + 5, y);
-          ctx.fillStyle = "#000";
-          ctx.fillText(m.label, x + r + 5, y);
+          ctx.lineWidth = 3.5;
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = pal.halo;
+          ctx.strokeText(m.label, x + r + 6, y);
+          ctx.fillStyle = pal.text;
+          ctx.fillText(m.label, x + r + 6, y);
         }
       }
     }
