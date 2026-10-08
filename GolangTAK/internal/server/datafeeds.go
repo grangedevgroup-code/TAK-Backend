@@ -36,6 +36,10 @@ type DataFeedConfig struct {
 	Port      int      `json:"port"`
 	Address   string   `json:"address,omitempty"`
 	Interface string   `json:"iface,omitempty"`
+	URL       string   `json:"url,omitempty"`
+	Username  string   `json:"username,omitempty"`
+	Password  string   `json:"password,omitempty"`
+	Interval  int      `json:"intervalSec,omitempty"`
 	Groups    []string `json:"groups"`
 	Tags      []string `json:"tags"`
 	Archive   bool     `json:"archive"`
@@ -215,7 +219,14 @@ func (s *Server) allDataFeeds() []dataFeedView {
 		if strings.EqualFold(f.Protocol, "tls") {
 			auth = "X_509"
 		}
-		add(dataFeedView{UUID: f.UUID, Name: f.Name, Type: "Streaming", Tags: f.Tags, Auth: auth, AuthRequired: auth == "X_509", Port: f.Port, Protocol: strings.ToLower(f.Protocol), Group: f.Address, Iface: f.Interface, Archive: f.Archive, Anongroup: len(f.Groups) == 0, Sync: f.Sync, FilterGroups: f.Groups, Enabled: f.Enabled})
+		port := f.Port
+		if port == 0 {
+			port = inputFeedDefaults[strings.ToLower(f.Protocol)]
+		}
+		if p := strings.ToLower(f.Protocol); p == "dump1090" || p == "traccar" {
+			port = 0
+		}
+		add(dataFeedView{UUID: f.UUID, Name: f.Name, Type: "Streaming", Tags: f.Tags, Auth: auth, AuthRequired: auth == "X_509", Port: port, Protocol: strings.ToLower(f.Protocol), Group: f.Address, Iface: f.Interface, Archive: f.Archive, Anongroup: len(f.Groups) == 0, Sync: f.Sync, FilterGroups: f.Groups, Enabled: f.Enabled})
 	}
 	group := func(g string) []string {
 		if g == "" {
@@ -281,6 +292,9 @@ func (s *Server) feedClient(f DataFeedConfig, addr string) *Client {
 }
 
 func (s *Server) startDataFeed(f DataFeedConfig) error {
+	if ok, err := s.startInputFeed(f); ok {
+		return err
+	}
 	if f.Port <= 0 || f.Port > 65535 {
 		return fmt.Errorf("port %d is not valid", f.Port)
 	}
@@ -359,7 +373,7 @@ func (s *Server) startDataFeed(f DataFeedConfig) error {
 			}
 		}()
 	default:
-		return fmt.Errorf("protocol %q is not supported; use tcp, tls, udp or mcast", f.Protocol)
+		return fmt.Errorf("protocol %q is not supported; use tcp, tls, udp, mcast, sbs, dump1090, ais, osmand or traccar", f.Protocol)
 	}
 	return nil
 }

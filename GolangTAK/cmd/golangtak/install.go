@@ -180,13 +180,20 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 		rules = append(rules, firewall.Rule{Port: cfg.Voice.Port, Proto: "tcp"}, firewall.Rule{Port: cfg.Voice.Port, Proto: "udp"})
 	}
 	for _, f := range cfg.DataFeeds {
-		if f.Enabled {
-			proto := "tcp"
-			if f.Protocol == "udp" || f.Protocol == "mcast" {
-				proto = "udp"
-			}
-			rules = append(rules, firewall.Rule{Port: f.Port, Proto: proto})
+		if !f.Enabled || f.Protocol == "sbs" || f.Protocol == "dump1090" || f.Protocol == "traccar" || (f.Protocol == "ais" && f.Address != "") {
+			continue
 		}
+		proto := "tcp"
+		if f.Protocol == "udp" || f.Protocol == "mcast" || f.Protocol == "ais" {
+			proto = "udp"
+		}
+		port := f.Port
+		if port == 0 && f.Protocol == "ais" {
+			port = 10110
+		} else if port == 0 && f.Protocol == "osmand" {
+			port = 5055
+		}
+		rules = append(rules, firewall.Rule{Port: port, Proto: proto})
 	}
 	if cfg.Meshtastic.Enabled && cfg.Meshtastic.BrokerPort > 0 {
 		rules = append(rules, firewall.Rule{Port: cfg.Meshtastic.BrokerPort, Proto: "tcp"})

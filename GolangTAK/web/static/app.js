@@ -2384,7 +2384,7 @@
   }
 
   async function pageFeeds(main) {
-    pageHead(main, "Feeds and layers", "Data feeds are inputs for sensors and other systems, each on its own port. Map layers are tile and WMS sources offered to TAK clients and missions.", btn("Add data feed", () => editFeed(), "primary", "plus"), btn("Add map layer", () => editLayer(), "", "plus"));
+    pageHead(main, "Feeds and layers", "Data feeds bring in CoT from sensors and gateways, aircraft and ships from ADS-B and AIS receivers, and Traccar trackers. Map layers are tile and WMS sources offered to TAK clients and missions.", btn("Add data feed", () => editFeed(), "primary", "plus"), btn("Add map layer", () => editLayer(), "", "plus"));
     const feedBox = h("div");
     const layerBox = h("div");
     main.append(h("h2", null, "Data feeds"), feedBox, h("h2", null, "Map layers"), layerBox);
@@ -2402,7 +2402,7 @@
         table(
           [
             { title: "Name", render: (r) => h("b", null, r.name) },
-            { title: "Type", render: (r) => (r.type === "Streaming" ? (r.protocol || "").toUpperCase() + " " + r.port : r.type) },
+            { title: "Type", render: (r) => (r.type === "Streaming" ? ({ sbs: "ADS-B SBS", dump1090: "ADS-B JSON", ais: "AIS NMEA", osmand: "Traccar Client", traccar: "Traccar" }[r.protocol] || (r.protocol || "").toUpperCase()) + (r.port ? " " + r.port : "") : r.type) },
             { title: "Groups", render: (r) => joined(r.filterGroups) },
             { title: "Tags", render: (r) => joined(r.tags) },
             { title: "Messages", render: (r) => String(r.messages || 0) },
@@ -2457,21 +2457,55 @@
         "form",
         { class: "grid" },
         field("Name", input("dfname", f.name || "", { required: true, placeholder: "UAS sensors" })),
-        field("Protocol", select("dfproto", [["tcp", "TCP"], ["tls", "TLS with client certificates"], ["udp", "UDP"], ["mcast", "Multicast UDP"]], f.protocol)),
-        field("Port", input("dfport", f.port || "", { type: "number", min: 1, max: 65535, required: true })),
-        field("Multicast address", input("dfaddr", f.address || "", { placeholder: "239.2.3.1" }), "Only for multicast feeds."),
+        field("Protocol", select("dfproto", [["tcp", "CoT over TCP"], ["tls", "CoT over TLS with client certificates"], ["udp", "CoT over UDP"], ["mcast", "CoT over multicast UDP"], ["sbs", "ADS-B receiver, dump1090 or readsb port 30003"], ["dump1090", "ADS-B receiver web page, aircraft.json"], ["ais", "AIS receiver, rtl_ais or AIS-catcher NMEA"], ["osmand", "Traccar Client phones, OsmAnd protocol"], ["traccar", "Traccar server"]], f.protocol)),
+        h("p", { class: "full small muted", id: "dfhelp" }),
+        field("Port", input("dfport", f.port || "", { type: "number", min: 1, max: 65535 })),
+        field("Address", input("dfaddr", f.address || "", { placeholder: "239.2.3.1" })),
         field("Interface", input("dfif", f.iface || "", { placeholder: "all" }), "Only for multicast feeds."),
+        field("URL", input("dfurl", f.url || "", { placeholder: "http://receiver.local:8080" })),
+        field("User name", input("dfuser", f.username || "", { autocomplete: "off" }), "Empty uses the password as an API token."),
+        field("Password", input("dfpass", f.password || "", { type: "password", autocomplete: "new-password" })),
+        field("Poll every", input("dfint", f.intervalSec || "", { type: "number", min: 1, max: 3600, placeholder: "seconds" })),
         field("Groups", input("dfgroups", (f.groups || []).join(", ")), "Only these groups see the feed. Empty sends it to everyone."),
         field("Tags", input("dftags", (f.tags || []).join(", "))),
         field("Options", h("div", null, checkbox("dfon", f.enabled, "Enabled"), h("br"), checkbox("dfarch", f.archive, "Keep in track history"), h("br"), checkbox("dfsync", f.sync, "Keep the latest objects for the data feed API")))
       );
+      const feedKinds = {
+        tcp: { show: ["port"], help: "TAK clients and gateways connect here and send CoT." },
+        tls: { show: ["port"], help: "Senders connect with a client certificate from this server." },
+        udp: { show: ["port"], help: "Listens for CoT datagrams on this port." },
+        mcast: { show: ["port", "addr", "if"], addr: "Multicast group", help: "Joins a multicast group and reads CoT from it." },
+        sbs: { show: ["port", "addr"], addr: "Receiver address", port: 30003, help: "Connects to the BaseStation port of dump1090, readsb or dump1090-fa on the receiver and shows the aircraft it hears." },
+        dump1090: { show: ["url", "int"], url: "http://receiver.local:8080", help: "Polls aircraft.json from the receiver's web page, such as tar1090, SkyAware or dump1090. A URL that ends in .json is used as it is." },
+        ais: { show: ["port", "addr"], addr: "Receiver address", port: 10110, help: "With no address, listens for NMEA sentences over UDP, which is what rtl_ais and AIS-catcher send. With an address, connects to the receiver's NMEA TCP port." },
+        osmand: { show: ["port", "pass"], port: 5055, pass: "Key", help: "Phones running Traccar Client report here. Set the client's server URL to http://this-server:PORT, adding ?key=KEY when a key is set. Each phone appears with its device identifier." },
+        traccar: { show: ["url", "user", "pass", "int"], url: "https://traccar.example.org", help: "Polls a Traccar server and shows the latest position of every device the account can see." },
+      };
+      const feedInputs = { port: "dfport", addr: "dfaddr", if: "dfif", url: "dfurl", user: "dfuser", pass: "dfpass", int: "dfint" };
+      const syncKind = () => {
+        const k = feedKinds[val(form, "dfproto")] || feedKinds.tcp;
+        for (const [w, id] of Object.entries(feedInputs)) {
+          const el = form.querySelector("#" + id), lab = form.querySelector("label[for=" + id + "]");
+          const show = k.show.includes(w) ? "" : "none";
+          el.parentNode.style.display = show;
+          if (lab) lab.style.display = show;
+        }
+        form.querySelector("label[for=dfaddr]").textContent = k.addr || "Address";
+        form.querySelector("label[for=dfpass]").textContent = k.pass || "Password";
+        form.querySelector("#dfport").placeholder = k.port ? String(k.port) : "";
+        form.querySelector("#dfurl").placeholder = k.url || "";
+        form.querySelector("#dfaddr").placeholder = { mcast: "239.2.3.1", sbs: "192.168.1.50", ais: "Empty to listen for UDP" }[val(form, "dfproto")] || "";
+        form.querySelector("#dfhelp").textContent = k.help;
+      };
+      form.querySelector("#dfproto").addEventListener("change", syncKind);
+      syncKind();
       modal(isNew ? "Add data feed" : "Edit " + f.name, form, [
         { label: "Cancel" },
         {
           label: "Save",
           primary: true,
           run: async () => {
-            const next = Object.assign({}, f, { name: val(form, "dfname"), protocol: val(form, "dfproto"), port: num(form, "dfport"), address: val(form, "dfaddr") || undefined, iface: val(form, "dfif") || undefined, groups: splitList(val(form, "dfgroups")), tags: splitList(val(form, "dftags")), enabled: val(form, "dfon"), archive: val(form, "dfarch"), sync: val(form, "dfsync") });
+            const next = Object.assign({}, f, { name: val(form, "dfname"), protocol: val(form, "dfproto"), port: num(form, "dfport"), address: val(form, "dfaddr") || undefined, iface: val(form, "dfif") || undefined, url: val(form, "dfurl") || undefined, username: val(form, "dfuser") || undefined, password: val(form, "dfpass") || undefined, intervalSec: num(form, "dfint") || undefined, groups: splitList(val(form, "dfgroups")), tags: splitList(val(form, "dftags")), enabled: val(form, "dfon"), archive: val(form, "dfarch"), sync: val(form, "dfsync") });
             const list = (cfg.dataFeeds || []).filter((x) => !f.uuid || x.uuid !== f.uuid);
             list.push(next);
             await saveFeeds(list);

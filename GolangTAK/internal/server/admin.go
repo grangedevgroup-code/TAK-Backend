@@ -744,6 +744,14 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 	if cfg.Feeds.ADSB.APIKey != "" {
 		cfg.Feeds.ADSB.APIKey = "********"
 	}
+	dfs := make([]DataFeedConfig, len(cfg.DataFeeds))
+	for i, f := range cfg.DataFeeds {
+		if f.Password != "" {
+			f.Password = "********"
+		}
+		dfs[i] = f
+	}
+	cfg.DataFeeds = dfs
 	plugins := make([]PluginConfig, len(cfg.Plugins))
 	local := identityOf(r).Via == "control"
 	for i, p := range cfg.Plugins {
@@ -785,6 +793,7 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	before := s.Config()
 	next, err := s.UpdateConfig(func(c *Config) error {
 		old := c.Peers
+		oldFeeds := c.DataFeeds
 		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
 		oldBind, oldKey, oldMail := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password
 		if err := jsonUnmarshalStrict(body, c); err != nil {
@@ -799,6 +808,17 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.Feeds.ADSB.APIKey == "********" {
 			c.Feeds.ADSB.APIKey = oldKey
+		}
+		for i := range c.DataFeeds {
+			if c.DataFeeds[i].Password != "********" {
+				continue
+			}
+			c.DataFeeds[i].Password = ""
+			for _, o := range oldFeeds {
+				if o.UUID == c.DataFeeds[i].UUID {
+					c.DataFeeds[i].Password = o.Password
+				}
+			}
 		}
 		for i := range c.Peers {
 			for _, o := range old {

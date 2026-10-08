@@ -157,6 +157,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Voice**: built-in Mumble server, no Murmur needed. Mumble, Mumla and the TAK voice plugins sign in with TAK user names and passwords (or LDAP), every group gets its own channel that only its members can join, and voice, whispers and text chat work over TCP or encrypted UDP.
 - **TAK Server API compatibility**: CloudTAK and other web clients sign in with OAuth (`/oauth/token`) and get certificates with the token. The TAK Server user management, certificate administration, repeater, CoT injector, mission property, paged mission and locate APIs are supported, so tools written for TAK Server work unchanged.
 - **Locate**: an optional web page anyone you send the link to can use to put their position on the map, for search and rescue or people without a TAK client.
+- **Your own receivers and trackers**: aircraft from an RTL-SDR running dump1090, readsb or dump1090-fa (the BaseStation port 30003, or aircraft.json from tar1090 and SkyAware), ships from rtl_ais or AIS-catcher (NMEA over UDP or TCP, with multi-part messages and static vessel data), phones running Traccar Client (OsmAnd protocol, port 5055, optional key), and every device on a Traccar server (user name and password, or an API token). Each is a data feed with its own groups, archive and sync settings.
 - **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
 - **TAK data feeds and map layers**: TCP, TLS, UDP and multicast inputs for sensors and other systems, each on its own port with its own groups, listed with the built-in feeds in the TAK Server data feed API (statistics, latest objects, bounds). Missions can include a feed with polygon, CoT type and callsign filters, and its data goes to the mission subscribers. Map layers (tiles, WMS, WMTS) are published to TAK clients and missions, and appear as base maps on the dashboard map. Missions, feeds and map layers are also shared over federation version 2.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
@@ -283,6 +284,8 @@ The dashboard (**Plugins and profiles**) shows each plugin's version, state, pro
 | 8554 | TCP | Video server, RTSP |
 | 1935 | TCP | Video server, RTMP ingest |
 | 8000, 8001 | UDP | Video server, RTP and RTCP |
+| 5055 | TCP | Traccar Client phones, when an OsmAnd data feed is added |
+| 10110 | UDP | AIS receivers sending NMEA, when an AIS data feed is added |
 | 1883 | TCP | MQTT broker for Meshtastic gateway nodes (off by default) |
 | 6969, 17012 | UDP | Multicast situational awareness (mesh) |
 
