@@ -191,6 +191,7 @@ func (s *Server) serveStream(conn net.Conn, kind string) {
 func (s *Server) afterAuth(c *Client) {
 	cfg := s.Config()
 	n := s.hub.Replay(c, cfg.Replay, cfg.Limits.ReplayLimit)
+	s.sendRepeated(c)
 	if n > 0 {
 		s.log.Debug("replayed cached events", "remote", c.Remote, "count", n)
 	}

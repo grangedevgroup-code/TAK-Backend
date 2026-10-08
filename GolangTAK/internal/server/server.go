@@ -55,6 +55,7 @@ type Server struct {
 	videos   *Videos
 	profiles *Profiles
 	chats    *Chats
+	repeated *Repeated
 	linkMu   sync.Mutex
 	links    map[string]*downloadLink
 	apiMu    sync.Mutex
@@ -308,6 +309,7 @@ func (s *Server) maintenance() {
 		case <-minute.C:
 			s.hub.Prune()
 			s.minuteTasks()
+			s.repeatAll()
 			if ips := strings.Join(LocalIPs(), ","); ips != lastIPs {
 				lastIPs = ips
 				if err := s.pki.EnsureServer(s.Config()); err != nil {

@@ -136,7 +136,7 @@ The same is available from a terminal: `golangtak qr USER` prints enrollment QR 
 | iTAK | SSL with quick connect QR and enrollment, TCP, server packages |
 | TAK Aware and other CoT apps | SSL, TCP, UDP, connection packages |
 | TAK Server | Federation version 1 and version 2 (gRPC) in both directions, including mission, file and log sharing over version 2, or a TCP or TLS link |
-| OpenTAKServer, FreeTAKServer | TCP or TLS links in both directions; GolangTAK also serves the FreeTAKServer REST API on port 19023 |
+| OpenTAKServer, FreeTAKServer | TCP or TLS links in both directions; GolangTAK also serves the FreeTAKServer REST API on port 19023, including repeated messages |
 | zyrntopo-tak-server and browser software | CoT over WebSocket on port 8090, links to WebSocket servers |
 | Mesh and radio gateways | Multicast situational awareness (239.2.3.1:6969 and 224.10.10.1:17012), UDP input |
 | Meshtastic | Gateway nodes connect to the built-in MQTT broker on port 1883 (when enabled), or both sides share an MQTT broker |
@@ -146,7 +146,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 
 ## Features
 
-- **Messaging**: CoT XML and TAK Protocol version 1 (protobuf) with automatic negotiation, groups (channels) with separate send and receive sets, direct messages, geospatial filters, emergency alerts with a repeater, chat store-and-forward for offline contacts, situational awareness replay for new clients.
+- **Messaging**: CoT XML and TAK Protocol version 1 (protobuf) with automatic negotiation, groups (channels) with separate send and receive sets, direct messages, geospatial filters, emergency alerts with a repeater, repeated objects sent to every device that connects, chat store-and-forward for offline contacts, situational awareness replay for new clients.
 - **Accounts**: local users with groups, or sign-in with LDAP and Active Directory accounts whose directory groups become TAK groups, with an administrator group and a callsign attribute.
 - **Certificates**: built-in certificate authority, certificate enrollment (signClient v1 and v2, JSON and XML), one-time enrollment codes, revocation, server certificate that renews itself when the address changes, import of an existing CA.
 - **Data**: data packages and the Data Sync API, missions with subscriptions, roles, passwords, invitations and change notifications, ExCheck checklists, CI-TRAP reports, video feeds, KML export, track history.

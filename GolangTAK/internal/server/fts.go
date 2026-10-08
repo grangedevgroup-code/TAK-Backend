@@ -116,12 +116,13 @@ func destination(lat, lon, meters, bearing float64) (float64, float64) {
 	return la2 * 180 / math.Pi, math.Mod(lo2*180/math.Pi+540, 360) - 180
 }
 
-func (s *Server) ftsPublish(r *http.Request, e *cot.Event) {
+func (s *Server) ftsPublish(r *http.Request, e *cot.Event) *Message {
 	id := identityOf(r)
 	m := NewMessage(e, s.apiClient(id), id.In)
 	m.Everyone = id.Admin
 	s.hub.Identify(m.Source, m)
 	s.hub.Publish(m)
+	return m
 }
 
 func (s *Server) ftsTimeout(b ftsBody, def time.Duration) time.Duration {
@@ -166,7 +167,10 @@ func (s *Server) ftsGeoObject(w http.ResponseWriter, r *http.Request) {
 		e.Detail.AddNew("remarks").Text = rem
 	}
 	e.Detail.AddNew("archive")
-	s.ftsPublish(r, e)
+	m := s.ftsPublish(r, e)
+	if b.str("repeat") == "true" {
+		s.addRepeated(m, identityOf(r).Name)
+	}
 	writeText(w, http.StatusOK, uid)
 }
 
@@ -646,6 +650,8 @@ func (s *Server) ftsRoutes() *http.ServeMux {
 	g("POST /ManageGeoObject/postGeoObject", s.ftsGeoObject)
 	g("PUT /ManageGeoObject/putGeoObject", s.ftsGeoObject)
 	g("GET /ManageGeoObject/getGeoObject", s.ftsGetGeoObjects)
+	g("GET /ManageGeoObject/GetRepeatedMessages", s.ftsRepeatedGet)
+	g("DELETE /ManageGeoObject/DeleteRepeatedMessage", s.ftsRepeatedDelete)
 	g("POST /ManageChat/postChatToAll", s.ftsChat)
 	g("POST /SendGeoChat", s.ftsChat)
 	g("POST /ManagePresence/postPresence", s.ftsPresence)
@@ -672,7 +678,7 @@ func (s *Server) ftsRoutes() *http.ServeMux {
 	g("GET /MissionTable", s.ftsMissions)
 	mux.HandleFunc("GET /ManageSystemUser/getAll", s.guard(accessAdmin, s.ftsSystemUsers))
 	mux.HandleFunc("GET /manageAPI/getHelp", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"APIs": []string{"/ManageGeoObject/postGeoObject", "/ManageGeoObject/putGeoObject", "/ManageGeoObject/getGeoObject",
+		writeJSON(w, http.StatusOK, map[string]any{"APIs": []string{"/ManageGeoObject/postGeoObject", "/ManageGeoObject/putGeoObject", "/ManageGeoObject/getGeoObject", "/ManageGeoObject/GetRepeatedMessages", "/ManageGeoObject/DeleteRepeatedMessage",
 			"/ManageChat/postChatToAll", "/ManagePresence/postPresence", "/ManagePresence/putPresence", "/ManageRoute/postRoute",
 			"/ManageEmergency/postEmergency", "/ManageEmergency/getEmergency", "/ManageEmergency/deleteEmergency", "/Sensor/postDrone", "/Sensor/postSPI",
 			"/ManageVideoStream/getVideoStream", "/ManageVideoStream/postVideoStream", "/ManageVideoStream/deleteVideoStream", "/Clients", "/RecentCoT", "/URL",

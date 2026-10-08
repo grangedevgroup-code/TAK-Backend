@@ -359,6 +359,30 @@
     return !v.stale || new Date(v.stale).getTime() > Date.now();
   }
 
+  function repeatedList() {
+    const box = h("div", { class: "full" }, h("p", { class: "muted small" }, "Loading..."));
+    const load = async () => {
+      const list = await api("GET", "/api/repeated");
+      S.repeated = new Set(list.map((r) => r.uid));
+      clear(box).append(
+        h("p", { class: "muted small" }, "Objects sent to every device when it connects and again every minute, like FreeTAKServer repeated messages. Choose an object on the map and select Repeat to add one."),
+        table(
+          [
+            { title: "Name", render: (r) => h("b", null, r.callsign || r.uid) },
+            { title: "Type", render: (r) => h("span", { class: "mono small" }, r.type) },
+            { title: "Added by", render: (r) => r.creator || "-" },
+            { title: "Since", cls: "nowrap", render: (r) => fmtAgo(r.created) },
+            { title: "", cls: "actions", render: (r) => btn("Stop repeating", () => api("DELETE", "/api/repeated/" + enc(r.uid)).then(load).catch(fail)) },
+          ],
+          list,
+          "Nothing is being repeated."
+        )
+      );
+    };
+    load().catch(fail);
+    return box;
+  }
+
   function emergencies() {
     const out = [];
     for (const v of S.events.values()) {
@@ -1278,6 +1302,7 @@
   }
 
   async function pageMap(main) {
+    if (S.me.admin) api("GET", "/api/repeated").then((l) => (S.repeated = new Set(l.map((r) => r.uid)))).catch(() => {});
     pageHead(main, "Map", "Live positions, markers and alerts from every connected device.");
     const coords = h("div", { class: "map-coords" }, "");
     const infoBox = h("div", { class: "map-info" });
@@ -1374,6 +1399,24 @@
           btn("Message", () => {
             location.hash = "#/chat/" + enc(v.callsign || v.uid);
           }),
+          S.me.admin && !v.uid.startsWith("ANDROID") && !(v.type || "").startsWith("b-a")
+            ? btn(S.repeated && S.repeated.has(v.uid) ? "Stop repeating" : "Repeat", async () => {
+                try {
+                  if (S.repeated && S.repeated.has(v.uid)) {
+                    await api("DELETE", "/api/repeated/" + enc(v.uid));
+                    S.repeated.delete(v.uid);
+                    toast("No longer repeated");
+                  } else {
+                    await api("POST", "/api/repeated/" + enc(v.uid));
+                    (S.repeated = S.repeated || new Set()).add(v.uid);
+                    toast("Sent to every device that connects, and again every minute");
+                  }
+                  showInfo(m);
+                } catch (e) {
+                  fail(e);
+                }
+              })
+            : null,
           btn("Delete", () =>
             confirmAction("Delete " + (v.callsign || v.uid), "Remove this item from the map on all connected devices?", "Delete", async () => {
               await api("DELETE", "/api/cot/" + enc(v.uid));
@@ -2518,6 +2561,8 @@
         sub("Emergency repeater"),
         field("Repeat alerts", checkbox("rep", cfg.repeater.enabled, "Resend active emergencies to everyone")),
         field("Every (seconds)", n("repint", cfg.repeater.intervalSec)),
+        sub("Repeated objects"),
+        repeatedList(),
       ],
       meshtastic: [
         "Bridge Meshtastic LoRa radios and TAK in both directions through MQTT.",

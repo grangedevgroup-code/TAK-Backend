@@ -35,6 +35,9 @@ func (s *Server) initSubsystems() error {
 	if s.chats, err = OpenChats(s.DataDir); err != nil {
 		return err
 	}
+	if s.repeated, err = OpenRepeated(s.DataDir); err != nil {
+		return err
+	}
 	if s.reports, err = OpenReports(s.DataDir); err != nil {
 		return err
 	}
@@ -119,6 +122,9 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.chats != nil {
 		s.chats.Close()
+	}
+	if s.repeated != nil {
+		s.repeated.Close()
 	}
 	if s.reports != nil {
 		s.reports.Close()
