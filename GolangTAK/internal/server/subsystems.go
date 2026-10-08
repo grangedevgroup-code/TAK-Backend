@@ -172,6 +172,7 @@ func (s *Server) housekeeping() {
 	s.expireResources()
 	s.expireMissions()
 	s.expireChats()
+	s.expireRecordings()
 	if n := s.history.Cleanup(cfg.Retention.HistoryDays); n > 0 {
 		s.log.Info("old history removed", "days", n)
 	}

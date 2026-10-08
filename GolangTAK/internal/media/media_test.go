@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -505,6 +506,15 @@ func TestFFmpegInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decoding hls: %v %s", err, frames)
 	}
+	rec := filepath.Join(t.TempDir(), "ff.mp4")
+	w := recordFor(t, l, rec, 3*time.Second)
+	out, err = exec.Command(filepath.Join(bin, "ffprobe"), "-hide_banner", "-loglevel", "error", "-count_frames", "-show_entries", "stream=codec_name,nb_read_frames:format=duration", "-of", "default=nw=1", rec).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "codec_name=h264") {
+		t.Fatalf("ffprobe recording: %v %s", err, out)
+	}
+	if !strings.Contains(string(out), "nb_read_frames="+strconv.Itoa(len(w.samples))) {
+		t.Fatalf("recorded %d samples, ffprobe says %s", len(w.samples), out)
+	}
 }
 
 func newBufReader(nc net.Conn) *bufio.Reader { return bufio.NewReader(nc) }
@@ -568,4 +578,58 @@ func startServerWith(t *testing.T, reg *Registry) (*Server, *Registry, string) {
 	go srv.Serve(ln)
 	t.Cleanup(srv.Close)
 	return srv, reg, ln.Addr().String()
+}
+
+func recordFor(t *testing.T, l *Live, path string, d time.Duration) *MP4Writer {
+	t.Helper()
+	sps, pps, info, ok := l.Params()
+	if !ok {
+		t.Fatal("no stream parameters")
+	}
+	w, err := NewMP4Writer(path, sps, pps, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := l.Watch()
+	defer l.Unwatch(v)
+	deadline := time.After(d)
+	for {
+		select {
+		case f := <-v.C:
+			if err := w.WriteFragment(f); err != nil {
+				t.Fatal(err)
+			}
+		case <-deadline:
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			return w
+		}
+	}
+}
+
+func TestRecordMP4(t *testing.T) {
+	_, reg, addr := startServer(t, nil, 0)
+	pub := publish(t, "rtsp://"+addr+"/rec", 0, 5*time.Millisecond)
+	defer pub.Close()
+	st := waitStream(t, reg, "rec")
+	l, err := LiveFor(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Wait(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(t.TempDir(), "rec.mp4")
+	w := recordFor(t, l, out, 700*time.Millisecond)
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b[4:8]) != "ftyp" || !bytes.Contains(b[:4096], []byte("moov")) || !bytes.Contains(b[:4096], []byte("stss")) || uint64(len(b)) < w.Bytes() {
+		t.Fatal("recording is not a progressive MP4")
+	}
+	if len(w.samples) < 20 || !w.samples[0].key {
+		t.Fatalf("samples %d first key %v", len(w.samples), len(w.samples) > 0 && w.samples[0].key)
+	}
 }

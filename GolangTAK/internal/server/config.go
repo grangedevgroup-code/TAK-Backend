@@ -251,7 +251,7 @@ func DefaultConfig() Config {
 			CacheLimit:      50000,
 		},
 		Repeater: RepeaterConfig{Enabled: true, IntervalSec: 5},
-		Video:    VideoServerConfig{Enabled: true, RTSPPort: 8554, RTMPPort: 1935, RTPPort: 8000, AnonymousRead: true, MaxStreams: 100},
+		Video:    VideoServerConfig{Enabled: true, RTSPPort: 8554, RTMPPort: 1935, RTPPort: 8000, AnonymousRead: true, MaxStreams: 100, RecordMinutes: 30, RecordDays: 7},
 		Voice:    VoiceConfig{Enabled: true, Port: 64738, MaxUsers: 200},
 		Federation: FederationConfig{
 			Groups:  []string{"__ANON__"},

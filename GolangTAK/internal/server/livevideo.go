@@ -25,6 +25,10 @@ type VideoServerConfig struct {
 	AnonymousPublish bool          `json:"anonymousPublish"`
 	MaxStreams       int           `json:"maxStreams"`
 	Sources          []VideoSource `json:"sources"`
+	Record           bool          `json:"record"`
+	RecordPaths      []string      `json:"recordPaths"`
+	RecordMinutes    int           `json:"recordMinutes"`
+	RecordDays       int           `json:"recordDays"`
 }
 
 type VideoSource struct {
@@ -42,9 +46,10 @@ type sourceState struct {
 }
 
 type liveVideo struct {
-	reg     *media.Registry
-	srv     *media.Server
-	sources sync.Map
+	reg       *media.Registry
+	srv       *media.Server
+	sources   sync.Map
+	recorders sync.Map
 }
 
 func (s *Server) startLiveVideo() error {
@@ -178,6 +183,9 @@ func (s *Server) onStreamPublish(st *media.Stream) {
 	f := VideoFeed{UID: streamFeedUID(st.Name), Alias: st.Name, Protocol: "rtsp", Address: cfg.Address, Port: cfg.Video.RTSPPort, Path: "/" + st.Name, RTSPReliable: "1", Buffer: "-1", Timeout: "5000", Groups: groups, Creator: st.Publisher, Updated: time.Now().UTC(), Active: true}
 	s.videos.Put(f)
 	s.log.Info("live video stream available", "path", st.Name, "by", st.Publisher, "source", st.Source)
+	if s.shouldRecord(st.Name) {
+		go s.startRecording(st)
+	}
 }
 
 func (s *Server) onStreamUnpublish(st *media.Stream) {
@@ -243,6 +251,7 @@ type streamView struct {
 	Browser   bool      `json:"browser"`
 	Groups    []string  `json:"groups,omitempty"`
 	LastData  time.Time `json:"lastData"`
+	Recording bool      `json:"recording"`
 }
 
 func (s *Server) rtspURL(r *http.Request, path string) string {
@@ -278,7 +287,7 @@ func (s *Server) apiStreams(w http.ResponseWriter, r *http.Request) {
 			if !s.streamVisible(id, st) {
 				continue
 			}
-			v := streamView{Path: st.Name, Publisher: st.Publisher, Source: st.Source, Started: st.Started, Readers: st.Readers(), Bytes: st.BytesIn.Load(), RTSP: s.rtspURL(r, st.Name), HLS: "/api/video/live/" + st.Name + "/index.m3u8", Groups: s.streamGroups(st), LastData: st.LastPacket()}
+			v := streamView{Path: st.Name, Publisher: st.Publisher, Source: st.Source, Started: st.Started, Readers: st.Readers(), Bytes: st.BytesIn.Load(), RTSP: s.rtspURL(r, st.Name), HLS: "/api/video/live/" + st.Name + "/index.m3u8", Groups: s.streamGroups(st), LastData: st.LastPacket(), Recording: s.isRecording(st.Name)}
 			for _, t := range st.Desc.Tracks {
 				v.Codecs = append(v.Codecs, firstNonEmpty(t.Codec, t.Media))
 				if t.Media == "video" && t.Codec == "H264" {

@@ -2064,7 +2064,40 @@
     const liveBox = h("div");
     const srcBox = h("div");
     const box = h("div");
-    main.append(h("h2", null, "Live streams"), liveBox, S.me.admin ? h("h2", null, "Pull sources") : null, S.me.admin ? srcBox : null, h("h2", null, "Video feeds"), box);
+    const recBox = h("div");
+    main.append(h("h2", null, "Live streams"), liveBox, h("h2", null, "Recordings"), recBox, S.me.admin ? h("h2", null, "Pull sources") : null, S.me.admin ? srcBox : null, h("h2", null, "Video feeds"), box);
+    const fmtDur = (sec) => {
+      sec = Math.round(sec || 0);
+      const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60), ss = sec % 60;
+      return (hh ? hh + ":" + String(mm).padStart(2, "0") : mm) + ":" + String(ss).padStart(2, "0");
+    };
+    const loadRecs = async () => {
+      const list = await api("GET", "/api/video/recordings");
+      const url = (r) => "/api/video/recordings/" + r.path.split("/").map(enc).join("/") + "/" + enc(r.file);
+      clear(recBox).append(
+        table(
+          [
+            { title: "Stream", render: (r) => h("b", null, r.path) },
+            { title: "Started", cls: "nowrap", render: (r) => fmtTime(r.start) },
+            { title: "Length", render: (r) => fmtDur(r.duration) },
+            { title: "Size", render: (r) => fmtBytes(r.size) },
+            { title: "Picture", render: (r) => (r.width ? r.width + " x " + r.height : "-") },
+            {
+              title: "",
+              cls: "actions",
+              render: (r) => [
+                btn("Play", () => modal(r.path + ", " + fmtTime(r.start), h("div", { class: "live-player" }, h("video", { class: "live-video", src: url(r), controls: true, autoplay: true, playsinline: true })), [{ label: "Close" }]), "small primary"),
+                h("a", { class: "button small", href: url(r) + "?download=1" }, "Download"),
+                S.me.admin ? btn("Delete", () => confirmAction("Delete recording", "Delete this recording of " + r.path + "?", "Delete", async () => { await api("DELETE", url(r)); loadRecs().catch(fail); }), "small") : null,
+              ],
+            },
+          ],
+          list,
+          S.me.admin ? h("span", null, "No recordings. Select Record on a live stream, or record streams automatically under ", h("a", { href: "#/settings/video" }, "Settings"), ".") : "No recordings."
+        )
+      );
+    };
+    loadRecs().catch(fail);
     let cfg = null;
     const saveSources = async (list) => {
       const vs = Object.assign({}, cfg.videoServer || {}, { sources: list });
@@ -2112,7 +2145,7 @@
           h("p", { class: "muted" }, "Publish over RTSP to ", h("span", { class: "mono" }, info.publishURL), info.rtmpURL ? [" or, from drone apps and OBS, over RTMP to ", h("span", { class: "mono" }, info.rtmpURL)] : null, ", using a user name and password from this server. Streams appear here and in every TAK client's video list."),
           table(
             [
-              { title: "Path", render: (r) => h("b", null, r.path) },
+              { title: "Path", render: (r) => h("b", null, r.path, r.recording ? h("span", { class: "pill problem", style: "margin-left:8px" }, "REC") : null) },
               { title: "From", render: (r) => r.publisher + (r.source.startsWith("pull") ? " (pulled)" : "") },
               { title: "Codecs", render: (r) => joined(r.codecs) },
               { title: "Viewers", render: (r) => String(r.readers) },
@@ -2124,6 +2157,17 @@
                 render: (r) => [
                   r.browser ? btn("Watch", () => watchStream(r), "small primary") : null,
                   copyButton(r.rtsp, "Copy RTSP"),
+                  S.me.admin
+                    ? btn(r.recording ? "Stop recording" : "Record", async () => {
+                        try {
+                          await api(r.recording ? "DELETE" : "POST", "/api/video-record/" + r.path.split("/").map(enc).join("/"));
+                          toast(r.recording ? "Recording stopped" : "Recording");
+                          loadLive().catch(fail);
+                        } catch (e) {
+                          fail(e);
+                        }
+                      }, "small")
+                    : null,
                   S.me.admin ? btn("Stop", () => confirmAction("Stop stream", "Disconnect the publisher of " + r.path + "?", "Stop", async () => { await api("DELETE", "/api/video/streams/" + r.path.split("/").map(enc).join("/")); loadLive().catch(fail); }), "small") : null,
                 ],
               },
@@ -3033,6 +3077,10 @@
         field("Viewing", checkbox("vs_ar", vs.anonymousRead, "Anyone can watch without signing in")),
         field("Publishing", checkbox("vs_ap", vs.anonymousPublish, "Anyone can publish without signing in")),
         field("Maximum streams", n("vs_max", vs.maxStreams), "0 means no limit."),
+        field("Recording", checkbox("vs_rec", vs.record, "Record every stream")),
+        field("Record these paths", input("vs_recp", (vs.recordPaths || []).join(", "), { placeholder: "live/uas, cameras" }), "Streams at or under these paths are always recorded. Comma separated."),
+        field("Minutes per file", n("vs_recm", vs.recordMinutes), "Long recordings are split into files of this length."),
+        field("Keep recordings for (days)", n("vs_recd", vs.recordDays), "0 keeps them forever."),
       ],
       locate: [
         h("span", null, "A web page where anyone you send the link to can share their position onto the map, for search and rescue or people without a TAK client. The page is ", h("a", { href: "/locate", target: "_blank", rel: "noopener" }, location.origin + "/locate"), "."),
@@ -3292,7 +3340,7 @@
         }),
         locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
         voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),
-        videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max") }),
+        videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max"), record: val(form, "vs_rec"), recordPaths: splitList(val(form, "vs_recp")), recordMinutes: num(form, "vs_recm"), recordDays: num(form, "vs_recd") }),
         feeds: {
           adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),
           ais: Object.assign({}, fs, { enabled: val(form, "fs_on"), username: val(form, "fs_user"), south: num(form, "fs_s"), west: num(form, "fs_w"), north: num(form, "fs_n"), east: num(form, "fs_e"), mmsi: val(form, "fs_mmsi"), intervalSec: num(form, "fs_int"), group: val(form, "fs_group") }),

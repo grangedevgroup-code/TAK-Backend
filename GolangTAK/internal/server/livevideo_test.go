@@ -63,7 +63,7 @@ func publishTestVideo(t *testing.T, raw string) *media.Client {
 func TestLiveVideoServer(t *testing.T) {
 	rtspPort := freePort(t)
 	s := newTestServer(t, func(c *Config) {
-		c.Video = VideoServerConfig{Enabled: true, RTSPPort: rtspPort, AnonymousRead: true}
+		c.Video = VideoServerConfig{Enabled: true, RTSPPort: rtspPort, AnonymousRead: true, RecordPaths: []string{"live"}, RecordMinutes: 30}
 	})
 	s.dir.AddUser("pilot", "pilot-password", false, nil)
 	base := "rtsp://127.0.0.1:" + strconv.Itoa(rtspPort) + "/live/uas1"
@@ -132,7 +132,29 @@ func TestLiveVideoServer(t *testing.T) {
 		return st == 200 && strings.Contains(string(body), "#EXT-X-MAP")
 	})
 
+	waitFor(t, "recording to start", 10*time.Second, func() bool { return s.isRecording("live/uas1") })
+	time.Sleep(1500 * time.Millisecond)
 	pub.Close()
+	var recs []recordingMeta
+	waitFor(t, "the recording to be saved", 10*time.Second, func() bool {
+		_, body := doReq(t, http.DefaultClient, "GET", plainURL(s, "/api/video/recordings"), nil, auth)
+		json.Unmarshal(body, &recs)
+		return len(recs) == 1
+	})
+	if recs[0].Path != "live/uas1" || recs[0].Duration <= 0 || recs[0].Width != 640 {
+		t.Fatalf("recording: %+v", recs[0])
+	}
+	fileURL := plainURL(s, "/api/video/recordings/live/uas1/"+recs[0].File)
+	st, body = doReq(t, http.DefaultClient, "GET", fileURL, nil, map[string]string{"Authorization": "Bearer " + secret, "Range": "bytes=0-99"})
+	if st != http.StatusPartialContent || len(body) != 100 || string(body[4:8]) != "ftyp" {
+		t.Fatalf("ranged recording: %d %d", st, len(body))
+	}
+	if st, _ := doReq(t, http.DefaultClient, "GET", plainURL(s, "/api/video/recordings/live/uas1/..%2f..%2fconfig.json"), nil, auth); st != http.StatusNotFound {
+		t.Fatalf("path traversal: %d", st)
+	}
+	if st, _ := doReq(t, http.DefaultClient, "DELETE", fileURL, nil, auth); st != http.StatusNoContent {
+		t.Fatal("delete recording failed")
+	}
 	waitFor(t, "the video feed to be removed after the stream ended", 5*time.Second, func() bool {
 		_, ok := s.videos.Get(streamFeedUID("live/uas1"))
 		return !ok

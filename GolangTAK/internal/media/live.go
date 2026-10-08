@@ -44,6 +44,9 @@ type Live struct {
 	ready    chan struct{}
 	readyOK  bool
 	init     []byte
+	info     SPSInfo
+	sps      []byte
+	pps      []byte
 	codec    string
 	viewers  map[*LiveViewer]struct{}
 	seq      uint32
@@ -164,6 +167,7 @@ func (l *Live) onAU(au AccessUnit) {
 			return
 		}
 		l.init = InitSegment(l.dep.SPS, l.dep.PPS, info, liveTimescale)
+		l.info, l.sps, l.pps = info, l.dep.SPS, l.dep.PPS
 		l.codec = info.Codec()
 		l.readyOK = true
 		close(l.ready)
