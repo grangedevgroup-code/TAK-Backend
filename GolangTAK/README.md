@@ -154,6 +154,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation, version 1 and version 2.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
 - **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
+- **TAK data feeds and map layers**: TCP, TLS, UDP and multicast inputs for sensors and other systems, each on its own port with its own groups, listed with the built-in feeds in the TAK Server data feed API (statistics, latest objects, bounds). Missions can include a feed with polygon, CoT type and callsign filters, and its data goes to the mission subscribers. Map layers (tiles, WMS, WMTS) are published to TAK clients and missions, and appear as base maps on the dashboard map. Missions, feeds and map layers are also shared over federation version 2.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
 
 ## Link servers together

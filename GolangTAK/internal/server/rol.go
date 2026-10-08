@@ -363,6 +363,28 @@ func (s *Server) rolSnapshot(ctx context.Context, t rolTarget) {
 				return
 			}
 		}
+		for _, l := range m.MapLayers {
+			mu := rolMapLayerUpdate{MissionName: m.Name, CreatorUID: l.CreatorUID, Mission: &rolMissionName{Name: m.Name}, MapLayer: l, Type: "ADD_MAPLAYER_TO_MISSION"}
+			if !push(takproto.ROL{Program: rolProgram("update", "mission", mu)}, m.Groups) {
+				return
+			}
+		}
+		for _, mf := range m.Feeds {
+			df, ok := s.dataFeedConfig(mf.DataFeedUID)
+			if !ok {
+				continue
+			}
+			md := rolDataFeed{Type: "DataFeedMetadata", MissionName: m.Name, MissionFeedUID: mf.UID, DataFeedUID: mf.DataFeedUID, FilterPolygon: mf.FilterPolygon, FilterCotTypes: mf.FilterCotTypes, FilterCallsign: mf.FilterCallsign, Archive: df.Archive, Sync: df.Sync, EnableLatestSA: true, FeedName: df.Name, AuthType: df.Auth, SyncCacheRetentionSeconds: df.SyncCacheRetentionSeconds, Tags: df.Tags}
+			if md.FilterCotTypes == nil {
+				md.FilterCotTypes = []string{}
+			}
+			if md.Tags == nil {
+				md.Tags = []string{}
+			}
+			if !push(takproto.ROL{Program: rolProgram("create", "data_feed", md)}, m.Groups) {
+				return
+			}
+		}
 		if m.Parent != "" && !push(takproto.ROL{Program: rolProgram("assign", "mission", rolHierarchy{MissionName: m.Name, ParentMissionName: m.Parent})}, m.Groups) {
 			return
 		}
@@ -407,6 +429,8 @@ func (s *Server) handleROL(src *Client, rol takproto.ROL, allowed []string, node
 		applied = s.rolMission(src, op, params, groups, origin)
 	case "resource":
 		applied = s.rolResource(src, op, params, rol.Payload, groups)
+	case "data_feed":
+		applied = s.rolDataFeed(op, params, groups)
 	default:
 		s.log.Debug("federated ROL not handled", "from", src.Name, "op", op, "resource", resource)
 	}
@@ -451,6 +475,9 @@ func (s *Server) rolMission(src *Client, op string, params []byte, groups []stri
 				return false
 			}
 			return s.rolMissionContent(src, mud, groups, origin)
+		}
+		if _, ok := probe["mapLayer"]; ok {
+			return s.rolMapLayer(params, groups)
 		}
 		if _, ok := probe["missionUpdateDetailsForLogEntryType"]; ok {
 			var lu rolLogUpdate
@@ -771,6 +798,129 @@ func (s *Server) rolResource(src *Client, op string, params []byte, payload []ta
 			}
 		})
 		return err == nil
+	}
+	return false
+}
+
+type rolDataFeed struct {
+	Type                      string   `json:"type"`
+	MissionName               string   `json:"missionName"`
+	MissionFeedUID            string   `json:"missionFeedUid"`
+	DataFeedUID               string   `json:"dataFeedUid"`
+	FilterPolygon             string   `json:"filterPolygon"`
+	FilterCotTypes            []string `json:"filterCotTypes"`
+	FilterCallsign            string   `json:"filterCallsign"`
+	Archive                   bool     `json:"archive"`
+	Sync                      bool     `json:"sync"`
+	EnableLatestSA            bool     `json:"enableLatestSA"`
+	ArchiveOnly               bool     `json:"archiveOnly"`
+	FeedName                  string   `json:"feedName"`
+	AuthType                  string   `json:"authType,omitempty"`
+	SyncCacheRetentionSeconds int      `json:"syncCacheRetentionSeconds"`
+	Tags                      []string `json:"tags"`
+}
+
+type rolMapLayerUpdate struct {
+	MissionName string          `json:"missionName"`
+	CreatorUID  string          `json:"creatorUid"`
+	Mission     *rolMissionName `json:"mission,omitempty"`
+	MapLayer    MapLayer        `json:"mapLayer"`
+	Type        string          `json:"type"`
+}
+
+type rolMissionName struct {
+	Name string `json:"name"`
+}
+
+func (s *Server) rolMissionFeed(m Mission, mf MissionFeed, df dataFeedView, op string) {
+	if !s.missionFederates(m) {
+		return
+	}
+	md := rolDataFeed{Type: "DataFeedMetadata", MissionName: m.Name, MissionFeedUID: mf.UID, DataFeedUID: mf.DataFeedUID, FilterPolygon: mf.FilterPolygon, FilterCotTypes: mf.FilterCotTypes, FilterCallsign: mf.FilterCallsign, Archive: df.Archive, Sync: df.Sync, EnableLatestSA: true, FeedName: df.Name, AuthType: df.Auth, SyncCacheRetentionSeconds: df.SyncCacheRetentionSeconds, Tags: df.Tags}
+	if md.FilterCotTypes == nil {
+		md.FilterCotTypes = []string{}
+	}
+	if md.Tags == nil {
+		md.Tags = []string{}
+	}
+	s.broadcastROL(takproto.ROL{Program: rolProgram(op, "data_feed", md)}, m.Groups, nil)
+}
+
+func (s *Server) rolMissionMapLayer(m Mission, l MapLayer, creator, kind string) {
+	if !s.missionFederates(m) {
+		return
+	}
+	mu := rolMapLayerUpdate{MissionName: m.Name, CreatorUID: creator, Mission: &rolMissionName{Name: m.Name}, MapLayer: l, Type: kind}
+	s.broadcastROL(takproto.ROL{Program: rolProgram("update", "mission", mu)}, m.Groups, nil)
+}
+
+func (s *Server) federatedFeeds() []dataFeedView {
+	if s.fedFeeds == nil {
+		return nil
+	}
+	return s.fedFeeds.All()
+}
+
+func (s *Server) rolDataFeed(op string, params []byte, groups []string) bool {
+	var md rolDataFeed
+	if json.Unmarshal(params, &md) != nil || md.DataFeedUID == "" {
+		return false
+	}
+	if op == "create" || op == "update" {
+		if _, ok := s.dataFeedConfig(md.DataFeedUID); !ok || op == "update" {
+			if existing, ok := s.dataFeedConfig(md.DataFeedUID); !ok || existing.Type == "Federation" {
+				v := dataFeedView{UUID: md.DataFeedUID, Name: firstNonEmpty(md.FeedName, md.DataFeedUID), Type: "Federation", Tags: md.Tags, Auth: firstNonEmpty(md.AuthType, "ANONYMOUS"), Archive: md.Archive, ArchiveOnly: md.ArchiveOnly, Sync: md.Sync, FilterGroups: groups, Federated: true, Enabled: true}
+				s.fedFeeds.Put(v.UUID, v)
+			}
+		}
+	}
+	if md.MissionName == "" || md.MissionFeedUID == "" {
+		return op != "delete"
+	}
+	m, ok := s.missions.Get(md.MissionName)
+	if !ok || !s.groupsOverlap(m.Groups, groups) {
+		return false
+	}
+	switch op {
+	case "create", "update":
+		mf := MissionFeed{UID: md.MissionFeedUID, DataFeedUID: md.DataFeedUID, FilterPolygon: md.FilterPolygon, FilterCotTypes: md.FilterCotTypes, FilterCallsign: md.FilterCallsign}
+		if op == "update" {
+			s.removeMissionFeed(m.Name, mf.UID, "")
+		}
+		_, created := s.addMissionFeed(m.Name, mf, "")
+		return created
+	case "delete":
+		if !s.Config().Federation.AllowDelete {
+			return false
+		}
+		_, _, found := s.removeMissionFeed(m.Name, md.MissionFeedUID, "")
+		return found
+	}
+	return false
+}
+
+func (s *Server) rolMapLayer(params []byte, groups []string) bool {
+	var mu rolMapLayerUpdate
+	if json.Unmarshal(params, &mu) != nil || mu.MissionName == "" || mu.MapLayer.UID == "" {
+		return false
+	}
+	m, ok := s.missions.Get(mu.MissionName)
+	if !ok || !s.groupsOverlap(m.Groups, groups) {
+		return false
+	}
+	switch mu.Type {
+	case "ADD_MAPLAYER_TO_MISSION", "UPDATE_MAPLAYER":
+		if validMapLayer(&mu.MapLayer) != "" {
+			return false
+		}
+		_, _, ok := s.putMissionMapLayer(m.Name, mu.MapLayer, mu.CreatorUID, false)
+		return ok
+	case "REMOVE_MAPLAYER_FROM_MISSION":
+		if !s.Config().Federation.AllowDelete {
+			return false
+		}
+		_, _, ok := s.removeMissionMapLayer(m.Name, mu.MapLayer.UID, mu.CreatorUID)
+		return ok
 	}
 	return false
 }

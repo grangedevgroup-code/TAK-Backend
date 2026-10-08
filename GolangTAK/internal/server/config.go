@@ -10,7 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/cot"
 )
 
 const DefaultName = "GolangTAK"
@@ -186,6 +189,7 @@ type Config struct {
 	LDAP           LDAPConfig       `json:"ldap"`
 	Meshtastic     MeshtasticConfig `json:"meshtastic"`
 	Plugins        []PluginConfig   `json:"plugins"`
+	DataFeeds      []DataFeedConfig `json:"dataFeeds"`
 	TileURL        string           `json:"tileUrl"`
 	LogLevel       string           `json:"logLevel"`
 	ACMEEmail      string           `json:"acmeEmail"`
@@ -325,6 +329,16 @@ func (c *Config) fill() {
 	}
 	if c.Federation.MaxHops <= 0 {
 		c.Federation.MaxHops = d.Federation.MaxHops
+	}
+	for i := range c.DataFeeds {
+		f := &c.DataFeeds[i]
+		if f.UUID == "" {
+			f.UUID = cot.NewUID()
+		}
+		if f.Name == "" {
+			f.Name = "Data feed " + strconv.Itoa(i+1)
+		}
+		f.Protocol = strings.ToLower(firstNonEmpty(f.Protocol, "tcp"))
 	}
 	if len(c.Federation.Groups) == 0 {
 		c.Federation.Groups = []string{c.AnonymousGroup}

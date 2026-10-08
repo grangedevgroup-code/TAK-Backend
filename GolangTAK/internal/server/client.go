@@ -35,6 +35,7 @@ type Message struct {
 	Disconnect  bool
 	Announce    string
 	Hops        int64
+	Feed        string
 	xmlOnce     sync.Once
 	xml         []byte
 	pbOnce      sync.Once

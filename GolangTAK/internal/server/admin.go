@@ -791,10 +791,12 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, err)
 		return
 	}
+	fb, _ := json.Marshal(before.DataFeeds)
+	fn, _ := json.Marshal(next.DataFeeds)
 	mb, _ := json.Marshal(before.Meshtastic)
 	mn, _ := json.Marshal(next.Meshtastic)
 	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
-		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled
+		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn)
 	if before.Address != next.Address || strings.Join(before.ExtraNames, ",") != strings.Join(next.ExtraNames, ",") {
 		if err := s.pki.EnsureServer(next); err != nil {
 			s.log.Error("server certificate update failed", "err", err)

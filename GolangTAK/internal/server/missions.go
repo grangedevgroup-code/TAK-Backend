@@ -101,6 +101,8 @@ type MissionChange struct {
 	ContentUID string       `json:"contentUid,omitempty"`
 	Resource   *Resource    `json:"resource,omitempty"`
 	Item       *MissionItem `json:"item,omitempty"`
+	Feed       *MissionFeed `json:"feed,omitempty"`
+	MapLayer   *MapLayer    `json:"mapLayer,omitempty"`
 }
 
 type Mission struct {
@@ -131,6 +133,8 @@ type Mission struct {
 	ExternalData   []map[string]any `json:"externalData"`
 	Parent         string           `json:"parent,omitempty"`
 	Origin         string           `json:"federatedFrom,omitempty"`
+	Feeds          []MissionFeed    `json:"feeds,omitempty"`
+	MapLayers      []MapLayer       `json:"mapLayers,omitempty"`
 	NextSeq        int64            `json:"nextSeq"`
 }
 
@@ -316,6 +320,12 @@ func (s *Server) changeJSON(m Mission, c MissionChange) map[string]any {
 	if c.Item != nil {
 		out["details"] = itemJSON(*c.Item)["details"]
 	}
+	if c.Feed != nil {
+		out["missionFeed"] = s.missionFeedJSON(*c.Feed)
+	}
+	if c.MapLayer != nil {
+		out["mapLayer"] = c.MapLayer
+	}
 	return out
 }
 
@@ -359,6 +369,14 @@ func (s *Server) missionJSON(m Mission, o missionOpts) map[string]any {
 	for _, c := range m.Contents {
 		contents = append(contents, s.contentJSON(c))
 	}
+	feeds := []map[string]any{}
+	for _, f := range m.Feeds {
+		feeds = append(feeds, s.missionFeedJSON(f))
+	}
+	layers := m.MapLayers
+	if layers == nil {
+		layers = []MapLayer{}
+	}
 	ext := m.ExternalData
 	if ext == nil {
 		ext = []map[string]any{}
@@ -367,7 +385,7 @@ func (s *Server) missionJSON(m Mission, o missionOpts) map[string]any {
 		"name": m.Name, "description": m.Description, "chatRoom": m.ChatRoom, "baseLayer": m.BaseLayer,
 		"bbox": m.BBox, "path": m.Path, "classification": m.Classification, "tool": firstNonEmpty(m.Tool, "public"),
 		"keywords": kw, "creatorUid": m.CreatorUID, "createTime": isoTime(m.Created),
-		"externalData": ext, "feeds": []any{}, "mapLayers": []any{},
+		"externalData": ext, "feeds": feeds, "mapLayers": layers,
 		"defaultRole": roleJSON(m.DefaultRole), "inviteOnly": m.InviteOnly, "expiration": m.Expiration,
 		"guid": m.GUID, "uids": uids, "contents": contents, "passwordProtected": m.PasswordHash != "",
 		"groups": groups,

@@ -547,6 +547,7 @@ func (b *meshBridge) publish(e *cot.Event, chat bool) {
 	m := NewMessage(e, b.client, b.client.InMask())
 	m.Everyone = b.cfg.Group == ""
 	m.NoReplay = chat
+	m.Feed = FeedMeshtastic
 	b.s.hub.Identify(b.client, m)
 	b.s.hub.Publish(m)
 }

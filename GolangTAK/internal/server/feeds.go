@@ -133,9 +133,10 @@ func (s *Server) startFeeds() {
 		func() bool { return s.Config().Feeds.AIS.Enabled }, s.pollAIS)
 }
 
-func (s *Server) publishFeed(e *cot.Event, group string) {
+func (s *Server) publishFeed(e *cot.Event, group, feed string) {
 	m := NewMessage(e, nil, nil)
 	m.NoHistory = true
+	m.Feed = feed
 	if group == "" {
 		m.Everyone = true
 	} else {
@@ -219,7 +220,7 @@ func (s *Server) pollADSB(ctx context.Context, hc *http.Client) (int, error) {
 		if e == nil {
 			continue
 		}
-		s.publishFeed(e, f.Group)
+		s.publishFeed(e, f.Group, FeedADSB)
 		n++
 	}
 	return n, nil
@@ -338,7 +339,7 @@ func (s *Server) pollAIS(ctx context.Context, hc *http.Client) (int, error) {
 	n := 0
 	for _, v := range vessels {
 		if e := aisEvent(v, stale); e != nil {
-			s.publishFeed(e, f.Group)
+			s.publishFeed(e, f.Group, FeedAIS)
 			n++
 		}
 	}

@@ -529,6 +529,7 @@
     { id: "files", title: "Files", icon: "files", render: pageFiles, keys: "data packages upload" },
     { id: "missions", title: "Missions", icon: "missions", render: pageMissions, keys: "data sync" },
     { id: "video", title: "Video feeds", icon: "video", render: pageVideo, keys: "rtsp camera" },
+    { id: "feeds", title: "Feeds and layers", icon: "layers", admin: true, render: pageFeeds, keys: "data feeds sensors inputs map layers tiles wms" },
     { group: "Administration", admin: true },
     { id: "performance", title: "Performance", icon: "pulse", admin: true, render: pagePerformance, keys: "cpu memory ram disk load health resources" },
     { id: "users", title: "Users", icon: "users", admin: true, render: pageUsers, keys: "accounts passwords certificates" },
@@ -1364,6 +1365,7 @@
     } catch (e) {}
     const isDark = () => getComputedStyle(document.documentElement).colorScheme === "dark";
     const mapLook = () => {
+      if (style.startsWith("layer:")) return ["none", isDark()];
       const s = style === "auto" ? (isDark() ? "dark" : "light") : style;
       if (s === "dark") return ["grayscale(1) invert(1) brightness(0.86) contrast(0.92)", true];
       if (s === "light") return ["grayscale(1) contrast(1.02)", false];
@@ -1371,6 +1373,24 @@
     };
     const styleSel = select("mapstyle", [["auto", "Match theme"], ["dark", "Dark"], ["light", "Light"], ["color", "Color"]], style);
     styleSel.setAttribute("aria-label", "Map style");
+    let tileLayers = [];
+    const applyBase = () => {
+      const l = tileLayers.find((x) => "layer:" + x.uid === style);
+      map.setTileUrl(l ? l.url : S.me.tileUrl);
+    };
+    api("GET", "/Marti/api/maplayers/all")
+      .then((r) => {
+        tileLayers = ((r && r.data) || []).filter((l) => l.enabled !== false && /\{z\}/.test(l.url || "") && l.type !== "WMS");
+        if (!tileLayers.length) return;
+        const group = h("optgroup", { label: "Map layers" }, tileLayers.map((l) => h("option", { value: "layer:" + l.uid }, l.name)));
+        styleSel.append(group);
+        if (style.startsWith("layer:") && tileLayers.some((l) => "layer:" + l.uid === style)) {
+          styleSel.value = style;
+          applyBase();
+          map.setStyle(...mapLook());
+        }
+      })
+      .catch(() => {});
     const wrap = h("div", { class: "map-wrap" }, canvas, infoBox, coords, h("div", { class: "map-attr" }, S.me.tileUrl && S.me.tileUrl.includes("openstreetmap") ? "Map data © OpenStreetMap contributors" : ""));
     let addMode = false;
     let showTracks = false;
@@ -1544,6 +1564,7 @@
       try {
         localStorage.setItem("golangtak-map-style", style);
       } catch (e) {}
+      applyBase();
       map.setStyle(...mapLook());
     });
     S.listeners.add((v) => {
@@ -1956,6 +1977,135 @@
           primary: true,
           run: async () => {
             await api("POST", "/api/video", { alias: val(f, "valias"), url: val(f, "vurl"), groups: splitList(val(f, "vgroups")), latitude: val(f, "vlat"), longitude: val(f, "vlon") });
+            load().catch(fail);
+          },
+        },
+      ]);
+    };
+    await load();
+  }
+
+  async function pageFeeds(main) {
+    pageHead(main, "Feeds and layers", "Data feeds are inputs for sensors and other systems, each on its own port. Map layers are tile and WMS sources offered to TAK clients and missions.", btn("Add data feed", () => editFeed(), "primary", "plus"), btn("Add map layer", () => editLayer(), "", "plus"));
+    const feedBox = h("div");
+    const layerBox = h("div");
+    main.append(h("h2", null, "Data feeds"), feedBox, h("h2", null, "Map layers"), layerBox);
+    let cfg;
+    const saveFeeds = async (list) => {
+      const r = await api("PUT", "/api/settings", { dataFeeds: list });
+      toast(r.restartRequired ? "Saved. Restart the server under Settings to apply." : "Saved");
+      load().catch(fail);
+    };
+    const load = async () => {
+      cfg = await api("GET", "/api/settings");
+      const feeds = await api("GET", "/api/datafeeds");
+      const layers = (await api("GET", "/Marti/api/maplayers/all")).data || [];
+      clear(feedBox).append(
+        table(
+          [
+            { title: "Name", render: (r) => h("b", null, r.name) },
+            { title: "Type", render: (r) => (r.type === "Streaming" ? (r.protocol || "").toUpperCase() + " " + r.port : r.type) },
+            { title: "Groups", render: (r) => joined(r.filterGroups) },
+            { title: "Tags", render: (r) => joined(r.tags) },
+            { title: "Messages", render: (r) => String(r.messages || 0) },
+            { title: "Last data", cls: "nowrap", render: (r) => (r.lastSeen ? fmtAgo(r.lastSeen) : "-") },
+            { title: "State", render: (r) => (r.error ? h("div", null, pill("problem", "error"), h("div", { class: "small muted" }, r.error)) : pill(r.enabled ? "running" : "disabled", r.enabled ? "on" : "off")) },
+            {
+              title: "",
+              cls: "actions",
+              render: (r) => {
+                if (r.builtIn) return h("a", { class: "button small", href: r.uuid === "golangtak-meshtastic" ? "#/settings/meshtastic" : "#/settings/feeds" }, "Settings");
+                if (r.type !== "Streaming") return null;
+                const own = (cfg.dataFeeds || []).find((x) => x.uuid === r.uuid);
+                return [
+                  btn("Edit", () => editFeed(own), "small"),
+                  btn("Delete", () => confirmAction("Delete data feed", "Delete " + r.name + "? Missions using it stop receiving its data.", "Delete", () => saveFeeds((cfg.dataFeeds || []).filter((x) => x.uuid !== r.uuid))), "small"),
+                ];
+              },
+            },
+          ],
+          feeds,
+          "No data feeds."
+        )
+      );
+      clear(layerBox).append(
+        table(
+          [
+            { title: "Name", render: (r) => h("b", null, r.name, r.defaultLayer ? h("span", { class: "pill", style: "margin-left:8px" }, "default") : null) },
+            { title: "Type", key: "type" },
+            { title: "URL", render: (r) => h("span", { class: "mono small break" }, r.url) },
+            { title: "Zoom", render: (r) => (r.minZoom != null || r.maxZoom != null ? (r.minZoom ?? 0) + " to " + (r.maxZoom ?? "-") : "-") },
+            {
+              title: "",
+              cls: "actions",
+              render: (r) => [
+                btn("Edit", () => editLayer(r), "small"),
+                btn("Delete", () => confirmAction("Delete map layer", "Delete " + r.name + "?", "Delete", async () => {
+                  await api("DELETE", "/Marti/api/maplayers/" + enc(r.uid));
+                  load().catch(fail);
+                }), "small"),
+              ],
+            },
+          ],
+          layers,
+          "No map layers. Add a tile or WMS source to offer it to TAK clients."
+        )
+      );
+    };
+    const editFeed = (f) => {
+      const isNew = !f;
+      f = f || { protocol: "tcp", enabled: true, archive: true, sync: true, groups: [], tags: [] };
+      const form = h(
+        "form",
+        { class: "grid" },
+        field("Name", input("dfname", f.name || "", { required: true, placeholder: "UAS sensors" })),
+        field("Protocol", select("dfproto", [["tcp", "TCP"], ["tls", "TLS with client certificates"], ["udp", "UDP"], ["mcast", "Multicast UDP"]], f.protocol)),
+        field("Port", input("dfport", f.port || "", { type: "number", min: 1, max: 65535, required: true })),
+        field("Multicast address", input("dfaddr", f.address || "", { placeholder: "239.2.3.1" }), "Only for multicast feeds."),
+        field("Interface", input("dfif", f.iface || "", { placeholder: "all" }), "Only for multicast feeds."),
+        field("Groups", input("dfgroups", (f.groups || []).join(", ")), "Only these groups see the feed. Empty sends it to everyone."),
+        field("Tags", input("dftags", (f.tags || []).join(", "))),
+        field("Options", h("div", null, checkbox("dfon", f.enabled, "Enabled"), h("br"), checkbox("dfarch", f.archive, "Keep in track history"), h("br"), checkbox("dfsync", f.sync, "Keep the latest objects for the data feed API")))
+      );
+      modal(isNew ? "Add data feed" : "Edit " + f.name, form, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const next = Object.assign({}, f, { name: val(form, "dfname"), protocol: val(form, "dfproto"), port: num(form, "dfport"), address: val(form, "dfaddr") || undefined, iface: val(form, "dfif") || undefined, groups: splitList(val(form, "dfgroups")), tags: splitList(val(form, "dftags")), enabled: val(form, "dfon"), archive: val(form, "dfarch"), sync: val(form, "dfsync") });
+            const list = (cfg.dataFeeds || []).filter((x) => !f.uuid || x.uuid !== f.uuid);
+            list.push(next);
+            await saveFeeds(list);
+          },
+        },
+      ]);
+    };
+    const editLayer = (l) => {
+      const isNew = !l;
+      l = l || { type: "MapTile", enabled: true };
+      const form = h(
+        "form",
+        { class: "grid" },
+        field("Name", input("mlname", l.name || "", { required: true })),
+        field("Type", select("mltype", [["MapTile", "Tiles"], ["WMS", "WMS"], ["WMTS", "WMTS"]], l.type)),
+        field("URL", input("mlurl", l.url || "", { required: true, placeholder: "https://tile.example.org/{z}/{x}/{y}.png" }), "Tile URLs use {z}, {x} and {y}."),
+        field("WMS layers", input("mllayers", l.layers || ""), "Only for WMS."),
+        field("Minimum zoom", input("mlmin", l.minZoom ?? "", { type: "number", min: 0, max: 24 })),
+        field("Maximum zoom", input("mlmax", l.maxZoom ?? "", { type: "number", min: 0, max: 24 })),
+        field("Description", input("mldesc", l.description || "")),
+        field("Options", h("div", null, checkbox("mlon", l.enabled, "Enabled"), h("br"), checkbox("mldef", l.defaultLayer, "Default layer")))
+      );
+      modal(isNew ? "Add map layer" : "Edit " + l.name, form, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const optNum = (id) => (val(form, id) === "" ? undefined : num(form, id));
+            const next = Object.assign({}, l, { name: val(form, "mlname"), type: val(form, "mltype"), url: val(form, "mlurl"), layers: val(form, "mllayers") || undefined, minZoom: optNum("mlmin"), maxZoom: optNum("mlmax"), description: val(form, "mldesc") || undefined, enabled: val(form, "mlon"), defaultLayer: val(form, "mldef") });
+            await api(isNew ? "POST" : "PUT", "/Marti/api/maplayers", next);
+            toast("Saved");
             load().catch(fail);
           },
         },

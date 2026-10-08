@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/store"
 )
 
 func (s *Server) initSubsystems() error {
@@ -38,6 +40,12 @@ func (s *Server) initSubsystems() error {
 	if s.repeated, err = OpenRepeated(s.DataDir); err != nil {
 		return err
 	}
+	if s.mapLayers, err = OpenMapLayers(s.DataDir); err != nil {
+		return err
+	}
+	if s.fedFeeds, err = store.Open[dataFeedView](filepath.Join(s.DataDir, "db", "federated-feeds.jsonl"), true); err != nil {
+		return err
+	}
 	if s.reports, err = OpenReports(s.DataDir); err != nil {
 		return err
 	}
@@ -62,6 +70,9 @@ func (s *Server) initSubsystems() error {
 	s.hub.OnCoT = func(m *Message) {
 		if !m.NoHistory {
 			s.history.Record(m)
+		}
+		if m.Feed != "" {
+			s.onFeedMessage(m)
 		}
 		if src := m.Source; src != nil && !src.Relay && m.Event.IsSA() && m.Event.UID == src.UID() {
 			s.devices.Seen(src, "Connected")
@@ -88,6 +99,8 @@ func (s *Server) startSubsystems() error {
 	if err := s.startFederationV2(); err != nil {
 		return err
 	}
+	s.rebuildFeedIndex()
+	s.startDataFeeds()
 	s.startFeeds()
 	s.startMeshtastic()
 	s.histStop = make(chan struct{})
@@ -125,6 +138,12 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.repeated != nil {
 		s.repeated.Close()
+	}
+	if s.mapLayers != nil {
+		s.mapLayers.Close()
+	}
+	if s.fedFeeds != nil {
+		s.fedFeeds.Close()
 	}
 	if s.reports != nil {
 		s.reports.Close()

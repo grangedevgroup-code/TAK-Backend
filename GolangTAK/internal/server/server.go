@@ -18,6 +18,7 @@ import (
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/cot"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/flock"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/store"
 )
 
 var ErrRunning = errors.New("GolangTAK is already running with this data directory")
@@ -28,53 +29,56 @@ type Options struct {
 }
 
 type Server struct {
-	DataDir  string
-	Version  string
-	Started  time.Time
-	cfgMu    sync.RWMutex
-	cfg      Config
-	level    *slog.LevelVar
-	logs     *LogBuffer
-	log      *slog.Logger
-	dir      *Directory
-	pki      *PKI
-	hub      *Hub
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	lmu      sync.Mutex
-	closers  []io.Closer
-	https    []*http.Server
-	stopOnce sync.Once
-	stoppers []func()
-	tokenKey []byte
-	devices  *Devices
-	res      *Resources
-	history  *History
-	missions *Missions
-	videos   *Videos
-	profiles *Profiles
-	chats    *Chats
-	repeated *Repeated
-	linkMu   sync.Mutex
-	links    map[string]*downloadLink
-	apiMu    sync.Mutex
-	apiSrc   *Client
-	peers    *PeerManager
-	fed      *Federation
-	reports  *Reports
-	feeds    *feedState
-	mesh     *meshBridge
-	perf     *perfSampler
-	plugins  *pluginManager
-	fig2     *fig2Server
-	fig2Out  sync.Map
-	control  string
-	lock     *flock.Lock
-	localMux http.Handler
-	localMu  sync.Mutex
-	restart  chan struct{}
-	histStop chan struct{}
+	DataDir   string
+	Version   string
+	Started   time.Time
+	cfgMu     sync.RWMutex
+	cfg       Config
+	level     *slog.LevelVar
+	logs      *LogBuffer
+	log       *slog.Logger
+	dir       *Directory
+	pki       *PKI
+	hub       *Hub
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	lmu       sync.Mutex
+	closers   []io.Closer
+	https     []*http.Server
+	stopOnce  sync.Once
+	stoppers  []func()
+	tokenKey  []byte
+	devices   *Devices
+	res       *Resources
+	history   *History
+	missions  *Missions
+	videos    *Videos
+	profiles  *Profiles
+	chats     *Chats
+	repeated  *Repeated
+	linkMu    sync.Mutex
+	links     map[string]*downloadLink
+	apiMu     sync.Mutex
+	apiSrc    *Client
+	peers     *PeerManager
+	fed       *Federation
+	reports   *Reports
+	feeds     *feedState
+	mesh      *meshBridge
+	perf      *perfSampler
+	plugins   *pluginManager
+	fig2      *fig2Server
+	fig2Out   sync.Map
+	dfeeds    *dataFeeds
+	mapLayers *MapLayers
+	fedFeeds  *store.Collection[dataFeedView]
+	control   string
+	lock      *flock.Lock
+	localMux  http.Handler
+	localMu   sync.Mutex
+	restart   chan struct{}
+	histStop  chan struct{}
 }
 
 func New(dataDir string, opts Options) (*Server, error) {
@@ -116,7 +120,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 	if raw, err := os.ReadFile(ConfigPath(dataDir)); err == nil && !strings.Contains(string(raw), cfg.NodeID) {
 		SaveConfig(dataDir, cfg)
 	}
-	s := &Server{DataDir: dataDir, Version: opts.Version, cfg: cfg, level: new(slog.LevelVar)}
+	s := &Server{DataDir: dataDir, Version: opts.Version, cfg: cfg, level: new(slog.LevelVar), dfeeds: newDataFeeds()}
 	if s.Version == "" {
 		s.Version = "dev"
 	}

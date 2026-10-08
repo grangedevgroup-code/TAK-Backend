@@ -47,8 +47,23 @@ func (s *Server) routes() *http.ServeMux {
 	m("GET /Marti/api/plugins/info/all/started", s.martiEmpty("PluginInfo"))
 	m("GET /Marti/api/plugins/info/started", s.martiEmpty("PluginInfo"))
 	m("GET /Marti/api/plugins/info/enabled", s.martiEmpty("PluginInfo"))
-	m("GET /Marti/api/maplayers/all", s.martiEmpty("MapLayer"))
-	m("GET /Marti/api/datafeeds", s.martiEmpty("DataFeed"))
+	m("GET /Marti/api/maplayers/all", s.martiMapLayersAll)
+	m("GET /Marti/api/maplayers/{uid}", s.martiMapLayerGet)
+	m("POST /Marti/api/maplayers", s.martiMapLayerSave)
+	m("PUT /Marti/api/maplayers", s.martiMapLayerSave)
+	m("DELETE /Marti/api/maplayers/{uid}", s.martiMapLayerDelete)
+	m("GET /Marti/api/datafeeds", s.martiDataFeeds)
+	m("GET /Marti/api/datafeeds/stats", s.martiDataFeedStats)
+	m("GET /Marti/api/datafeeds/stats/{uuid}", s.martiDataFeedStats)
+	m("GET /Marti/api/datafeeds/bounds/{bbox}", s.martiDataFeedsInBounds)
+	m("GET /Marti/api/datafeeds/{uuid}/{what}", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("what") != "cots_types" {
+			s.martiUnknown(w, r)
+			return
+		}
+		s.martiDataFeedTypes(w, r)
+	})
+	m("GET /Marti/api/datafeeds/{uuid}/cots/{type}", s.martiDataFeedCots)
 	m("GET /Marti/api/iconset/all/uid", s.martiEmpty("java.lang.String"))
 
 	pub("GET /Marti/api/tls/config", s.martiTLSConfig)
@@ -136,6 +151,7 @@ func (s *Server) routes() *http.ServeMux {
 	u("POST /api/markers", s.apiMarker)
 	u("GET /api/emergencies", s.apiEmergencies)
 	a("GET /api/repeated", s.apiRepeatedList)
+	a("GET /api/datafeeds", s.apiDataFeeds)
 	a("POST /api/repeated/{uid}", s.apiRepeatedAdd)
 	a("DELETE /api/repeated/{uid}", s.apiRepeatedDelete)
 	a("GET /api/logs", s.apiLogs)
@@ -429,7 +445,43 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 			r.SetPathValue("id", seg[1])
 		}
 		s.missionExternalData(w, r)
-	case "layers", "maplayers", "feed", "feeds":
+	case "feed", "feeds":
+		switch {
+		case len(seg) == 1 && (method == http.MethodPost || method == http.MethodPut):
+			s.missionFeedAdd(w, r)
+		case len(seg) == 2 && method == http.MethodDelete:
+			r.SetPathValue("uid", seg[1])
+			s.missionFeedDelete(w, r)
+		case len(seg) == 1 && method == http.MethodGet:
+			if mm, ok := s.loadMissionAny(w, r); ok {
+				out := []map[string]any{}
+				for _, f := range mm.Feeds {
+					out = append(out, s.missionFeedJSON(f))
+				}
+				writeJSON(w, http.StatusOK, s.envelope("MissionFeed", out))
+			}
+		default:
+			notFound()
+		}
+	case "maplayers":
+		switch {
+		case len(seg) == 1 && (method == http.MethodPost || method == http.MethodPut):
+			s.missionMapLayerSave(w, r)
+		case len(seg) == 2 && method == http.MethodDelete:
+			r.SetPathValue("uid", seg[1])
+			s.missionMapLayerDelete(w, r)
+		case len(seg) == 1 && method == http.MethodGet:
+			if mm, ok := s.loadMissionAny(w, r); ok {
+				layers := mm.MapLayers
+				if layers == nil {
+					layers = []MapLayer{}
+				}
+				writeJSON(w, http.StatusOK, s.envelope("MapLayer", layers))
+			}
+		default:
+			notFound()
+		}
+	case "layers":
 		writeJSON(w, http.StatusOK, s.envelope("MissionLayer", []any{}))
 	default:
 		notFound()
