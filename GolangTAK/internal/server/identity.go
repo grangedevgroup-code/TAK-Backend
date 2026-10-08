@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/pki"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/store"
 )
 
@@ -49,6 +50,16 @@ type CertRecord struct {
 	ClientUID string    `json:"clientUid,omitempty"`
 	Source    string    `json:"source"`
 	Revoked   bool      `json:"revoked,omitempty"`
+	RevokedAt time.Time `json:"revokedAt,omitempty"`
+	Hash      string    `json:"hash,omitempty"`
+	Subject   string    `json:"subject,omitempty"`
+	Issuer    string    `json:"issuer,omitempty"`
+	DER       []byte    `json:"der,omitempty"`
+}
+
+func newCertRecord(cert *x509.Certificate, clientUID, source string) CertRecord {
+	sum := sha256.Sum256(cert.Raw)
+	return CertRecord{Serial: pki.SerialHex(cert), Created: time.Now().UTC(), Expires: cert.NotAfter, ClientUID: clientUID, Source: source, Hash: hex.EncodeToString(sum[:]), Subject: cert.Subject.String(), Issuer: cert.Issuer.String(), DER: cert.Raw}
 }
 
 type User struct {
@@ -544,8 +555,9 @@ func (d *Directory) RevokeCert(serial string) error {
 	if owner != "" {
 		d.UpdateUser(owner, func(u *User) error {
 			for i := range u.Certs {
-				if strings.EqualFold(u.Certs[i].Serial, serial) {
+				if strings.EqualFold(u.Certs[i].Serial, serial) && !u.Certs[i].Revoked {
 					u.Certs[i].Revoked = true
+					u.Certs[i].RevokedAt = time.Now().UTC()
 				}
 			}
 			return nil
@@ -569,7 +581,10 @@ func (d *Directory) RevokeAll(user string) int {
 	}
 	d.UpdateUser(user, func(u *User) error {
 		for i := range u.Certs {
-			u.Certs[i].Revoked = true
+			if !u.Certs[i].Revoked {
+				u.Certs[i].Revoked = true
+				u.Certs[i].RevokedAt = time.Now().UTC()
+			}
 		}
 		return nil
 	})

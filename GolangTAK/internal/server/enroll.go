@@ -58,7 +58,7 @@ func (s *Server) signFromRequest(w http.ResponseWriter, r *http.Request) (*x509.
 		writeText(w, http.StatusInternalServerError, "certificate signing failed")
 		return nil, false
 	}
-	if err := s.dir.RecordCert(id.Name, CertRecord{Serial: pki.SerialHex(cert), Created: time.Now().UTC(), Expires: cert.NotAfter, ClientUID: clientUID, Source: "enroll"}); err != nil {
+	if err := s.dir.RecordCert(id.Name, newCertRecord(cert, clientUID, "enroll")); err != nil {
 		s.log.Error("could not record issued certificate", "user", id.Name, "err", err)
 	}
 	if id.Via == "token" && id.TokenID != "" {
@@ -124,7 +124,7 @@ func (s *Server) martiMakeKeyStore(w http.ResponseWriter, r *http.Request) {
 		writeText(w, http.StatusInternalServerError, "could not create certificate")
 		return
 	}
-	s.dir.RecordCert(cn, CertRecord{Serial: pki.SerialHex(cert), Created: time.Now().UTC(), Expires: cert.NotAfter, ClientUID: r.URL.Query().Get("clientUid"), Source: "keystore"})
+	s.dir.RecordCert(cn, newCertRecord(cert, r.URL.Query().Get("clientUid"), "keystore"))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+safeFileName(cn)+`.p12"`)
 	w.Write(data)

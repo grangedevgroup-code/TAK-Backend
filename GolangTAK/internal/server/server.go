@@ -74,6 +74,7 @@ type Server struct {
 	dfeeds    *dataFeeds
 	live      *liveVideo
 	voice     *mumble.Server
+	injectors *Injectors
 	mapLayers *MapLayers
 	fedFeeds  *store.Collection[dataFeedView]
 	control   string

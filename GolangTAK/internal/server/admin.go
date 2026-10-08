@@ -50,9 +50,10 @@ func (s *Server) viewUser(u User) userView {
 		}
 		return v
 	}
-	certs := u.Certs
-	if certs == nil {
-		certs = []CertRecord{}
+	certs := make([]CertRecord, 0, len(u.Certs))
+	for _, c := range u.Certs {
+		c.DER = nil
+		certs = append(certs, c)
 	}
 	return userView{Name: u.Name, Admin: u.Admin, Disabled: u.Disabled, In: nz(u.In), Out: nz(u.Out), Inactive: nz(u.Inactive),
 		Callsign: u.Callsign, Team: u.Team, TeamRole: u.TeamRole, Note: u.Note, Created: u.Created, LastLogin: u.LastLogin,

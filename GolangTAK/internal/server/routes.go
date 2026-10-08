@@ -52,6 +52,35 @@ func (s *Server) routes() *http.ServeMux {
 	m("POST /Marti/api/maplayers", s.martiMapLayerSave)
 	m("PUT /Marti/api/maplayers", s.martiMapLayerSave)
 	m("DELETE /Marti/api/maplayers/{uid}", s.martiMapLayerDelete)
+	m("GET /Marti/api/certadmin/cert", s.martiCertAdmin)
+	m("GET /Marti/api/certadmin/cert/{a}", s.martiCertAdmin)
+	m("GET /Marti/api/certadmin/cert/{a}/{b}", s.martiCertAdmin)
+	m("DELETE /Marti/api/certadmin/cert/{a}", s.martiCertAdmin)
+	m("DELETE /Marti/api/certadmin/cert/{a}/{b}", s.martiCertAdmin)
+	m("GET /Marti/api/injectors/cot/uid", s.martiInjectors)
+	m("GET /Marti/api/injectors/cot/uid/{uid}", s.martiInjectors)
+	m("POST /Marti/api/injectors/cot/uid", s.martiInjectors)
+	m("PUT /Marti/api/injectors/cot/uid", s.martiInjectors)
+	m("DELETE /Marti/api/injectors/cot/uid", s.martiInjectors)
+	m("DELETE /Marti/api/injectors/cot/uid/{uid}", s.martiInjectors)
+	m("GET /Marti/api/files/metadata/count", s.filesCount)
+	m("GET /files/api/config", s.filesConfig)
+	m("GET /Marti/sync/{hash}/metadata", s.syncMetadata)
+	m("POST /Marti/ExportMissionKML", s.martiExportKML)
+	m("GET /Marti/api/repeater/list", s.martiRepeaterList)
+	m("GET /Marti/api/repeater/period", s.martiRepeaterPeriod)
+	m("POST /Marti/api/repeater/period", s.martiRepeaterPeriod)
+	m("GET /Marti/api/repeater/remove/{uid}", s.martiRepeaterRemove)
+	m("GET /Marti/api/security/config", s.martiSecurityConfig)
+	m("GET /Marti/api/authentication/config", s.martiAuthConfig)
+	m("GET /Marti/api/security/verifyConfig", s.martiVerifyConfig)
+	m("GET /Marti/api/pagedmissions", s.martiPagedMissions)
+	m("GET /Marti/api/user-management/api/{action}", s.martiUserManagement)
+	m("POST /Marti/api/user-management/api/{action}", s.martiUserManagement)
+	m("PUT /Marti/api/user-management/api/{action}", s.martiUserManagement)
+	m("GET /Marti/api/user-management/api/{action}/{arg}", s.martiUserManagement)
+	m("DELETE /Marti/api/user-management/api/{action}/{arg}", s.martiUserManagement)
+	m("PUT /Marti/api/video/{uid}", s.videoPut)
 	m("GET /Marti/api/datafeeds", s.martiDataFeeds)
 	m("GET /Marti/api/datafeeds/stats", s.martiDataFeedStats)
 	m("GET /Marti/api/datafeeds/stats/{uuid}", s.martiDataFeedStats)
@@ -123,6 +152,9 @@ func (s *Server) routes() *http.ServeMux {
 	pub("GET /api/packages/{atak}/{file}", s.packagesFile)
 
 	pub("POST /api/login", s.apiLogin)
+	pub("POST /oauth/token", s.oauthToken)
+	pub("GET /locate", s.locatePage)
+	pub("POST /locate/api", s.locatePost)
 	pub("POST /api/logout", s.apiLogout)
 	pub("GET /api/ca.pem", s.apiCA)
 	pub("GET /api/truststore.p12", s.apiTrustStore)
@@ -280,11 +312,14 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 		s.martiUnknown(w, r)
 	}
 	if len(seg) == 0 {
-		if method == http.MethodGet {
+		switch method {
+		case http.MethodGet:
 			s.missionList(w, r)
-			return
+		case http.MethodDelete:
+			s.missionDeleteByQuery(w, r)
+		default:
+			notFound()
 		}
-		notFound()
 		return
 	}
 	switch {
@@ -390,6 +425,8 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 			s.missionContentsAdd(w, r)
 		case method == http.MethodDelete:
 			s.missionContentsRemove(w, r)
+		case method == http.MethodGet:
+			s.missionContentsList(w, r)
 		default:
 			notFound()
 		}
@@ -486,6 +523,12 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 		default:
 			notFound()
 		}
+	case "properties":
+		key := ""
+		if len(seg) == 2 {
+			key = seg[1]
+		}
+		s.missionProperties(w, r, key)
 	case "layers":
 		writeJSON(w, http.StatusOK, s.envelope("MissionLayer", []any{}))
 	default:

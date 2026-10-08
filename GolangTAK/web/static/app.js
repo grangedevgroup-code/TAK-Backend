@@ -2932,6 +2932,7 @@
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
     { id: "voice", title: "Voice", keys: "mumble mumla murmur radio push to talk ptt" },
+    { id: "locate", title: "Locate", keys: "location sharing search rescue lost person link" },
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
     { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload" },
@@ -2943,7 +2944,7 @@
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -3014,6 +3015,14 @@
         field("Viewing", checkbox("vs_ar", vs.anonymousRead, "Anyone can watch without signing in")),
         field("Publishing", checkbox("vs_ap", vs.anonymousPublish, "Anyone can publish without signing in")),
         field("Maximum streams", n("vs_max", vs.maxStreams), "0 means no limit."),
+      ],
+      locate: [
+        h("span", null, "A web page where anyone you send the link to can share their position onto the map, for search and rescue or people without a TAK client. The page is ", h("a", { href: "/locate", target: "_blank", rel: "noopener" }, location.origin + "/locate"), "."),
+        field("Enabled", checkbox("lo_on", lo.enabled, "Turn on the locate page and API")),
+        field("Without signing in", checkbox("lo_pub", lo.public, "Anyone with the link can send a location")),
+        field("Group", input("lo_group", lo.group || "", { placeholder: "everyone" }), "Locations go to this group. Empty sends them to everyone."),
+        field("Mission", input("lo_mis", lo.mission || "", { placeholder: "none" }), "Also add every location to this mission."),
+        field("Marker type", input("lo_type", lo.cotType || "", { placeholder: "a-f-G" }), "CoT type of the marker."),
       ],
       voice: [
         "The built-in voice server. Mumble, Mumla and the TAK voice plugins connect with TAK user names and passwords, and each group is a channel its members can join.",
@@ -3263,6 +3272,7 @@
           intervalSec: num(form, "mt_int"),
           group: val(form, "mt_group"),
         }),
+        locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
         voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),
         videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max") }),
         feeds: {

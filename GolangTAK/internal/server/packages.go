@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/cot"
-	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/pki"
 )
 
 type zipEntry struct {
@@ -155,7 +154,7 @@ func (s *Server) BuildPackage(kind PackageKind, user, host string) ([]byte, stri
 			if err != nil {
 				return nil, "", err
 			}
-			if err := s.dir.RecordCert(user, CertRecord{Serial: pki.SerialHex(cert), Created: time.Now().UTC(), Expires: cert.NotAfter, Source: "package"}); err != nil {
+			if err := s.dir.RecordCert(user, newCertRecord(cert, "", "package")); err != nil {
 				return nil, "", err
 			}
 			userFile := safeFileName(user) + "-" + sid + ".p12"

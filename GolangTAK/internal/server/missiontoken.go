@@ -78,6 +78,6 @@ func (s *Server) parseMissionToken(t string) (missionClaims, error) {
 }
 
 func (s *Server) isMissionToken(t string) bool {
-	_, err := s.parseMissionToken(t)
-	return err == nil
+	c, err := s.parseMissionToken(t)
+	return err == nil && (c.Mission != "" || c.GUID != "")
 }

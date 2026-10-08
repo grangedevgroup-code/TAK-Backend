@@ -43,6 +43,9 @@ func (s *Server) initSubsystems() error {
 	if s.mapLayers, err = OpenMapLayers(s.DataDir); err != nil {
 		return err
 	}
+	if s.injectors, err = OpenInjectors(s.DataDir); err != nil {
+		return err
+	}
 	if s.fedFeeds, err = store.Open[dataFeedView](filepath.Join(s.DataDir, "db", "federated-feeds.jsonl"), true); err != nil {
 		return err
 	}
@@ -79,6 +82,7 @@ func (s *Server) initSubsystems() error {
 		}
 	}
 	s.hub.OnMissions = s.onMissionCoT
+	s.hub.Inject = s.applyInjectors
 	s.hub.OnOffline = s.storeOffline
 	return nil
 }
@@ -145,6 +149,9 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.mapLayers != nil {
 		s.mapLayers.Close()
+	}
+	if s.injectors != nil {
+		s.injectors.Close()
 	}
 	if s.fedFeeds != nil {
 		s.fedFeeds.Close()

@@ -86,7 +86,7 @@ func (s *Server) CreateLinkInvite(name string, groups []string) (LinkInvite, err
 	if err != nil {
 		return LinkInvite{}, err
 	}
-	if err := s.dir.RecordCert(user, CertRecord{Serial: pki.SerialHex(cert), Created: time.Now().UTC(), Expires: cert.NotAfter, Source: "link"}); err != nil {
+	if err := s.dir.RecordCert(user, newCertRecord(cert, "", "link")); err != nil {
 		return LinkInvite{}, err
 	}
 	u := "tls://" + net.JoinHostPort(addr, strconv.Itoa(cfg.Ports.TLS))

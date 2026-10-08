@@ -140,6 +140,10 @@ func (s *Server) resolveIdentity(r *http.Request) (*Identity, *Session, error) {
 			if s.isMissionToken(cred) {
 				break
 			}
+			if c, err := s.parseOAuthToken(cred); err == nil {
+				id, err := s.dir.Identity(c.Sub, "oauth")
+				return id, nil, err
+			}
 			id, err := s.dir.CheckToken(ip, cred)
 			return id, nil, err
 		case "basic":

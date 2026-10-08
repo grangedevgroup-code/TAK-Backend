@@ -555,7 +555,9 @@ func (s *Server) apiKML(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) martiExportKML(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	r.ParseForm()
+	q := r.Form
 	var start, end time.Time
 	if v := q.Get("startTime"); v != "" {
 		start, _ = cot.ParseTime(v)

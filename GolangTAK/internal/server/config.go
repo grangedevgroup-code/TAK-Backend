@@ -192,6 +192,7 @@ type Config struct {
 	DataFeeds      []DataFeedConfig  `json:"dataFeeds"`
 	Video          VideoServerConfig `json:"videoServer"`
 	Voice          VoiceConfig       `json:"voice"`
+	Locate         LocateConfig      `json:"locate"`
 	TileURL        string            `json:"tileUrl"`
 	LogLevel       string            `json:"logLevel"`
 	ACMEEmail      string            `json:"acmeEmail"`
