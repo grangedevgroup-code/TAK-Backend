@@ -17,6 +17,10 @@ func TestPluginHelperProcess(t *testing.T) {
 	if mode == "" {
 		t.Skip("helper process for the plugin tests")
 	}
+	if mode == "web" {
+		webHelper()
+		return
+	}
 	req, _ := http.NewRequest("GET", os.Getenv("GOLANGTAK_URL")+"/api/me", nil)
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("GOLANGTAK_TOKEN"))
 	resp, err := http.DefaultClient.Do(req)

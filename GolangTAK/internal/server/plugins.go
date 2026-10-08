@@ -29,6 +29,8 @@ type PluginConfig struct {
 	Enabled bool              `json:"enabled"`
 	Admin   bool              `json:"admin,omitempty"`
 	Groups  []string          `json:"groups,omitempty"`
+
+	Settings map[string]string `json:"settings,omitempty"`
 }
 
 var pluginNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$`)
@@ -40,6 +42,13 @@ const (
 	pluginStableRun  = time.Minute
 	pluginStopWait   = 5 * time.Second
 )
+
+func ValidatePluginName(name string) error {
+	if !pluginNameRe.MatchString(name) {
+		return fmt.Errorf("plugin name %q must start with a letter or digit and use only letters, digits, dot, dash and underscore", name)
+	}
+	return nil
+}
 
 func validatePlugins(list []PluginConfig) error {
 	seen := map[string]bool{}
@@ -84,6 +93,7 @@ type pluginProc struct {
 	lastExit  string
 	nextStart time.Time
 	logs      []string
+	httpAddr  string
 }
 
 type PluginStatus struct {
@@ -101,6 +111,16 @@ type PluginStatus struct {
 	Restarts  int       `json:"restarts"`
 	LastExit  string    `json:"lastExit,omitempty"`
 	NextStart time.Time `json:"nextStart,omitempty"`
+
+	Version     string            `json:"version,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Author      string            `json:"author,omitempty"`
+	Homepage    string            `json:"homepage,omitempty"`
+	Page        string            `json:"page,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	AdminOnly   bool              `json:"adminOnly,omitempty"`
+	Schema      []PluginSetting   `json:"schema,omitempty"`
+	Settings    map[string]string `json:"settings,omitempty"`
 }
 
 func pluginKey(p PluginConfig) string {
@@ -293,6 +313,7 @@ func (m *pluginManager) runOnce(ctx context.Context, pr *pluginProc) error {
 	cmd := exec.Command(command, p.Args...)
 	cmd.Dir = work
 	cmd.Env = append(os.Environ(), s.pluginEnv(p, dir, token)...)
+	cmd.Env = append(cmd.Env, s.pluginExtraEnv(p, pr)...)
 	for k, v := range p.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
@@ -473,6 +494,19 @@ func (pr *pluginProc) status(s *Server) PluginStatus {
 		st.EnvKeys = append(st.EnvKeys, k)
 	}
 	sort.Strings(st.EnvKeys)
+	if m := s.pluginManifest(pr.cfg); m != nil {
+		st.Version, st.Description, st.Author, st.Homepage, st.AdminOnly, st.Schema = m.Version, m.Description, m.Author, m.Homepage, m.AdminOnly, m.Settings
+		if m.HTTP {
+			st.Page = firstNonEmpty(m.Page, pr.cfg.Name)
+			st.URL = "/plugins/" + pr.cfg.Name + "/"
+		}
+		st.Settings = s.pluginSettingValues(pr.cfg, m)
+		for _, def := range m.Settings {
+			if def.Type == "secret" && st.Settings[def.Key] != "" {
+				st.Settings[def.Key] = secretMask
+			}
+		}
+	}
 	return st
 }
 

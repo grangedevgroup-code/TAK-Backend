@@ -1,0 +1,10 @@
+{
+  "name": "welcome",
+  "version": "1.1.0",
+  "description": "Sends a chat message to every device the first time it connects.",
+  "command": "welcome",
+  "commands": { "windows": "welcome.exe" },
+  "settings": [
+    { "key": "message", "label": "Message", "type": "text", "help": "%s becomes the device's callsign." }
+  ]
+}

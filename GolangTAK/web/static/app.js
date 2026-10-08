@@ -563,6 +563,7 @@
     { group: "Account" },
     { id: "tokens", title: "API tokens", icon: "tokens", render: pageTokens, keys: "bearer scripts" },
     { id: "account", title: "My account", icon: "account", render: pageAccount, keys: "password theme dark light sign out" },
+    { id: "plugin", title: "Plugin", icon: "plugins", hidden: true, render: pagePluginView },
   ];
 
   let alertEl = null;
@@ -626,7 +627,7 @@
     if (document.querySelector(".palette")) return;
     const items = [];
     for (const p of PAGES) {
-      if (!p.id || (p.admin && !S.me.admin)) continue;
+      if (!p.id || p.hidden || (p.admin && !S.me.admin)) continue;
       items.push({ title: p.title, where: "Page", icon: p.icon, hash: "#/" + p.id, keys: p.keys || "" });
     }
     if (S.me.admin) for (const s of SETTINGS_SECTIONS) items.push({ title: s.title, where: "Settings", icon: "settings", hash: "#/settings/" + s.id, keys: s.keys || "" });
@@ -723,7 +724,7 @@
     const nav = h("nav", { "aria-label": "Sections" });
     countEl = null;
     for (const p of PAGES) {
-      if (p.admin && !S.me.admin) continue;
+      if ((p.admin && !S.me.admin) || p.hidden) continue;
       if (p.group) {
         nav.append(h("div", { class: "group" }, p.group));
         continue;
@@ -732,6 +733,15 @@
       if (count) countEl = count;
       nav.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => setOpen(false) }, icon(p.icon), h("span", { class: "t" }, p.title), count));
     }
+    api("GET", "/api/plugin-pages")
+      .then((list) => {
+        S.pluginPages = list;
+        if (!list.length) return;
+        nav.append(h("div", { class: "group" }, "Plugins"));
+        for (const p of list) nav.append(h("a", { href: "#/plugin/" + enc(p.name), "data-page": "plugin", "data-plugin": p.name, title: p.description || p.page, onclick: () => setOpen(false) }, icon("plugins"), h("span", { class: "t" }, p.page)));
+        markPluginNav();
+      })
+      .catch(() => {});
     const signOutBtn = btn("Sign out", signOut, "icon-only ghost", "signout");
     signOutBtn.setAttribute("aria-label", "Sign out");
     signOutBtn.title = "Sign out";
@@ -766,6 +776,30 @@
     updateCount();
   }
 
+  function markPluginNav() {
+    const cur = S.page === "plugin" ? decodeURIComponent((location.hash.split("/")[2] || "")) : "";
+    for (const a of document.querySelectorAll(".side nav a[data-plugin]")) {
+      const on = a.dataset.plugin === cur;
+      a.classList.toggle("active", on);
+      if (on) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    }
+  }
+
+  async function pagePluginView(main, params) {
+    const name = params[0] || "";
+    const info = (S.pluginPages || []).find((p) => p.name === name) || (await api("GET", "/api/plugin-pages")).find((p) => p.name === name);
+    if (!info) {
+      main.append(h("div", { class: "notice" }, "That plugin page is not available."));
+      return;
+    }
+    document.title = info.page + " - GolangTAK";
+    setCrumbs({ title: info.page, id: "plugin" }, "");
+    pageHead(main, info.page, info.description || "", h("a", { class: "button", href: info.url, target: "_blank", rel: "noopener" }, "Open in a new tab"));
+    main.append(h("iframe", { class: "plugin-frame", src: info.url, title: info.page }));
+    markPluginNav();
+  }
+
   function setCrumbs(page, extra) {
     if (!crumbEl) return;
     let group = "";
@@ -773,6 +807,7 @@
       if (p.group) group = p.group;
       if (p === page) break;
     }
+    if (page.id === "plugin") group = "Plugins";
     const parts = [];
     if (group) parts.push(h("span", null, group), h("span", { class: "sep" }, "/"));
     if (extra) parts.push(h("a", { href: "#/" + page.id }, page.title), h("span", { class: "sep" }, "/"), h("b", null, extra));
@@ -804,7 +839,7 @@
     const side = document.querySelector(".side");
     if (side) side.classList.remove("open");
     setCrumbs(page, page.id === "missions" && rest[0] ? decodeURIComponent(rest[0]) : "");
-    for (const a of document.querySelectorAll(".side nav a")) {
+    for (const a of document.querySelectorAll(".side nav a:not([data-plugin])")) {
       a.classList.toggle("active", a.dataset.page === page.id);
       if (a.dataset.page === page.id) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
@@ -2821,7 +2856,7 @@
     const spBox = h("div");
     main.append(
       h("h2", null, "Server plugins"),
-      h("p", null, "Programs that run next to GolangTAK and use its API: bots, bridges to other systems, alerting, logging. GolangTAK starts them, gives each one an API token, and restarts them if they stop. For safety, plugins are added only on the server itself, with ", h("span", { class: "mono" }, "golangtak plugin add NAME COMMAND"), "."),
+      h("p", null, "Programs that run next to GolangTAK and use its API: bots, bridges to other systems, alerting, logging. GolangTAK starts them, gives each one an API token, and restarts them if they stop. For safety, plugins are installed only on the server itself, with ", h("span", { class: "mono" }, "golangtak plugin install FOLDER, ZIP or URL"), " or ", h("span", { class: "mono" }, "golangtak plugin add NAME COMMAND"), ". Plugins with a settings form can be configured here, and plugins with pages appear in the menu."),
       spBox
     );
     const showLogs = async (name) => {
@@ -2843,12 +2878,46 @@
       obs.observe(document.body, { childList: true });
       return close;
     };
+    const pluginSettings = (r) => {
+      const vals = r.settings || {};
+      const f = h(
+        "form",
+        { class: "grid" },
+        r.schema.map((st) => {
+          const id = "ps_" + st.key;
+          const v = vals[st.key] ?? st.default ?? "";
+          let el;
+          if (st.type === "bool") el = checkbox(id, v === "true", st.label || st.key);
+          else if (st.type === "select") el = select(id, [["", "-"]].concat((st.options || []).map((o) => [o, o])), v);
+          else if (st.type === "textarea") el = h("textarea", { id: id, rows: 4 }, v);
+          else el = input(id, v, { type: st.type === "number" ? "number" : st.type === "secret" ? "password" : "text", required: !!st.required, autocomplete: "off" });
+          return field(st.type === "bool" ? "" : st.label || st.key, el, st.help);
+        })
+      );
+      modal("Settings for " + r.name, f, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const body = {};
+            for (const st of r.schema) {
+              const el = f.querySelector("#ps_" + CSS.escape(st.key));
+              body[st.key] = st.type === "bool" ? String(el.checked) : el.value;
+            }
+            await api("PUT", "/api/server-plugins/" + enc(r.name) + "/settings", body);
+            toast("Saved. The plugin restarts with the new settings.");
+            setTimeout(() => loadServerPlugins().catch(() => {}), 1000);
+          },
+        },
+      ]);
+    };
     const loadServerPlugins = async () => {
       const list = await api("GET", "/api/server-plugins");
       clear(spBox).append(
         table(
           [
-            { title: "Name", render: (r) => h("b", null, r.name) },
+            { title: "Name", render: (r) => h("div", null, h("b", null, r.name), r.version ? h("span", { class: "muted small" }, " " + r.version) : null, r.description ? h("div", { class: "small muted" }, r.description) : null) },
             { title: "State", render: (r) => h("div", null, r.state === "disabled" ? h("span", { class: "pill" }, "disabled") : pill(r.state), r.lastExit && r.state !== "running" ? h("div", { class: "small muted", style: "margin-top:4px" }, r.lastExit) : null) },
             { title: "Process", cls: "num", render: (r) => (r.pid ? String(r.pid) : "-") },
             { title: "Restarts", cls: "num", render: (r) => String(r.restarts) },
@@ -2857,6 +2926,8 @@
               title: "",
               cls: "actions",
               render: (r) => [
+                r.url && r.state === "running" ? h("a", { class: "button small primary", href: "#/plugin/" + enc(r.name) }, "Open") : null,
+                r.schema && r.schema.length ? btn("Settings", () => pluginSettings(r), "small") : null,
                 btn("Output", () => showLogs(r.name).catch(fail), "small"),
                 btn("Restart", async () => {
                   await api("POST", "/api/server-plugins/" + enc(r.name) + "/restart").catch(fail);

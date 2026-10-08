@@ -213,7 +213,7 @@ Drone apps, OBS and other encoders that only send RTMP use `rtmp://SERVER:1935/l
 A server plugin is any program you want running next to GolangTAK: a bot that answers in chat, a bridge to a dispatch or alerting system, a logger, a sensor feed. GolangTAK starts it with the server, restarts it if it stops (waiting a little longer each time, up to a minute), stops it on shutdown, and keeps its recent output for the dashboard.
 
 ```sh
-sudo golangtak plugin add welcome /opt/plugins/welcome --env "WELCOME_MESSAGE=Welcome aboard, %s."
+sudo golangtak plugin add welcome /opt/plugins/welcome
 sudo golangtak plugin list
 sudo golangtak plugin logs welcome
 ```
@@ -232,9 +232,37 @@ Put `--` before plugin arguments that start with a dash: `golangtak plugin add n
 
 The plugin account is a normal user, not an administrator. Add `--admin` to give it full access, and `--groups` to choose what it sees. With its token a plugin can read the event stream, send chat (`POST /api/chat`), place markers (`POST /api/markers`), and use everything else the dashboard uses.
 
-[`examples/plugins/welcome`](examples/plugins/welcome/main.go) is a complete example: it watches the event stream and sends each newly seen device a welcome message. Build it with `go build ./examples/plugins/welcome`.
+**Packaged plugins.** A plugin folder or zip with a `plugin.json` installs in one step, from a folder, a zip file or an https link:
 
-The dashboard (**Plugins and profiles**) shows each plugin's state, process and output, and can restart, enable or disable it. Plugins can only be added, changed or removed on the server itself, with the `golangtak plugin` command or in `config.json`, so a stolen dashboard password cannot be used to run programs on the server.
+```sh
+sudo golangtak plugin install ./statusboard
+sudo golangtak plugin settings statusboard title="Team status"
+sudo golangtak plugin uninstall statusboard
+```
+
+`plugin.json` names the program (per operating system if needed), describes the plugin, declares a settings form and says whether the plugin has web pages:
+
+```json
+{
+  "name": "statusboard",
+  "version": "1.0.0",
+  "description": "Device status board",
+  "command": "statusboard",
+  "commands": { "windows": "statusboard.exe" },
+  "http": true,
+  "page": "Status board",
+  "settings": [
+    { "key": "title", "label": "Board title", "type": "text", "default": "Status board" },
+    { "key": "staleMinutes", "label": "Stale after (minutes)", "type": "number", "default": "5" }
+  ]
+}
+```
+
+Setting types are `text`, `number`, `bool`, `secret`, `select` (with `options`) and `textarea`. Administrators change settings in the dashboard, which restarts the plugin with them; the plugin reads them as JSON from `GOLANGTAK_PLUGIN_SETTINGS`, and secrets are never shown again. A plugin with `"http": true` gets a private address in `GOLANGTAK_PLUGIN_HTTP`; its pages and API appear on the dashboard at `/plugins/NAME/` and in the menu, behind dashboard sign-in (`"adminOnly": true` limits them to administrators, and `"public": true` serves `/plugins/NAME/public/` without signing in). GolangTAK passes the signed-in user in the `X-GolangTAK-User`, `X-GolangTAK-Admin` and `X-GolangTAK-Groups` headers and never forwards session cookies or tokens to the plugin.
+
+**Writing plugins in Go.** The [`pkg/plugin`](pkg/plugin/plugin.go) package handles the connection: `plugin.Load()`, `Events` for the live stream with reconnects, `Chat`, `SendCoT`, `PlaceMarker`, `Do` for any API call, `Setting` for the settings form, `Serve` for web pages and `UserOf` for who is signed in. [`examples/plugins/welcome`](examples/plugins/welcome/main.go) greets new devices, and [`examples/plugins/statusboard`](examples/plugins/statusboard/main.go) adds a status board page to the dashboard. Plugins in other languages use the same environment variables and HTTP endpoints.
+
+The dashboard (**Plugins and profiles**) shows each plugin's version, state, process and output, edits its settings, and can restart, enable or disable it. Plugins can only be installed, added or removed on the server itself, with the `golangtak plugin` command or in `config.json`, so a stolen dashboard password cannot be used to run programs on the server.
 
 ## Ports
 

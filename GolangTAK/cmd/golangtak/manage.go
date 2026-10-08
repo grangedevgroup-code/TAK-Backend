@@ -974,12 +974,61 @@ func cmdPlugin(a *args) error {
 				fmt.Printf("Plugin %s saved. It starts with the server.\n", name)
 			}
 			return nil
-		case "del", "delete", "rm", "remove":
+		case "install":
+			if name == "" {
+				return errUsage
+			}
+			return installPlugin(a, c, name)
+		case "settings", "setting":
+			if name == "" {
+				return errUsage
+			}
+			if len(a.pos) < 3 {
+				var list []server.PluginStatus
+				if err := c.call("GET", "/api/server-plugins", nil, &list); err != nil {
+					return err
+				}
+				for _, p := range list {
+					if !strings.EqualFold(p.Name, name) {
+						continue
+					}
+					if len(p.Schema) == 0 {
+						fmt.Println("This plugin has no settings.")
+						return nil
+					}
+					t := table()
+					fmt.Fprintln(t, "KEY\tVALUE\tDESCRIPTION")
+					for _, st := range p.Schema {
+						fmt.Fprintf(t, "%s\t%s\t%s\n", st.Key, p.Settings[st.Key], firstNonEmpty(st.Label, st.Help))
+					}
+					return t.Flush()
+				}
+				return fmt.Errorf("no server plugin named %s", name)
+			}
+			body := map[string]string{}
+			for _, kv := range a.pos[2:] {
+				k, v, ok := strings.Cut(kv, "=")
+				if !ok || k == "" {
+					return fmt.Errorf("settings are KEY=VALUE, got %q", kv)
+				}
+				body[k] = v
+			}
+			if err := c.call("PUT", "/api/server-plugins/"+url.PathEscape(name)+"/settings", body, nil); err != nil {
+				return err
+			}
+			fmt.Printf("Settings for %s saved; the plugin restarts with them.\n", name)
+			return nil
+		case "del", "delete", "rm", "remove", "uninstall":
 			if name == "" {
 				return errUsage
 			}
 			if err := c.call("DELETE", "/api/server-plugins/"+url.PathEscape(name), nil, nil); err != nil {
 				return err
+			}
+			if a.on("files") || sub == "uninstall" {
+				if err := server.ValidatePluginName(name); err == nil {
+					os.RemoveAll(filepath.Join(dataDir(a), "plugin-apps", name))
+				}
 			}
 			fmt.Printf("Plugin %s removed.\n", name)
 			return nil

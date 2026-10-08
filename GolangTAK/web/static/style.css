@@ -590,3 +590,4 @@ details.more > .inner { padding: 16px; }
 .live-player { width: 100%; }
 .live-player .live-video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
 .live-status { margin-top: 8px; }
+.plugin-frame { display: block; width: 100%; height: calc(100vh - 210px); min-height: 420px; border: 1px solid var(--border-strong); background: var(--panel); }

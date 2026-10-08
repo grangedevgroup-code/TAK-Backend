@@ -1,0 +1,14 @@
+{
+  "name": "statusboard",
+  "version": "1.0.0",
+  "description": "A status board page listing every device with its last report, battery and team, with a box to message everyone.",
+  "command": "statusboard",
+  "commands": { "windows": "statusboard.exe" },
+  "http": true,
+  "page": "Status board",
+  "settings": [
+    { "key": "title", "label": "Board title", "type": "text", "default": "Status board" },
+    { "key": "staleMinutes", "label": "Mark as stale after (minutes)", "type": "number", "default": "5" },
+    { "key": "allowBroadcast", "label": "Let users message everyone from the board", "type": "bool", "default": "true" }
+  ]
+}
