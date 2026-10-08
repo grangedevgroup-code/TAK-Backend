@@ -59,6 +59,7 @@ func newTestServer(t *testing.T, mutate func(*Config)) *Server {
 	cfg.Ports = Ports{TCP: freePort(t), TLS: freePort(t), UDP: 0, HTTP: freePort(t), HTTPS: freePort(t), Enroll: freePort(t), WebSocket: freePort(t), API: freePort(t)}
 	cfg.Ports.TCPAlt = cfg.Ports.TCP
 	cfg.Mesh.Enabled = false
+	cfg.Video.Enabled = false
 	cfg.Certificates.KeyBits = 2048
 	cfg.LogLevel = "debug"
 	if mutate != nil {

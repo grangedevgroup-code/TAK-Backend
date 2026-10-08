@@ -166,34 +166,35 @@ type PeerConfig struct {
 }
 
 type Config struct {
-	Name           string           `json:"name"`
-	Address        string           `json:"address"`
-	ExtraNames     []string         `json:"extraNames"`
-	Bind           string           `json:"bind"`
-	NodeID         string           `json:"nodeId"`
-	Ports          Ports            `json:"ports"`
-	AllowAnonymous bool             `json:"allowAnonymous"`
-	AnonymousGroup string           `json:"anonymousGroup"`
-	Protobuf       bool             `json:"protobuf"`
-	Replay         string           `json:"replay"`
-	StrictGroups   bool             `json:"strictGroups"`
-	Channels       bool             `json:"channels"`
-	Mesh           MeshConfig       `json:"mesh"`
-	Certificates   CertConfig       `json:"certificates"`
-	Retention      RetentionConfig  `json:"retention"`
-	Limits         LimitsConfig     `json:"limits"`
-	Repeater       RepeaterConfig   `json:"repeater"`
-	Federation     FederationConfig `json:"federation"`
-	Peers          []PeerConfig     `json:"peers"`
-	Feeds          FeedsConfig      `json:"feeds"`
-	LDAP           LDAPConfig       `json:"ldap"`
-	Meshtastic     MeshtasticConfig `json:"meshtastic"`
-	Plugins        []PluginConfig   `json:"plugins"`
-	DataFeeds      []DataFeedConfig `json:"dataFeeds"`
-	TileURL        string           `json:"tileUrl"`
-	LogLevel       string           `json:"logLevel"`
-	ACMEEmail      string           `json:"acmeEmail"`
-	ACMEDomain     string           `json:"acmeDomain"`
+	Name           string            `json:"name"`
+	Address        string            `json:"address"`
+	ExtraNames     []string          `json:"extraNames"`
+	Bind           string            `json:"bind"`
+	NodeID         string            `json:"nodeId"`
+	Ports          Ports             `json:"ports"`
+	AllowAnonymous bool              `json:"allowAnonymous"`
+	AnonymousGroup string            `json:"anonymousGroup"`
+	Protobuf       bool              `json:"protobuf"`
+	Replay         string            `json:"replay"`
+	StrictGroups   bool              `json:"strictGroups"`
+	Channels       bool              `json:"channels"`
+	Mesh           MeshConfig        `json:"mesh"`
+	Certificates   CertConfig        `json:"certificates"`
+	Retention      RetentionConfig   `json:"retention"`
+	Limits         LimitsConfig      `json:"limits"`
+	Repeater       RepeaterConfig    `json:"repeater"`
+	Federation     FederationConfig  `json:"federation"`
+	Peers          []PeerConfig      `json:"peers"`
+	Feeds          FeedsConfig       `json:"feeds"`
+	LDAP           LDAPConfig        `json:"ldap"`
+	Meshtastic     MeshtasticConfig  `json:"meshtastic"`
+	Plugins        []PluginConfig    `json:"plugins"`
+	DataFeeds      []DataFeedConfig  `json:"dataFeeds"`
+	Video          VideoServerConfig `json:"videoServer"`
+	TileURL        string            `json:"tileUrl"`
+	LogLevel       string            `json:"logLevel"`
+	ACMEEmail      string            `json:"acmeEmail"`
+	ACMEDomain     string            `json:"acmeDomain"`
 }
 
 func DefaultConfig() Config {
@@ -248,6 +249,7 @@ func DefaultConfig() Config {
 			CacheLimit:      50000,
 		},
 		Repeater: RepeaterConfig{Enabled: true, IntervalSec: 5},
+		Video:    VideoServerConfig{Enabled: true, RTSPPort: 8554, RTMPPort: 1935, RTPPort: 8000, AnonymousRead: true, MaxStreams: 100},
 		Federation: FederationConfig{
 			Groups:  []string{"__ANON__"},
 			MaxHops: 4,

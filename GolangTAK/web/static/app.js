@@ -315,6 +315,10 @@
     a.remove();
   }
 
+  function copyButton(text, label) {
+    return btn(label || "Copy", () => copy(text), "small", "copy");
+  }
+
   function copy(text) {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => toast("Copied"), () => toast("Copy failed", true));
@@ -528,7 +532,7 @@
     { group: "Shared data" },
     { id: "files", title: "Files", icon: "files", render: pageFiles, keys: "data packages upload" },
     { id: "missions", title: "Missions", icon: "missions", render: pageMissions, keys: "data sync" },
-    { id: "video", title: "Video feeds", icon: "video", render: pageVideo, keys: "rtsp camera" },
+    { id: "video", title: "Video", icon: "video", render: pageVideo, keys: "rtsp camera live streams hls drone uas feeds" },
     { id: "feeds", title: "Feeds and layers", icon: "layers", admin: true, render: pageFeeds, keys: "data feeds sensors inputs map layers tiles wms" },
     { group: "Administration", admin: true },
     { id: "performance", title: "Performance", icon: "pulse", admin: true, render: pagePerformance, keys: "cpu memory ram disk load health resources" },
@@ -1921,10 +1925,187 @@
     main.append(h("h2", null, "Recent changes"), table([{ title: "Time", render: (r) => fmtTime(r.timestamp) }, { title: "Change", key: "type" }, { title: "Item", render: (r) => (r.contentResource && r.contentResource.name) || r.contentUid || "-" }, { title: "By", render: (r) => r.creatorUid || "-" }], changes, "No changes."));
   }
 
+  function livePlayer(path) {
+    const video = h("video", { muted: true, autoplay: true, playsinline: true, controls: true, class: "live-video" });
+    video.muted = true;
+    const status = h("div", { class: "small muted live-status" }, "Connecting...");
+    const ctrl = new AbortController();
+    (async () => {
+      const resp = await fetch("/api/video/live/" + path.split("/").map(enc).join("/") + "/live.mp4", { signal: ctrl.signal, credentials: "same-origin" });
+      if (!resp.ok) {
+        let msg = "HTTP " + resp.status;
+        try {
+          msg = (await resp.json()).error || msg;
+        } catch (e) {}
+        throw new Error(msg);
+      }
+      const mime = 'video/mp4; codecs="' + (resp.headers.get("X-Codec") || "avc1.42E01E") + '"';
+      const MS = window.ManagedMediaSource || window.MediaSource;
+      if (!MS || !MS.isTypeSupported(mime)) throw new Error("This browser cannot play " + mime + ". Open the RTSP address in VLC or a TAK client.");
+      const ms = new MS();
+      video.disableRemotePlayback = true;
+      video.src = URL.createObjectURL(ms);
+      await new Promise((r) => ms.addEventListener("sourceopen", r, { once: true }));
+      const sb = ms.addSourceBuffer(mime);
+      sb.mode = "segments";
+      const queue = [];
+      const pump = () => {
+        if (sb.updating || !queue.length || ms.readyState !== "open") return;
+        const n = queue.reduce((a, b) => a + b.length, 0);
+        const buf = new Uint8Array(n);
+        let o = 0;
+        for (const q of queue.splice(0)) {
+          buf.set(q, o);
+          o += q.length;
+        }
+        try {
+          sb.appendBuffer(buf);
+        } catch (e) {
+          status.textContent = e.message;
+        }
+      };
+      sb.addEventListener("updateend", () => {
+        const b = video.buffered;
+        if (b.length) {
+          const end = b.end(b.length - 1), start = b.start(0);
+          if (video.currentTime < start || end - video.currentTime > 3) video.currentTime = Math.max(start, end - 0.5);
+          if (end - start > 60 && !sb.updating) {
+            sb.remove(start, end - 20);
+            return;
+          }
+          status.textContent = "Live";
+          video.play().catch(() => {});
+        }
+        pump();
+      });
+      const reader = resp.body.getReader();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        queue.push(value);
+        pump();
+      }
+      status.textContent = "The stream ended.";
+    })().catch((e) => {
+      if (e.name !== "AbortError") status.textContent = e.message;
+    });
+    return { el: h("div", { class: "live-player" }, video, status), stop: () => ctrl.abort() };
+  }
+
+  function watchStream(st) {
+    const p = livePlayer(st.path);
+    const close = modal(st.path, h("div", null, p.el, h("div", { class: "toolbar", style: "margin-top:12px" }, h("span", { class: "mono small break" }, st.rtsp), copyButton(st.rtsp))), [{ label: "Close", run: () => p.stop() }]);
+    const back = document.querySelector(".modal-back:last-of-type");
+    if (back) new MutationObserver((_, obs) => {
+      if (!back.isConnected) {
+        p.stop();
+        obs.disconnect();
+      }
+    }).observe(document.body, { childList: true });
+    return close;
+  }
+
   async function pageVideo(main) {
-    pageHead(main, "Video feeds", "Video streams listed for TAK devices: RTSP, RTMP, SRT, UDP and HTTP.", btn("Add feed", () => addFeed(), "primary", "plus"));
+    pageHead(main, "Video", "Live streams on the built-in video server, and video feeds listed for TAK devices: RTSP, RTMP, SRT, UDP and HTTP.", btn("Add feed", () => addFeed(), "primary", "plus"), S.me.admin ? btn("Add pull source", () => editSource(), "", "plus") : null);
+    const liveBox = h("div");
+    const srcBox = h("div");
     const box = h("div");
-    main.append(box);
+    main.append(h("h2", null, "Live streams"), liveBox, S.me.admin ? h("h2", null, "Pull sources") : null, S.me.admin ? srcBox : null, h("h2", null, "Video feeds"), box);
+    let cfg = null;
+    const saveSources = async (list) => {
+      const vs = Object.assign({}, cfg.videoServer || {}, { sources: list });
+      const r = await api("PUT", "/api/settings", { videoServer: vs });
+      if (r.restartRequired) confirmAction("Restart required", "Pull sources start after a restart. Restart now?", "Restart", async () => {
+        await api("POST", "/api/restart");
+        toast("Restarting");
+      });
+      else toast("Saved");
+      loadLive().catch(fail);
+    };
+    const editSource = (src) => {
+      const isNew = !src;
+      src = src || { enabled: true, groups: [] };
+      const f = h(
+        "form",
+        { class: "grid" },
+        field("Name", input("vsname", src.name || "", { required: true, placeholder: "gate-camera" })),
+        field("Camera URL", input("vsurl", src.url || "", { required: true, placeholder: "rtsp://user:password@192.168.1.20:554/stream1" }), "RTSP or RTSPS. The server pulls it and republishes it."),
+        field("Path", input("vspath", src.path || "", { placeholder: "cameras/gate" }), "Where the stream is published on this server. Empty uses the name."),
+        field("Groups", input("vsgroups", (src.groups || []).join(", ")), "Only these groups can watch. Empty means everyone."),
+        field("Enabled", checkbox("vson", src.enabled !== false, "Pull this source"))
+      );
+      modal(isNew ? "Add pull source" : "Edit " + src.name, f, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const next = { name: val(f, "vsname"), url: val(f, "vsurl"), path: val(f, "vspath"), groups: splitList(val(f, "vsgroups")), enabled: val(f, "vson") };
+            const list = ((cfg.videoServer || {}).sources || []).filter((x) => x.name !== src.name && x.name !== next.name);
+            list.push(next);
+            await saveSources(list);
+          },
+        },
+      ]);
+    };
+    const loadLive = async () => {
+      if (S.me.admin) cfg = await api("GET", "/api/settings");
+      const info = await api("GET", "/api/video/streams");
+      if (!info.enabled) {
+        clear(liveBox).append(h("p", { class: "muted" }, "The video server is off. ", S.me.admin ? h("a", { href: "#/settings/video" }, "Turn it on under Settings") : "Ask an administrator to turn it on.", "."));
+      } else {
+        clear(liveBox).append(
+          h("p", { class: "muted" }, "Publish over RTSP to ", h("span", { class: "mono" }, info.publishURL), info.rtmpURL ? [" or, from drone apps and OBS, over RTMP to ", h("span", { class: "mono" }, info.rtmpURL)] : null, ", using a user name and password from this server. Streams appear here and in every TAK client's video list."),
+          table(
+            [
+              { title: "Path", render: (r) => h("b", null, r.path) },
+              { title: "From", render: (r) => r.publisher + (r.source.startsWith("pull") ? " (pulled)" : "") },
+              { title: "Codecs", render: (r) => joined(r.codecs) },
+              { title: "Viewers", render: (r) => String(r.readers) },
+              { title: "Received", render: (r) => fmtBytes(r.bytes) },
+              { title: "Since", cls: "nowrap", render: (r) => fmtAgo(r.started) },
+              {
+                title: "",
+                cls: "actions",
+                render: (r) => [
+                  r.browser ? btn("Watch", () => watchStream(r), "small primary") : null,
+                  copyButton(r.rtsp, "Copy RTSP"),
+                  S.me.admin ? btn("Stop", () => confirmAction("Stop stream", "Disconnect the publisher of " + r.path + "?", "Stop", async () => { await api("DELETE", "/api/video/streams/" + r.path.split("/").map(enc).join("/")); loadLive().catch(fail); }), "small") : null,
+                ],
+              },
+            ],
+            info.streams,
+            "No live streams. Publish one to the address above."
+          )
+        );
+      }
+      if (S.me.admin) {
+        clear(srcBox).append(
+          table(
+            [
+              { title: "Name", render: (r) => h("b", null, r.name) },
+              { title: "Path", render: (r) => h("span", { class: "mono small" }, r.path) },
+              { title: "State", render: (r) => (!r.enabled ? pill("disabled", "off") : r.live ? pill("running", "live") : h("div", null, pill("problem", "connecting"), r.error ? h("div", { class: "small muted" }, r.error) : null)) },
+              {
+                title: "",
+                cls: "actions",
+                render: (r) => {
+                  const src = ((cfg.videoServer || {}).sources || []).find((x) => x.name === r.name);
+                  return [btn("Edit", () => editSource(src), "small"), btn("Delete", () => confirmAction("Delete source", "Delete " + r.name + "?", "Delete", () => saveSources(((cfg.videoServer || {}).sources || []).filter((x) => x.name !== r.name))), "small")];
+                },
+              },
+            ],
+            info.sources,
+            "No pull sources. Add a camera to relay it through this server."
+          )
+        );
+      }
+    };
+    loadLive().catch(fail);
+    const timer = setInterval(() => {
+      if (!liveBox.isConnected) return clearInterval(timer);
+      if (!document.querySelector(".modal-back")) loadLive().catch(() => {});
+    }, 5000);
     const load = async () => {
       const list = await api("GET", "/api/video");
       clear(box).append(
@@ -2713,6 +2894,7 @@
     { id: "mesh", title: "Mesh and alerts", keys: "multicast sa emergency repeater ttl" },
     { id: "meshtastic", title: "Meshtastic", keys: "lora mqtt broker radio" },
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
+    { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
     { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload" },
@@ -2724,7 +2906,7 @@
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -2784,6 +2966,17 @@
         field("Downlink channel", input("mt_dch", mt.downlinkChannel, { placeholder: "first channel" })),
         field("Seconds between positions", n("mt_int", mt.intervalSec), "Per TAK user, to protect the mesh's airtime."),
         field("Group", input("mt_group", mt.group, { placeholder: "everyone" }), "Mesh traffic goes to this group, and only its traffic goes to the mesh. Empty means everyone."),
+      ],
+      video: [
+        "The built-in video server. Cameras, drones, ATAK and ffmpeg publish to it over RTSP, TAK clients play from it, and the dashboard plays H.264 streams in the browser.",
+        field("Enabled", checkbox("vs_on", vs.enabled, "Run the video server")),
+        field("RTSP port", n("vs_rtsp", vs.rtspPort), "Publish and play at rtsp://ADDRESS:PORT/live/NAME."),
+        field("RTSPS port", n("vs_rtsps", vs.rtspsPort), "Encrypted RTSP with this server's certificate. 0 turns it off."),
+        field("RTMP port", n("vs_rtmp", vs.rtmpPort), "For drone apps, OBS and encoders that only send RTMP: rtmp://ADDRESS:PORT/live/NAME?user=USER&pass=PASSWORD. 0 turns it off."),
+        field("RTP port", n("vs_rtp", vs.rtpPort), "UDP transport uses this even port and the next one. 0 allows TCP only."),
+        field("Viewing", checkbox("vs_ar", vs.anonymousRead, "Anyone can watch without signing in")),
+        field("Publishing", checkbox("vs_ap", vs.anonymousPublish, "Anyone can publish without signing in")),
+        field("Maximum streams", n("vs_max", vs.maxStreams), "0 means no limit."),
       ],
       feeds: [
         "Live aircraft and ships shown on every device's map.",
@@ -3025,6 +3218,7 @@
           intervalSec: num(form, "mt_int"),
           group: val(form, "mt_group"),
         }),
+        videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max") }),
         feeds: {
           adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),
           ais: Object.assign({}, fs, { enabled: val(form, "fs_on"), username: val(form, "fs_user"), south: num(form, "fs_s"), west: num(form, "fs_w"), north: num(form, "fs_n"), east: num(form, "fs_e"), mmsi: val(form, "fs_mmsi"), intervalSec: num(form, "fs_int"), group: val(form, "fs_group") }),

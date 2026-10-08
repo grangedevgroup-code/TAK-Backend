@@ -792,11 +792,13 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fb, _ := json.Marshal(before.DataFeeds)
+	vb, _ := json.Marshal(before.Video)
+	vn, _ := json.Marshal(next.Video)
 	fn, _ := json.Marshal(next.DataFeeds)
 	mb, _ := json.Marshal(before.Meshtastic)
 	mn, _ := json.Marshal(next.Meshtastic)
 	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
-		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn)
+		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn)
 	if before.Address != next.Address || strings.Join(before.ExtraNames, ",") != strings.Join(next.ExtraNames, ",") {
 		if err := s.pki.EnsureServer(next); err != nil {
 			s.log.Error("server certificate update failed", "err", err)
@@ -835,6 +837,25 @@ func validateConfig(c *Config) error {
 		}
 		if err := check(x.n, x.v, x.proto); err != nil {
 			return err
+		}
+	}
+	if v := c.Video; v.Enabled {
+		for _, x := range []struct {
+			n     string
+			v     int
+			proto string
+		}{{"videoServer.rtspPort", v.RTSPPort, "tcp"}, {"videoServer.rtspsPort", v.RTSPSPort, "tcp"}, {"videoServer.rtmpPort", v.RTMPPort, "tcp"}, {"videoServer.rtpPort", v.RTPPort, "udp"}} {
+			if err := check(x.n, x.v, x.proto); err != nil {
+				return err
+			}
+		}
+		if v.RTPPort > 0 {
+			if v.RTPPort%2 != 0 {
+				return errors.New("the video RTP port must be even")
+			}
+			if err := check("videoServer.rtcpPort", v.RTPPort+1, "udp"); err != nil {
+				return err
+			}
 		}
 	}
 	if strings.TrimSpace(c.Name) == "" {

@@ -101,6 +101,9 @@ func (s *Server) startSubsystems() error {
 	}
 	s.rebuildFeedIndex()
 	s.startDataFeeds()
+	if err := s.startLiveVideo(); err != nil {
+		return err
+	}
 	s.startFeeds()
 	s.startMeshtastic()
 	s.histStop = make(chan struct{})

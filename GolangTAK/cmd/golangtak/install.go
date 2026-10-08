@@ -163,6 +163,21 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 	if cfg.Federation.Enabled {
 		rules = append(rules, firewall.Rule{Port: p.Federation, Proto: "tcp"}, firewall.Rule{Port: p.FederationV2, Proto: "tcp"})
 	}
+	if v := cfg.Video; v.Enabled {
+		rules = append(rules, firewall.Rule{Port: v.RTSPPort, Proto: "tcp"}, firewall.Rule{Port: v.RTSPSPort, Proto: "tcp"}, firewall.Rule{Port: v.RTMPPort, Proto: "tcp"})
+		if v.RTPPort > 0 {
+			rules = append(rules, firewall.Rule{Port: v.RTPPort, Proto: "udp"}, firewall.Rule{Port: v.RTPPort + 1, Proto: "udp"})
+		}
+	}
+	for _, f := range cfg.DataFeeds {
+		if f.Enabled {
+			proto := "tcp"
+			if f.Protocol == "udp" || f.Protocol == "mcast" {
+				proto = "udp"
+			}
+			rules = append(rules, firewall.Rule{Port: f.Port, Proto: proto})
+		}
+	}
 	if cfg.Meshtastic.Enabled && cfg.Meshtastic.BrokerPort > 0 {
 		rules = append(rules, firewall.Rule{Port: cfg.Meshtastic.BrokerPort, Proto: "tcp"})
 	}

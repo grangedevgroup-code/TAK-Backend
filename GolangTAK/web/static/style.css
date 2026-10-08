@@ -586,3 +586,7 @@ details.more > .inner { padding: 16px; }
 }
 .map-info .cot-image { display: block; margin-top: 12px; border: 1px solid var(--border-strong); }
 .map-info .cot-image img { display: block; width: 100%; height: auto; max-height: 240px; object-fit: contain; background: var(--canvas); }
+.modal:has(.live-player) { width: min(920px, calc(100vw - 32px)); max-width: none; }
+.live-player { width: 100%; }
+.live-player .live-video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.live-status { margin-top: 8px; }

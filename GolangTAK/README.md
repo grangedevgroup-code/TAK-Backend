@@ -153,6 +153,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Administration**: web dashboard (map with routes, drawings, range and bearing lines, CasEvac 9-line reports and attached images, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs, and a performance page with CPU, memory, disk, load and message rates over the last ten minutes), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation, version 1 and version 2.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
+- **Video server**: built in, no MediaMTX needed. Cameras, drones, ATAK, OBS and ffmpeg publish over RTSP, RTSPS or RTMP (H.264 and AAC); TAK clients and VLC play over RTSP (TCP or UDP) or HLS, and the dashboard plays live H.264 in the browser. Streams sign in with GolangTAK accounts, are listed automatically in every TAK client's video list, and can be pulled from existing cameras (RTSP with Basic or Digest sign-in) and relayed.
 - **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
 - **TAK data feeds and map layers**: TCP, TLS, UDP and multicast inputs for sensors and other systems, each on its own port with its own groups, listed with the built-in feeds in the TAK Server data feed API (statistics, latest objects, bounds). Missions can include a feed with polygon, CoT type and callsign filters, and its data goes to the mission subscribers. Map layers (tiles, WMS, WMTS) are published to TAK clients and missions, and appear as base maps on the dashboard map. Missions, feeds and map layers are also shared over federation version 2.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
@@ -192,6 +193,16 @@ golangtak config set federation.enabled true ports.federation 9000 ports.federat
 ```
 
 Give the other server this server's CA (`/api/ca.pem`) and add its CA under **Server links**, **Federation**. Version 2 also shares public missions, their files, logs, parent missions and expiration with TAK Server, both ways and including missions that existed before the link. Federated deletes are off unless you allow them (`federation.allowFederatedDelete`), and `federation.disableMissionFederation` turns mission sharing off.
+
+## Video server
+
+Publish a stream with a user name and password from this server:
+
+```sh
+ffmpeg -re -i video.mp4 -c copy -f rtsp rtsp://USER:PASSWORD@SERVER:8554/live/uas1
+```
+
+Drone apps, OBS and other encoders that only send RTMP use `rtmp://SERVER:1935/live/uas1?user=USER&pass=PASSWORD`. The stream appears in every TAK client's video list as `rtsp://SERVER:8554/live/uas1`, on the dashboard under **Video**, and as HLS at `/api/video/live/live/uas1/index.m3u8`. Cameras that already serve RTSP can be added under **Video**, **Add pull source** and are relayed from the server. Ports, RTSPS and anonymous viewing or publishing are under **Settings**, **Video server**.
 
 ## Server plugins
 
@@ -236,6 +247,9 @@ The dashboard (**Plugins and profiles**) shows each plugin's state, process and 
 | 19023 | TCP | FreeTAKServer-compatible REST API |
 | 9000 | TCP | Federation version 1 (off by default) |
 | 9001 | TCP | Federation version 2, gRPC (off by default) |
+| 8554 | TCP | Video server, RTSP |
+| 1935 | TCP | Video server, RTMP ingest |
+| 8000, 8001 | UDP | Video server, RTP and RTCP |
 | 1883 | TCP | MQTT broker for Meshtastic gateway nodes (off by default) |
 | 6969, 17012 | UDP | Multicast situational awareness (mesh) |
 

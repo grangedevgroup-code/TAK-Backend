@@ -71,6 +71,7 @@ type Server struct {
 	fig2      *fig2Server
 	fig2Out   sync.Map
 	dfeeds    *dataFeeds
+	live      *liveVideo
 	mapLayers *MapLayers
 	fedFeeds  *store.Collection[dataFeedView]
 	control   string

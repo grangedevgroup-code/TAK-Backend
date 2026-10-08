@@ -152,6 +152,9 @@ func (s *Server) routes() *http.ServeMux {
 	u("GET /api/emergencies", s.apiEmergencies)
 	a("GET /api/repeated", s.apiRepeatedList)
 	a("GET /api/datafeeds", s.apiDataFeeds)
+	u("GET /api/video/streams", s.apiStreams)
+	u("GET /api/video/live/{rest...}", s.apiLiveStream)
+	a("DELETE /api/video/streams/{rest...}", s.apiStreamStop)
 	a("POST /api/repeated/{uid}", s.apiRepeatedAdd)
 	a("DELETE /api/repeated/{uid}", s.apiRepeatedDelete)
 	a("GET /api/logs", s.apiLogs)
@@ -233,7 +236,7 @@ func (s *Server) dashboardIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Frame-Options", "DENY")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob: https: http:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob: https: http:; media-src 'self' blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'")
 	w.Write(web.Index())
 }
 
