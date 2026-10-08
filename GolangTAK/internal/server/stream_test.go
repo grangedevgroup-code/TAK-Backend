@@ -10,6 +10,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,14 +19,35 @@ import (
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/takproto"
 )
 
+var (
+	portMu   sync.Mutex
+	portNext = 20000 + int(time.Now().UnixNano()%6000)
+	portUsed = map[int]bool{}
+)
+
 func freePort(t *testing.T) int {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	portMu.Lock()
+	defer portMu.Unlock()
+	for range 12000 {
+		p := portNext
+		portNext++
+		if portNext >= 32000 {
+			portNext = 20000
+		}
+		if portUsed[p] {
+			continue
+		}
+		l, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(p))
+		if err != nil {
+			continue
+		}
+		l.Close()
+		portUsed[p] = true
+		return p
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
+	t.Fatal("no free port between 20000 and 32000")
+	return 0
 }
 
 func newTestServer(t *testing.T, mutate func(*Config)) *Server {
