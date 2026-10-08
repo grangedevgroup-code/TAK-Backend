@@ -374,16 +374,34 @@
     return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 1 : 2) + " km" : Math.round(m) + " m";
   }
 
+  function geoArea(pts) {
+    const r = 6371008.8, rad = Math.PI / 180;
+    let sum = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      sum += (b[1] - a[1]) * rad * (2 + Math.sin(a[0] * rad) + Math.sin(b[0] * rad));
+    }
+    return Math.abs((sum * r * r) / 2);
+  }
+
+  function fmtArea(m2) {
+    const acres = m2 / 4046.8564224, ha = m2 / 10000;
+    if (ha < 1) return Math.round(m2).toLocaleString() + " m² (" + acres.toFixed(2) + " acres)";
+    return (ha < 100 ? ha.toFixed(2) : Math.round(ha).toLocaleString()) + " ha (" + (acres < 100 ? acres.toFixed(1) : Math.round(acres).toLocaleString()) + " acres)";
+  }
+
   function shapeRows(v) {
     const sh = v.shape;
     if (!sh) return [];
-    if (sh.radius) return [["Shape", sh.minor && sh.minor !== sh.radius ? "Ellipse" : "Circle"], ["Radius", fmtDist(sh.radius)]];
+    if (sh.radius) return [["Shape", sh.minor && sh.minor !== sh.radius ? "Ellipse" : "Circle"], ["Radius", fmtDist(sh.radius)], ["Area", fmtArea(Math.PI * sh.radius * (sh.minor || sh.radius))]];
     const pts = sh.points || [];
     let len = 0;
     for (let i = 1; i < pts.length; i++) len += geoDist(pts[i - 1], pts[i]);
     if (sh.closed && pts.length > 2) len += geoDist(pts[pts.length - 1], pts[0]);
     const kind = sh.route ? "Route" : (v.type || "").startsWith("u-rb-a") ? "Range and bearing" : sh.closed ? "Area" : "Line";
-    return [["Shape", kind], [sh.route ? "Waypoints" : "Points", String(pts.length)], [sh.closed ? "Perimeter" : "Length", fmtDist(len)]];
+    const rows = [["Shape", kind], [sh.route ? "Waypoints" : "Points", String(pts.length)], [sh.closed ? "Perimeter" : "Length", fmtDist(len)]];
+    if (sh.closed && pts.length > 2) rows.push(["Area", fmtArea(geoArea(pts))]);
+    return rows;
   }
 
   const MEDEVAC_FIELDS = [

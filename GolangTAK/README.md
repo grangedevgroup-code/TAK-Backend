@@ -150,7 +150,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Accounts**: local users with groups, or sign-in with LDAP and Active Directory accounts whose directory groups become TAK groups, with an administrator group and a callsign attribute.
 - **Certificates**: built-in certificate authority, certificate enrollment (signClient v1 and v2, JSON and XML), one-time enrollment codes, revocation, server certificate that renews itself when the address changes, import of an existing CA.
 - **Data**: data packages and the Data Sync API, missions with subscriptions, roles, passwords, invitations and change notifications, ExCheck checklists, CI-TRAP reports, video feeds, KML export, track history.
-- **Administration**: web dashboard (map with routes, drawings, range and bearing lines, CasEvac 9-line reports and attached images, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs, and a performance page with CPU, memory, disk, load and message rates over the last ten minutes), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
+- **Administration**: web dashboard (map with routes, drawings, range and bearing lines, areas in acres and hectares (for Fire Area Survey perimeters and other drawings), CasEvac 9-line reports and attached images, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs, and a performance page with CPU, memory, disk, load and message rates over the last ten minutes), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation, version 1 and version 2.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
 - **Video server**: built in, no MediaMTX needed. Cameras, drones, ATAK, OBS and ffmpeg publish over RTSP, RTSPS or RTMP (H.264 and AAC); TAK clients and VLC play over RTSP (TCP or UDP) or HLS, and the dashboard plays live H.264 in the browser. Streams sign in with GolangTAK accounts, are listed automatically in every TAK client's video list, and can be pulled from existing cameras (RTSP with Basic or Digest sign-in) and relayed.
@@ -188,6 +188,7 @@ The code carries the address, a client certificate and the certificate authority
 | FreeTAKServer | `tcp://HOST:8087`, or `tls://HOST:8089` with a certificate |
 | zyrntopo-tak-server and WebSocket software | `wss://HOST/` or `ws://HOST:PORT/` |
 | Anything else that speaks CoT | `tcp://`, `tls://`, `udp://` or `ws://` |
+| PyTAK scripts | `COT_URL=tcp://SERVER:8087`, or `tls://SERVER:8089` with `PYTAK_TLS_CLIENT_CERT` and `PYTAK_TLS_CLIENT_KEY` from a certificate package. For UDP on the same machine as GolangTAK use `udp+wo://SERVER:8087`, because PyTAK's two-way UDP mode takes over the port. |
 
 **TAK Server federation.** To accept federates on both protocol versions:
 
