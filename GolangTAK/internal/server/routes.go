@@ -128,6 +128,7 @@ func (s *Server) routes() *http.ServeMux {
 	u("GET /api/cot/history", s.apiHistory)
 	u("POST /api/cot", s.apiPostCoT)
 	u("DELETE /api/cot/{uid}", s.apiDeleteEvent)
+	u("GET /api/cot/{uid}/image", s.apiEventImage)
 	u("GET /api/tracks", s.apiTracks)
 	u("GET /api/kml", s.apiKML)
 	u("GET /api/stream", s.apiStream)

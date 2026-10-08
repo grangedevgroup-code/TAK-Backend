@@ -251,7 +251,70 @@
         ctx.fillRect(0, n * TILE - top, w, top + h - n * TILE);
       }
       this.drawTracks();
+      this.drawShapes();
       this.drawMarkers();
+    }
+
+    metersToPx(lat, meters) {
+      return (meters * worldSize(this.zoom)) / (40075016.686 * Math.cos((clampLat(lat) * Math.PI) / 180));
+    }
+
+    shapePath(m) {
+      const ctx = this.ctx;
+      const sh = m.shape;
+      ctx.beginPath();
+      if (sh.radius) {
+        const [x, y] = this.toScreen(m.lat, m.lon);
+        const rx = Math.max(2, this.metersToPx(m.lat, sh.radius));
+        const ry = Math.max(2, this.metersToPx(m.lat, sh.minor || sh.radius));
+        ctx.ellipse(x, y, rx, ry, ((sh.angle || 0) * Math.PI) / 180, 0, Math.PI * 2);
+        return;
+      }
+      sh.points.forEach((p, i) => {
+        const [x, y] = this.toScreen(p[0], p[1]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      if (sh.closed) ctx.closePath();
+    }
+
+    drawShapes() {
+      const ctx = this.ctx;
+      const pal = this.palette();
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      for (const m of this.markers) {
+        const sh = m.shape;
+        if (!sh) continue;
+        const sel = m.uid === this.selected;
+        const color = withAlpha(sh.stroke, 1) || (sh.route ? "#7fd3df" : pal.text);
+        this.shapePath(m);
+        if (sh.closed && sh.fill) {
+          ctx.fillStyle = withAlpha(sh.fill, 0.35, true);
+          ctx.fill();
+        }
+        const w = Math.min(Math.max(sh.width || (sh.route ? 3 : 2), 1.5), 6) + (sel ? 1.5 : 0);
+        ctx.strokeStyle = pal.halo;
+        ctx.lineWidth = w + 3;
+        ctx.stroke();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = w;
+        if (sh.route) ctx.setLineDash([10, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (sh.route && sh.points) {
+          for (const p of sh.points) {
+            const [x, y] = this.toScreen(p[0], p[1]);
+            ctx.beginPath();
+            ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = pal.ink;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
     }
 
     drawFallback(z, x, y, sx, sy) {
@@ -317,6 +380,9 @@
         case "neutral":
           ctx.rect(x - r, y - r, r * 2, r * 2);
           break;
+        case "medevac":
+          ctx.rect(x - r - 1, y - r - 1, (r + 1) * 2, (r + 1) * 2);
+          break;
         case "point":
           ctx.moveTo(x - r, y - r);
           ctx.lineTo(x + r, y + r);
@@ -331,11 +397,11 @@
     drawMarkers() {
       const ctx = this.ctx;
       const pal = this.palette();
-      const fill = { friend: "#80e0ff", hostile: "#ff8080", neutral: "#aaffaa", unknown: "#ffff80", emergency: "#ff4d4f" };
+      const fill = { friend: "#80e0ff", hostile: "#ff8080", neutral: "#aaffaa", unknown: "#ffff80", emergency: "#ff4d4f", medevac: "#ffffff" };
       const font = "'Atkinson Hyperlegible Next', system-ui, sans-serif";
       ctx.font = "600 12px " + font;
       ctx.textBaseline = "middle";
-      const rank = { emergency: 0, friend: 1, hostile: 1, unknown: 2, point: 3, neutral: 4 };
+      const rank = { emergency: 0, medevac: 0, friend: 1, hostile: 1, unknown: 2, point: 3, neutral: 4 };
       const sorted = this.markers.slice().sort((a, b) => (a.kind === "emergency") - (b.kind === "emergency"));
       const labels = [];
       for (const m of sorted) {
@@ -343,6 +409,10 @@
         const [x, y] = this.toScreen(m.lat, m.lon);
         if (x < -50 || y < -50 || x > this.width + 50 || y > this.height + 50) continue;
         const r = m.kind === "emergency" ? 8 : 6;
+        if (m.kind === "shape") {
+          if (m.label) labels.push({ m: m, x: x + 6, y: y, r: 0, p: m.uid === this.selected ? -1 : 3 });
+          continue;
+        }
         if (m.uid === this.selected) {
           ctx.beginPath();
           ctx.rect(x - r - 6, y - r - 6, (r + 6) * 2, (r + 6) * 2);
@@ -366,7 +436,11 @@
           ctx.strokeStyle = pal.ink;
           ctx.lineWidth = 1.5;
           ctx.stroke();
-          if (m.kind === "emergency") {
+          if (m.kind === "medevac") {
+            ctx.fillStyle = "#d92d20";
+            ctx.fillRect(x - 1.5, y - r + 1, 3, (r - 1) * 2);
+            ctx.fillRect(x - r + 1, y - 1.5, (r - 1) * 2, 3);
+          } else if (m.kind === "emergency") {
             ctx.beginPath();
             ctx.arc(x, y, r + 4, 0, Math.PI * 2);
             ctx.strokeStyle = fill.emergency;
@@ -416,8 +490,31 @@
     hit(px, py) {
       let best = null, bestD = 14 * 14;
       for (const m of this.markers) {
+        if (m.kind === "shape") continue;
         const [x, y] = this.toScreen(m.lat, m.lon);
         const d = (x - px) * (x - px) + (y - py) * (y - py);
+        if (d <= bestD) {
+          best = m;
+          bestD = d;
+        }
+      }
+      if (best) return best;
+      bestD = 8 * 8;
+      for (const m of this.markers) {
+        const sh = m.shape;
+        if (!sh) continue;
+        let d = Infinity;
+        if (sh.radius) {
+          const [x, y] = this.toScreen(m.lat, m.lon);
+          const r = this.metersToPx(m.lat, sh.radius);
+          const c = Math.hypot(px - x, py - y);
+          d = c <= r ? 0 : (c - r) * (c - r);
+        } else if (sh.points) {
+          const pts = sh.points.map((p) => this.toScreen(p[0], p[1]));
+          if (sh.closed) pts.push(pts[0]);
+          for (let i = 1; i < pts.length; i++) d = Math.min(d, segDist2(px, py, pts[i - 1], pts[i]));
+          if (sh.closed && sh.fill && inPoly(px, py, pts)) d = 0;
+        }
         if (d <= bestD) {
           best = m;
           bestD = d;
@@ -516,8 +613,35 @@
     }
   }
 
+  function withAlpha(c, a, cap) {
+    const m = /^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/.exec(c || "");
+    if (!m) return "";
+    const cur = Number(m[4]);
+    if (!cap && cur === 0) return "";
+    return "rgba(" + m[1] + "," + m[2] + "," + m[3] + "," + (cap ? Math.min(cur, a) : a) + ")";
+  }
+
+  function segDist2(px, py, a, b) {
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const l = dx * dx + dy * dy;
+    let t = l ? ((px - a[0]) * dx + (py - a[1]) * dy) / l : 0;
+    t = Math.max(0, Math.min(1, t));
+    const x = a[0] + t * dx - px, y = a[1] + t * dy - py;
+    return x * x + y * y;
+  }
+
+  function inPoly(px, py, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
   SlippyMap.affiliation = function (type) {
     if (!type) return "unknown";
+    if (type.startsWith("b-r-f-h-c")) return "medevac";
     if (type.startsWith("b-a-")) return "emergency";
     if (type.startsWith("a-") && type.length > 2) {
       const a = type[2];

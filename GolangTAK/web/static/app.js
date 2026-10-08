@@ -359,6 +359,57 @@
     return !v.stale || new Date(v.stale).getTime() > Date.now();
   }
 
+  function geoDist(a, b) {
+    const r = 6371008.8, rad = Math.PI / 180;
+    const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * r * Math.asin(Math.sqrt(x));
+  }
+
+  function fmtDist(m) {
+    return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 1 : 2) + " km" : Math.round(m) + " m";
+  }
+
+  function shapeRows(v) {
+    const sh = v.shape;
+    if (!sh) return [];
+    if (sh.radius) return [["Shape", sh.minor && sh.minor !== sh.radius ? "Ellipse" : "Circle"], ["Radius", fmtDist(sh.radius)]];
+    const pts = sh.points || [];
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += geoDist(pts[i - 1], pts[i]);
+    if (sh.closed && pts.length > 2) len += geoDist(pts[pts.length - 1], pts[0]);
+    const kind = sh.route ? "Route" : (v.type || "").startsWith("u-rb-a") ? "Range and bearing" : sh.closed ? "Area" : "Line";
+    return [["Shape", kind], [sh.route ? "Waypoints" : "Points", String(pts.length)], [sh.closed ? "Perimeter" : "Length", fmtDist(len)]];
+  }
+
+  const MEDEVAC_FIELDS = [
+    ["title", "Title"], ["freq", "Line 1, frequency"], ["urgent", "Line 3, urgent"], ["urgent_surgical", "Line 3, urgent surgical"], ["priority", "Line 3, priority"], ["routine", "Line 3, routine"], ["convenience", "Line 3, convenience"],
+    ["equipment_none", "Line 4, no equipment"], ["hoist", "Line 4, hoist"], ["extraction_equipment", "Line 4, extraction"], ["ventilator", "Line 4, ventilator"], ["equipment_other", "Line 4, other"], ["equipment_detail", "Line 4, detail"],
+    ["litter", "Line 5, litter"], ["ambulatory", "Line 5, ambulatory"], ["security", "Line 6, security"], ["hlz_marking", "Line 7, marking"], ["hlz_remarks", "Line 7, marking remarks"],
+    ["us_military", "Line 8, US military"], ["us_civilian", "Line 8, US civilian"], ["nonus_military", "Line 8, non-US military"], ["nonus_civilian", "Line 8, non-US civilian"], ["epw", "Line 8, EPW"], ["child", "Line 8, child"],
+    ["terrain_none", "Line 9, no obstacles"], ["terrain_slope", "Line 9, slope"], ["terrain_rough", "Line 9, rough"], ["terrain_loose", "Line 9, loose"], ["terrain_other", "Line 9, other"], ["terrain_other_detail", "Line 9, detail"],
+    ["obstacles", "Obstacles"], ["winds_are_from", "Winds from"], ["friendlies", "Friendlies"], ["enemy", "Enemy"], ["medline_remarks", "Remarks"],
+  ];
+
+  function medevacRows(md) {
+    if (!md) return [];
+    const security = { 0: "No enemy troops", 1: "Possible enemy troops", 2: "Enemy troops in area", 3: "Enemy troops, armed escort required" };
+    const marking = { 0: "Panels", 1: "Pyrotechnic", 2: "Smoke", 3: "None", 4: "Other" };
+    const rows = [];
+    for (const [k, label] of MEDEVAC_FIELDS) {
+      let val = md[k];
+      if (val === undefined || val === "" || val === "0" || val === "false") continue;
+      if (k === "security") val = security[val] || val;
+      if (k === "hlz_marking") val = marking[val] || val;
+      if (val === "true") val = "Yes";
+      rows.push([label, val]);
+    }
+    for (const [k, val] of Object.entries(md)) if (k.startsWith("zmist")) rows.push(["ZMIST " + k.slice(5).replace("_", " "), val]);
+    const known = new Set(MEDEVAC_FIELDS.map((f) => f[0]).concat(["casevac"]));
+    for (const [k, val] of Object.entries(md)) if (!known.has(k) && !k.startsWith("zmist") && val !== "0" && val !== "false") rows.push([k.replace(/_/g, " "), val === "true" ? "Yes" : val]);
+    return rows.length ? [["Report", "CasEvac 9-line"], ...rows] : [];
+  }
+
   function repeatedList() {
     const box = h("div", { class: "full" }, h("p", { class: "muted small" }, "Loading..."));
     const load = async () => {
@@ -1358,9 +1409,11 @@
       const out = [];
       for (const v of S.events.values()) {
         if (!isLive(v)) continue;
-        if (v.lat === 0 && v.lon === 0) continue;
+        const pts = v.shape && v.shape.points;
+        if (v.lat === 0 && v.lon === 0 && !(pts && pts.length)) continue;
         if (!v.type || v.type.startsWith("t-") || v.type.startsWith("b-t-f") || v.type.startsWith("b-f-t")) continue;
-        out.push({ uid: v.uid, lat: v.lat, lon: v.lon, label: v.callsign || "", kind: SlippyMap.affiliation(v.type), v: v });
+        const [lat, lon] = v.lat === 0 && v.lon === 0 ? pts[0] : [v.lat, v.lon];
+        out.push({ uid: v.uid, lat: lat, lon: lon, label: v.callsign || "", kind: v.shape ? "shape" : SlippyMap.affiliation(v.type), shape: v.shape, v: v });
       }
       return out;
     };
@@ -1391,14 +1444,19 @@
           ["Updated", fmtAgo(v.time)],
           ["Stale", fmtTime(v.stale)],
           ["Remarks", v.remarks],
+          ...shapeRows(v),
+          ...medevacRows(v.medevac),
           ["UID", h("span", { class: "mono small break" }, v.uid)],
         ]),
+        ...(v.image ? [h("a", { href: "/api/cot/" + enc(v.uid) + "/image", target: "_blank", rel: "noopener", class: "cot-image" }, h("img", { src: "/api/cot/" + enc(v.uid) + "/image", alt: "Image attached to " + (v.callsign || v.uid), loading: "lazy" }))] : []),
         h(
           "div",
           { class: "toolbar" },
-          btn("Message", () => {
-            location.hash = "#/chat/" + enc(v.callsign || v.uid);
-          }),
+          (v.type || "").startsWith("a-")
+            ? btn("Message", () => {
+                location.hash = "#/chat/" + enc(v.callsign || v.uid);
+              })
+            : null,
           S.me.admin && !v.uid.startsWith("ANDROID") && !(v.type || "").startsWith("b-a")
             ? btn(S.repeated && S.repeated.has(v.uid) ? "Stop repeating" : "Repeat", async () => {
                 try {

@@ -436,12 +436,21 @@ type eventView struct {
 	Chat     string    `json:"chat,omitempty"`
 	To       string    `json:"to,omitempty"`
 	XML      string    `json:"xml,omitempty"`
+
+	Shape   *shapeView        `json:"shape,omitempty"`
+	Medevac map[string]string `json:"medevac,omitempty"`
+	Image   bool              `json:"image,omitempty"`
 }
 
 func viewOf(m *Message, withXML bool) eventView {
 	e := m.Event
 	v := eventView{UID: e.UID, Type: e.Type, Callsign: e.Callsign(), Lat: e.Point.Lat, Lon: e.Point.Lon, Hae: e.Point.Hae, Time: e.Time, Stale: e.Stale, Remarks: e.Remarks()}
 	v.Team, _ = e.Team()
+	v.Shape = shapeOf(e)
+	v.Medevac = medevacOf(e)
+	if n := e.D("image"); n != nil && strings.TrimSpace(n.Text) != "" {
+		v.Image = true
+	}
 	if m.Source != nil {
 		v.Source = m.Source.Kind + " " + m.Source.Remote
 	} else {

@@ -584,3 +584,5 @@ details.more > .inner { padding: 16px; }
   .app { display: block; }
   main { padding: 0; }
 }
+.map-info .cot-image { display: block; margin-top: 12px; border: 1px solid var(--border-strong); }
+.map-info .cot-image img { display: block; width: 100%; height: auto; max-height: 240px; object-fit: contain; background: var(--canvas); }
