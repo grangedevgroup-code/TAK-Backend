@@ -191,6 +191,7 @@ type Config struct {
 	Plugins        []PluginConfig    `json:"plugins"`
 	DataFeeds      []DataFeedConfig  `json:"dataFeeds"`
 	Video          VideoServerConfig `json:"videoServer"`
+	Voice          VoiceConfig       `json:"voice"`
 	TileURL        string            `json:"tileUrl"`
 	LogLevel       string            `json:"logLevel"`
 	ACMEEmail      string            `json:"acmeEmail"`
@@ -250,6 +251,7 @@ func DefaultConfig() Config {
 		},
 		Repeater: RepeaterConfig{Enabled: true, IntervalSec: 5},
 		Video:    VideoServerConfig{Enabled: true, RTSPPort: 8554, RTMPPort: 1935, RTPPort: 8000, AnonymousRead: true, MaxStreams: 100},
+		Voice:    VoiceConfig{Enabled: true, Port: 64738, MaxUsers: 200},
 		Federation: FederationConfig{
 			Groups:  []string{"__ANON__"},
 			MaxHops: 4,

@@ -104,6 +104,7 @@ func (s *Server) startSubsystems() error {
 	if err := s.startLiveVideo(); err != nil {
 		return err
 	}
+	s.startVoice()
 	s.startFeeds()
 	s.startMeshtastic()
 	s.histStop = make(chan struct{})
@@ -154,6 +155,7 @@ func (s *Server) closeSubsystems() {
 }
 
 func (s *Server) minuteTasks() {
+	s.refreshVoiceChannels()
 	s.devices.Flush()
 	s.missions.cots.Sync()
 }

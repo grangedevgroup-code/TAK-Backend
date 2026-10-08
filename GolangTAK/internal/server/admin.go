@@ -793,12 +793,14 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	fb, _ := json.Marshal(before.DataFeeds)
 	vb, _ := json.Marshal(before.Video)
+	ob, _ := json.Marshal(before.Voice)
+	on, _ := json.Marshal(next.Voice)
 	vn, _ := json.Marshal(next.Video)
 	fn, _ := json.Marshal(next.DataFeeds)
 	mb, _ := json.Marshal(before.Meshtastic)
 	mn, _ := json.Marshal(next.Meshtastic)
 	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
-		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn)
+		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn) || string(ob) != string(on)
 	if before.Address != next.Address || strings.Join(before.ExtraNames, ",") != strings.Join(next.ExtraNames, ",") {
 		if err := s.pki.EnsureServer(next); err != nil {
 			s.log.Error("server certificate update failed", "err", err)
@@ -836,6 +838,11 @@ func validateConfig(c *Config) error {
 			continue
 		}
 		if err := check(x.n, x.v, x.proto); err != nil {
+			return err
+		}
+	}
+	if c.Voice.Enabled {
+		if err := check("voice.port", c.Voice.Port, "tcp"); err != nil {
 			return err
 		}
 	}

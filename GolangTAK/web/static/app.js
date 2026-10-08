@@ -1644,9 +1644,45 @@
   async function pageClients(main) {
     pageHead(main, "Online now", "Devices and server links connected right now. Updates every 5 seconds.", btn("Connect a device", go("#/connect"), "primary", "connect"));
     const box = h("div");
+    const voiceBox = h("div");
     const search = searchBox(box, "Filter by callsign, user or address");
-    main.append(h("div", { class: "toolbar" }, search.el), box);
+    main.append(h("div", { class: "toolbar" }, search.el), box, h("h2", null, "Voice"), voiceBox);
+    const loadVoice = async () => {
+      const v = await api("GET", "/api/voice");
+      if (!v.enabled) {
+        clear(voiceBox).append(h("p", { class: "muted" }, "The voice server is off. ", S.me.admin ? h("a", { href: "#/settings/voice" }, "Turn it on under Settings") : "Ask an administrator to turn it on.", "."));
+        return;
+      }
+      clear(voiceBox).append(
+        h("p", { class: "muted" }, "Mumble and Mumla, including the TAK voice plugins, connect to ", h("span", { class: "mono" }, v.address + ":" + v.port), " with the same user name and password as TAK. Each group has its own channel."),
+        table(
+          [
+            { title: "User", render: (r) => h("b", null, r.name) },
+            { title: "Channel", render: (r) => r.channel || "-" },
+            { title: "State", render: (r) => (r.deafened ? "deafened" : r.muted ? "muted" : "talking allowed") },
+            { title: "Address", render: (r) => h("span", { class: "mono small" }, r.remote) },
+            { title: "Connected", render: (r) => fmtAgo(r.since) },
+            S.me.admin
+              ? {
+                  title: "",
+                  cls: "actions",
+                  render: (r) =>
+                    btn("Disconnect", () =>
+                      confirmAction("Disconnect", "Disconnect " + r.name + " from voice?", "Disconnect", async () => {
+                        await api("DELETE", "/api/voice/users/" + r.session);
+                        loadVoice().catch(fail);
+                      })
+                    ),
+                }
+              : null,
+          ].filter(Boolean),
+          v.users || [],
+          "Nobody is on voice."
+        )
+      );
+    };
     const load = async () => {
+      loadVoice().catch(() => {});
       const list = await api("GET", "/api/clients");
       list.sort((a, b) => ((a.info && a.info.callsign) || a.remote).localeCompare((b.info && b.info.callsign) || b.remote));
       clear(box).append(
@@ -2895,6 +2931,7 @@
     { id: "meshtastic", title: "Meshtastic", keys: "lora mqtt broker radio" },
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
+    { id: "voice", title: "Voice", keys: "mumble mumla murmur radio push to talk ptt" },
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
     { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload" },
@@ -2906,7 +2943,7 @@
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -2977,6 +3014,14 @@
         field("Viewing", checkbox("vs_ar", vs.anonymousRead, "Anyone can watch without signing in")),
         field("Publishing", checkbox("vs_ap", vs.anonymousPublish, "Anyone can publish without signing in")),
         field("Maximum streams", n("vs_max", vs.maxStreams), "0 means no limit."),
+      ],
+      voice: [
+        "The built-in voice server. Mumble, Mumla and the TAK voice plugins connect with TAK user names and passwords, and each group is a channel its members can join.",
+        field("Enabled", checkbox("vo_on", vo.enabled, "Run the voice server")),
+        field("Port", n("vo_port", vo.port), "TCP and UDP. Mumble's standard port is 64738."),
+        field("Guests", checkbox("vo_anon", vo.anonymous, "Allow people without an account to join the root channel")),
+        field("Maximum users", n("vo_max", vo.maxUsers)),
+        field("Welcome message", input("vo_welcome", vo.welcome || "")),
       ],
       feeds: [
         "Live aircraft and ships shown on every device's map.",
@@ -3218,6 +3263,7 @@
           intervalSec: num(form, "mt_int"),
           group: val(form, "mt_group"),
         }),
+        voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),
         videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max") }),
         feeds: {
           adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),

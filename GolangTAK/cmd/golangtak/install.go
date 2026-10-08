@@ -169,6 +169,9 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 			rules = append(rules, firewall.Rule{Port: v.RTPPort, Proto: "udp"}, firewall.Rule{Port: v.RTPPort + 1, Proto: "udp"})
 		}
 	}
+	if cfg.Voice.Enabled && cfg.Voice.Port > 0 {
+		rules = append(rules, firewall.Rule{Port: cfg.Voice.Port, Proto: "tcp"}, firewall.Rule{Port: cfg.Voice.Port, Proto: "udp"})
+	}
 	for _, f := range cfg.DataFeeds {
 		if f.Enabled {
 			proto := "tcp"

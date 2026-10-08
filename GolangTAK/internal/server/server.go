@@ -18,6 +18,7 @@ import (
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/cot"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/flock"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/mumble"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/store"
 )
 
@@ -72,6 +73,7 @@ type Server struct {
 	fig2Out   sync.Map
 	dfeeds    *dataFeeds
 	live      *liveVideo
+	voice     *mumble.Server
 	mapLayers *MapLayers
 	fedFeeds  *store.Collection[dataFeedView]
 	control   string

@@ -152,6 +152,8 @@ func (s *Server) routes() *http.ServeMux {
 	u("GET /api/emergencies", s.apiEmergencies)
 	a("GET /api/repeated", s.apiRepeatedList)
 	a("GET /api/datafeeds", s.apiDataFeeds)
+	u("GET /api/voice", s.apiVoice)
+	a("DELETE /api/voice/users/{session}", s.apiVoiceKick)
 	u("GET /api/video/streams", s.apiStreams)
 	u("GET /api/video/live/{rest...}", s.apiLiveStream)
 	a("DELETE /api/video/streams/{rest...}", s.apiStreamStop)

@@ -154,6 +154,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation, version 1 and version 2.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
 - **Video server**: built in, no MediaMTX needed. Cameras, drones, ATAK, OBS and ffmpeg publish over RTSP, RTSPS or RTMP (H.264 and AAC); TAK clients and VLC play over RTSP (TCP or UDP) or HLS, and the dashboard plays live H.264 in the browser. Streams sign in with GolangTAK accounts, are listed automatically in every TAK client's video list, and can be pulled from existing cameras (RTSP with Basic or Digest sign-in) and relayed.
+- **Voice**: built-in Mumble server, no Murmur needed. Mumble, Mumla and the TAK voice plugins sign in with TAK user names and passwords (or LDAP), every group gets its own channel that only its members can join, and voice, whispers and text chat work over TCP or encrypted UDP.
 - **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
 - **TAK data feeds and map layers**: TCP, TLS, UDP and multicast inputs for sensors and other systems, each on its own port with its own groups, listed with the built-in feeds in the TAK Server data feed API (statistics, latest objects, bounds). Missions can include a feed with polygon, CoT type and callsign filters, and its data goes to the mission subscribers. Map layers (tiles, WMS, WMTS) are published to TAK clients and missions, and appear as base maps on the dashboard map. Missions, feeds and map layers are also shared over federation version 2.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
@@ -247,6 +248,7 @@ The dashboard (**Plugins and profiles**) shows each plugin's state, process and 
 | 19023 | TCP | FreeTAKServer-compatible REST API |
 | 9000 | TCP | Federation version 1 (off by default) |
 | 9001 | TCP | Federation version 2, gRPC (off by default) |
+| 64738 | TCP and UDP | Voice server (Mumble) |
 | 8554 | TCP | Video server, RTSP |
 | 1935 | TCP | Video server, RTMP ingest |
 | 8000, 8001 | UDP | Video server, RTP and RTCP |
