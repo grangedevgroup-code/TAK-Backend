@@ -99,6 +99,14 @@ func TestMeshtasticBridge(t *testing.T) {
 		return e.Remarks() == "copy, from TAK" && strings.Contains(e.UID, "MESHTASTIC")
 	}, "chat echoed back from the mesh", 500*time.Millisecond)
 
+	for _, c := range s.hub.Clients() {
+		if c.Kind == KindMeshtastic && (!c.Relay || !c.Internal()) {
+			t.Fatal("the Meshtastic bridge must be a built-in relay client")
+		}
+	}
+	if owner := s.hub.ByUID("MESHTASTIC-!0a0b0c0d"); owner == nil || owner.Kind != KindMeshtastic || !owner.Relay {
+		t.Fatalf("mesh node uid must route through the bridge, got %v", owner)
+	}
 	st := s.meshStatus()
 	if !st.Enabled || st.BrokerClients != 1 || st.PacketsIn != 3 || st.PacketsOut < 2 || len(st.Nodes) != 1 || st.Nodes[0].Name != "Ridge Relay" {
 		t.Fatalf("status %+v", st)

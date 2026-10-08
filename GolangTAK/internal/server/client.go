@@ -19,6 +19,7 @@ const (
 	KindFederation = "federation"
 	KindAPI        = "api"
 	KindServer     = "server"
+	KindMeshtastic = "meshtastic"
 )
 
 type Message struct {
@@ -276,5 +277,5 @@ type ClientView struct {
 }
 
 func (c *Client) Internal() bool {
-	return c.Relay && (c.Kind == KindUDP || c.Kind == KindMesh || c.Kind == KindAPI || c.Kind == KindServer)
+	return c.Relay && (c.Kind == KindUDP || c.Kind == KindMesh || c.Kind == KindAPI || c.Kind == KindServer || c.Kind == KindMeshtastic)
 }

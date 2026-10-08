@@ -22,8 +22,6 @@ import (
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAK/internal/mqtt"
 )
 
-const KindMeshtastic = "meshtastic"
-
 type meshNode struct {
 	num       uint32
 	longName  string

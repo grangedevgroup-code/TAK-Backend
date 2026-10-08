@@ -76,7 +76,7 @@ func (h *Hub) NewClient(kind, remote string, id *Identity) *Client {
 		c.SetIdentity(id)
 	}
 	switch kind {
-	case KindPeer, KindFederation, KindMesh, KindUDP, KindAPI:
+	case KindPeer, KindFederation, KindMesh, KindUDP, KindAPI, KindMeshtastic:
 		c.Relay = true
 	}
 	return c
