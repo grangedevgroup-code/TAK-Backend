@@ -450,6 +450,7 @@ func (s *Server) serveResource(w http.ResponseWriter, r *http.Request, key strin
 	st, _ := f.Stat()
 	w.Header().Set("Content-Type", firstNonEmpty(res.MIMEType, "application/octet-stream"))
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": res.Name}))
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	w.Header().Set("ETag", `"`+res.Hash+`"`)
 	http.ServeContent(w, r, res.Name, st.ModTime(), f)
 }

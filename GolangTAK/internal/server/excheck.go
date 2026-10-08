@@ -316,6 +316,15 @@ func (s *Server) excheckTemplateGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) excheckTemplateDelete(w http.ResponseWriter, r *http.Request) {
 	uid := r.PathValue("uid")
+	res, ok := s.res.Get(uid)
+	if !ok || !s.resourceVisible(identityOf(r), res) {
+		writeText(w, http.StatusNotFound, "template not found")
+		return
+	}
+	if !s.canEdit(identityOf(r), res) {
+		writeText(w, http.StatusForbidden, "only the author or an administrator can delete this template")
+		return
+	}
 	if _, err := s.missionDropContent(exTemplates, uid, r.URL.Query().Get("clientUid")); err != nil {
 		writeText(w, http.StatusNotFound, "template not found")
 		return
@@ -327,8 +336,12 @@ func (s *Server) excheckTemplateDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) excheckTemplateTask(w http.ResponseWriter, r *http.Request) {
 	uid, taskUID := r.PathValue("uid"), r.PathValue("task")
 	cl, res, ok := s.loadXMLResource(uid)
-	if !ok {
+	if !ok || !s.resourceVisible(identityOf(r), res) {
 		writeText(w, http.StatusNotFound, "template not found")
+		return
+	}
+	if r.Method != http.MethodGet && !s.canEdit(identityOf(r), res) {
+		writeText(w, http.StatusForbidden, "only the author or an administrator can change this template")
 		return
 	}
 	tasks := cl.Child("checklistTasks")
@@ -631,6 +644,9 @@ func (s *Server) excheckStop(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.requirePermission(w, r, m, "MISSION_DELETE") {
+		return
+	}
 	s.missions.db.Delete(m.Name)
 	for _, c := range m.Contents {
 		if !s.missionUsesHash(c.Hash) {
@@ -648,6 +664,9 @@ func (s *Server) excheckTask(w http.ResponseWriter, r *http.Request) {
 	}
 	taskUID := r.PathValue("task")
 	clientUID := r.URL.Query().Get("clientUid")
+	if r.Method != http.MethodGet && !s.requirePermission(w, r, m, "MISSION_WRITE") {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		n, _, ok := s.loadXMLResource(taskUID)
@@ -775,6 +794,10 @@ func (s *Server) excheckMissionRef(w http.ResponseWriter, r *http.Request) {
 	target, ok := s.missions.Get(r.PathValue("mission"))
 	if !ok || !s.missionVisible(identityOf(r), target) {
 		writeText(w, http.StatusNotFound, "mission not found")
+		return
+	}
+	if !s.canWriteMission(r, m) || !s.canWriteMission(r, target) {
+		writeText(w, http.StatusForbidden, "your mission role does not allow MISSION_WRITE")
 		return
 	}
 	clientUID := r.URL.Query().Get("clientUid")
@@ -907,12 +930,26 @@ func parseWKTPoint(s string) (float64, float64) {
 	return lat, lon
 }
 
+const citrapMaxBytes = 64 << 20
+
+var citrapSlots = make(chan struct{}, 2)
+
 func (s *Server) citrapPost(w http.ResponseWriter, r *http.Request) {
 	id := identityOf(r)
 	clientUID := r.URL.Query().Get("clientUid")
-	body, err := io.ReadAll(io.LimitReader(r.Body, s.uploadLimit()))
+	select {
+	case citrapSlots <- struct{}{}:
+		defer func() { <-citrapSlots }()
+	case <-r.Context().Done():
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, citrapMaxBytes+1))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if len(body) > citrapMaxBytes {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "CI-TRAP reports are limited to 64 MB"})
 		return
 	}
 	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
@@ -947,6 +984,15 @@ func (s *Server) citrapPost(w http.ResponseWriter, r *http.Request) {
 		LocationDescription: report.Attr("locationDescription"), EventScale: report.Attr("eventScale"),
 		Importance: report.Attr("importance"), Status: report.Attr("status"), Tags: report.Attr("tags"),
 		ClientUID: clientUID, Groups: s.identityGroups(id),
+	}
+	if _, exists := s.reports.db.Get(rep.ID); exists {
+		if old, ok := s.res.Get("citrap-" + rep.ID); !id.Admin && (!ok || old.Submitter != id.Name) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the author or an administrator can change this report"})
+			return
+		}
+	} else if m, ok := s.missions.Get(rep.ID); ok && m.Tool != "citrap" {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "a mission with this name already exists"})
+		return
 	}
 	rep.DateTime, _ = cot.ParseTime(report.Attr("dateTime"))
 	rep.Lat, rep.Lon = parseWKTPoint(rep.Location)
@@ -1057,6 +1103,17 @@ func (s *Server) citrapAttachment(w http.ResponseWriter, r *http.Request) {
 	id := identityOf(r)
 	q := r.URL.Query()
 	reportID := firstNonEmpty(q.Get("id"), q.Get("reportId"), q.Get("missionName"))
+	if reportID != "" {
+		m, ok := s.missions.Get(reportID)
+		if !ok || !s.missionVisible(id, m) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "report not found"})
+			return
+		}
+		if !s.canWriteMission(r, m) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "your mission role does not allow MISSION_WRITE"})
+			return
+		}
+	}
 	res, code, err := s.storeUpload(w, r, Resource{Name: q.Get("filename"), Keywords: []string{"citrap", "attachment"}, Tool: "citrap", Submitter: id.Name,
 		CreatorUID: q.Get("clientUid"), Groups: s.identityGroups(id), UID: cot.NewUID()})
 	if err != nil {

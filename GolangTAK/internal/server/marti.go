@@ -63,6 +63,15 @@ func (s *Server) visibleTo(id *Identity, groups GroupMask) bool {
 	return id.Out.Intersects(groups) || id.In.Intersects(groups)
 }
 
+func (s *Server) deviceMask(dev Device) GroupMask {
+	if dev.User != "" {
+		if u, ok := s.dir.User(dev.User); ok {
+			return s.dir.Mask(u.In)
+		}
+	}
+	return s.dir.Anonymous().In
+}
+
 func (s *Server) martiClientEndpoints(w http.ResponseWriter, r *http.Request) {
 	id := identityOf(r)
 	secAgo, _ := strconv.Atoi(r.URL.Query().Get("secAgo"))
@@ -86,6 +95,9 @@ func (s *Server) martiClientEndpoints(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if live && !s.visibleTo(id, c.InMask()) {
+			continue
+		}
+		if !live && !s.visibleTo(id, s.deviceMask(dev)) {
 			continue
 		}
 		status := "Disconnected"

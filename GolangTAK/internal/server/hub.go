@@ -333,6 +333,11 @@ func (h *Hub) Identify(c *Client, m *Message) {
 		h.mu.Unlock()
 		return
 	}
+	if existing := h.byUID[e.UID]; existing != nil && existing != c && !existing.Relay && !mayTakeUID(existing, c) {
+		c.mu.Unlock()
+		h.mu.Unlock()
+		return
+	}
 	first := c.info.UID == ""
 	oldCS := c.info.Callsign
 	c.info.UID = e.UID
@@ -662,4 +667,16 @@ func (h *Hub) Contacts() []ClientInfo {
 		}
 	}
 	return out
+}
+
+func mayTakeUID(owner, claimant *Client) bool {
+	o := owner.Identity()
+	if o == nil || o.Anon || o.Name == "" {
+		return true
+	}
+	n := claimant.Identity()
+	if n == nil || n.Anon || n.Name == "" {
+		return false
+	}
+	return strings.EqualFold(o.Name, n.Name)
 }

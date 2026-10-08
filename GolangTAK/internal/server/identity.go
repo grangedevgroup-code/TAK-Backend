@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"net"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -863,10 +864,19 @@ func newLimiter(max int, window time.Duration) *limiter {
 	return &limiter{max: max, window: window, hits: map[string][]time.Time{}}
 }
 
+func limiterKey(ip string) string {
+	p := net.ParseIP(ip)
+	if p == nil || p.To4() != nil {
+		return ip
+	}
+	return p.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}
+
 func (l *limiter) blocked(ip string) bool {
 	if ip == "" {
 		return false
 	}
+	ip = limiterKey(ip)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	cut := time.Now().Add(-l.window)
@@ -890,10 +900,18 @@ func (l *limiter) fail(ip string) {
 	if ip == "" {
 		return
 	}
+	ip = limiterKey(ip)
 	l.mu.Lock()
 	if len(l.hits) > 50000 {
-		l.hits = map[string][]time.Time{}
+		cut := time.Now().Add(-l.window)
+		for k, h := range l.hits {
+			if len(h) == 0 || !h[len(h)-1].After(cut) {
+				delete(l.hits, k)
+			}
+		}
 	}
-	l.hits[ip] = append(l.hits[ip], time.Now())
+	if len(l.hits) <= 200000 || l.hits[ip] != nil {
+		l.hits[ip] = append(l.hits[ip], time.Now())
+	}
 	l.mu.Unlock()
 }

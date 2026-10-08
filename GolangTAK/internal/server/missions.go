@@ -19,7 +19,7 @@ import (
 const (
 	RoleOwner      = "MISSION_OWNER"
 	RoleSubscriber = "MISSION_SUBSCRIBER"
-	RoleReadOnly   = "MISSION_READ_ONLY"
+	RoleReadOnly   = "MISSION_READONLY_SUBSCRIBER"
 )
 
 var rolePermissions = map[string][]string{
@@ -32,7 +32,7 @@ func normalizeRole(r string) string {
 	switch strings.ToUpper(strings.TrimSpace(r)) {
 	case RoleOwner, "OWNER":
 		return RoleOwner
-	case RoleReadOnly, "READ_ONLY", "READONLY":
+	case RoleReadOnly, "MISSION_READ_ONLY", "READ_ONLY", "READONLY", "READONLY_SUBSCRIBER":
 		return RoleReadOnly
 	case RoleSubscriber, "SUBSCRIBER", "":
 		return RoleSubscriber
@@ -432,14 +432,25 @@ func (s *Server) callerUID(r *http.Request) string {
 	return firstNonEmpty(q.Get("creatorUid"), q.Get("CreatorUid"), q.Get("clientUid"), q.Get("uid"))
 }
 
+func (s *Server) subBelongsTo(r *http.Request, sub *MissionSub) bool {
+	if c, ok := s.missionToken(r); ok && c.Sub == sub.ClientUID {
+		return true
+	}
+	if sub.Username == "" {
+		return true
+	}
+	id := identityOf(r)
+	return id != nil && !id.Anon && strings.EqualFold(id.Name, sub.Username)
+}
+
 func (s *Server) callerRole(r *http.Request, m Mission) string {
 	id := identityOf(r)
 	if id != nil && id.Admin {
 		return RoleOwner
 	}
 	uid := s.callerUID(r)
-	if sub := m.sub(uid); sub != nil {
-		return sub.Role
+	if sub := m.sub(uid); sub != nil && s.subBelongsTo(r, sub) {
+		return normalizeRole(sub.Role)
 	}
 	if id != nil && !id.Anon {
 		for _, sub := range m.Subs {
@@ -477,6 +488,10 @@ func (s *Server) loadMission(w http.ResponseWriter, r *http.Request) (Mission, b
 		return m, false
 	}
 	return m, true
+}
+
+func (s *Server) canWriteMission(r *http.Request, m Mission) bool {
+	return slices.Contains(rolePermissions[s.callerRole(r, m)], "MISSION_WRITE")
 }
 
 func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, m Mission, perm string) bool {
@@ -647,7 +662,10 @@ func (s *Server) missionDelete(w http.ResponseWriter, r *http.Request) {
 	s.missions.DeleteAllCoT(m.Name)
 	if boolParam(r, "deepDelete") {
 		for _, c := range m.Contents {
-			if !s.missionUsesHash(c.Hash) {
+			if s.missionUsesHash(c.Hash) {
+				continue
+			}
+			if res, ok := s.res.Get(c.UID); ok && s.canEdit(identityOf(r), res) {
 				s.res.Delete(c.UID)
 			}
 		}
@@ -1124,6 +1142,10 @@ func (s *Server) missionLogCreate(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "mission not found: " + name})
 			return
 		}
+		if !s.canWriteMission(r, m) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "your mission role does not allow MISSION_WRITE in " + name})
+			return
+		}
 		if r.Method == http.MethodPut && body.ID != "" {
 			m, _ = s.missions.Update(m.Name, func(x *Mission) error {
 				for i := range x.Logs {
@@ -1162,6 +1184,10 @@ func (s *Server) missionLogDelete(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if slices.ContainsFunc(m.Logs, func(l MissionLog) bool { return l.ID == id }) {
+			if !s.canWriteMission(r, m) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "your mission role does not allow MISSION_WRITE"})
+				return
+			}
 			s.missions.Update(m.Name, func(x *Mission) error {
 				x.Logs = slices.DeleteFunc(x.Logs, func(l MissionLog) bool { return l.ID == id })
 				return nil
