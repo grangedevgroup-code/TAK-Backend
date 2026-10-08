@@ -194,6 +194,7 @@ type Config struct {
 	Voice          VoiceConfig       `json:"voice"`
 	Locate         LocateConfig      `json:"locate"`
 	Email          EmailConfig       `json:"email"`
+	ACME           ACMEConfig        `json:"letsEncrypt"`
 	TileURL        string            `json:"tileUrl"`
 	LogLevel       string            `json:"logLevel"`
 	ACMEEmail      string            `json:"acmeEmail"`

@@ -76,6 +76,7 @@ type Server struct {
 	voice     *mumble.Server
 	injectors *Injectors
 	acct      *accountSecurity
+	acme      *acmeState
 	mapLayers *MapLayers
 	fedFeeds  *store.Collection[dataFeedView]
 	control   string

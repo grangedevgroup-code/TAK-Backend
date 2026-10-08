@@ -153,6 +153,9 @@ func (s *Server) routes() *http.ServeMux {
 
 	pub("POST /api/login", s.apiLogin)
 	pub("POST /oauth/token", s.oauthToken)
+	pub("GET /.well-known/acme-challenge/{token}", s.acmeChallenge)
+	a("GET /api/letsencrypt", s.apiACME)
+	a("POST /api/letsencrypt", s.apiACME)
 	pub("POST /api/login/verify", s.apiLoginVerify)
 	pub("GET /api/auth/options", s.apiAuthOptions)
 	pub("POST /api/password/forgot", s.apiPasswordForgot)

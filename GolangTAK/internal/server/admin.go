@@ -821,6 +821,8 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	fb, _ := json.Marshal(before.DataFeeds)
 	vb, _ := json.Marshal(before.Video)
 	ob, _ := json.Marshal(before.Voice)
+	ab, _ := json.Marshal(before.ACME)
+	an, _ := json.Marshal(next.ACME)
 	on, _ := json.Marshal(next.Voice)
 	vn, _ := json.Marshal(next.Video)
 	fn, _ := json.Marshal(next.DataFeeds)
@@ -828,6 +830,12 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	mn, _ := json.Marshal(next.Meshtastic)
 	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
 		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn) || string(ob) != string(on)
+	if string(ab) != string(an) && next.ACME.Enabled && s.acme != nil {
+		select {
+		case s.acme.kick <- struct{}{}:
+		default:
+		}
+	}
 	if before.Address != next.Address || strings.Join(before.ExtraNames, ",") != strings.Join(next.ExtraNames, ",") {
 		if err := s.pki.EnsureServer(next); err != nil {
 			s.log.Error("server certificate update failed", "err", err)
@@ -865,6 +873,11 @@ func validateConfig(c *Config) error {
 			continue
 		}
 		if err := check(x.n, x.v, x.proto); err != nil {
+			return err
+		}
+	}
+	if c.ACME.Enabled && c.ACME.ChallengePort != 0 && c.ACME.ChallengePort != c.Ports.HTTP {
+		if err := check("letsEncrypt.challengePort", c.ACME.ChallengePort, "tcp"); err != nil {
 			return err
 		}
 	}

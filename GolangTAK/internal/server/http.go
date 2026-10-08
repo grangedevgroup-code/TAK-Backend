@@ -70,6 +70,9 @@ func (s *Server) enrollTLSConfig() *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			if c := s.acmeCertFor(hello); c != nil {
+				return c, nil
+			}
 			return s.pki.ServerCert(), nil
 		},
 	}

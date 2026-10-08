@@ -3150,6 +3150,7 @@
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
     { id: "voice", title: "Voice", keys: "mumble mumla murmur radio push to talk ptt" },
     { id: "locate", title: "Locate", keys: "location sharing search rescue lost person link" },
+    { id: "letsencrypt", title: "Let's Encrypt", keys: "acme certificate https browser trusted domain ssl tls" },
     { id: "email", title: "Email and accounts", keys: "smtp mail registration sign up password reset two factor 2fa domains" },
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
@@ -3158,11 +3159,28 @@
     { id: "advanced", title: "Advanced (JSON)", keys: "config.json raw" },
   ];
 
+  async function loadLEStatus() {
+    const box = document.getElementById("le_status");
+    if (!box) return;
+    try {
+      const st = await api("GET", "/api/letsencrypt");
+      const parts = [];
+      if (st.expires) parts.push("Certificate for " + (st.names || []).join(", ") + " from " + st.issuer + ", valid until " + fmtTime(st.expires) + ".");
+      else parts.push("No certificate yet.");
+      if (st.running) parts.push("Requesting a certificate now.");
+      if (st.error) parts.push("Last attempt failed: " + st.error);
+      clear(box).append(h("p", { class: "small" + (st.error ? " bad" : " muted") }, parts.join(" ")), st.enabled ? btn("Request now", async () => { await api("POST", "/api/letsencrypt").catch(fail); toast("Requested"); setTimeout(loadLEStatus, 4000); }, "small") : null);
+    } catch (e) {
+      clear(box);
+    }
+  }
+
   async function pageSettings(main, params) {
+    setTimeout(loadLEStatus, 200);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -3237,6 +3255,14 @@
         field("Record these paths", input("vs_recp", (vs.recordPaths || []).join(", "), { placeholder: "live/uas, cameras" }), "Streams at or under these paths are always recorded. Comma separated."),
         field("Minutes per file", n("vs_recm", vs.recordMinutes), "Long recordings are split into files of this length."),
         field("Keep recordings for (days)", n("vs_recd", vs.recordDays), "0 keeps them forever."),
+      ],
+      letsencrypt: [
+        "A free certificate browsers and phones trust, used on the dashboard and enrollment port when it is opened by name. TAK streaming keeps this server's own certificate authority. Each name must point at this server and port 80 must be reachable from the internet.",
+        field("Enabled", checkbox("le_on", le.enabled, "Get and renew a certificate from Let's Encrypt")),
+        field("Domain names", input("le_dom", (le.domains || []).join(", "), { placeholder: "tak.example.org" }), "Comma separated."),
+        field("Email", input("le_mail", le.email || "", { type: "email" }), "Let's Encrypt writes here before a certificate expires."),
+        field("Challenge port", n("le_port", le.challengePort || ""), "Port 80 unless a router forwards another port to it."),
+        h("div", { class: "full", id: "le_status" }, "Checking..."),
       ],
       email: [
         "Email lets people reset forgotten passwords, receive sign-in codes and, if you allow it, create their own accounts.",
@@ -3514,6 +3540,7 @@
           intervalSec: num(form, "mt_int"),
           group: val(form, "mt_group"),
         }),
+        letsEncrypt: Object.assign({}, le, { enabled: val(form, "le_on"), domains: splitList(val(form, "le_dom")), email: val(form, "le_mail"), challengePort: num(form, "le_port") }),
         email: Object.assign({}, em, { enabled: val(form, "em_on"), host: val(form, "em_host"), port: num(form, "em_port"), security: val(form, "em_sec"), username: val(form, "em_user"), password: val(form, "em_pw"), from: val(form, "em_from"), publicUrl: val(form, "em_url"), allowRegistration: val(form, "em_reg"), approveRegistrations: val(form, "em_appr"), allowedDomains: splitList(val(form, "em_allow")), blockedDomains: splitList(val(form, "em_block")), registrationGroups: splitList(val(form, "em_groups")) }),
         locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
         voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),

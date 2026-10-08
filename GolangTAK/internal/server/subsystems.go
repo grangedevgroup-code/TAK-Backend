@@ -112,6 +112,7 @@ func (s *Server) startSubsystems() error {
 		return err
 	}
 	s.startVoice()
+	s.startACME()
 	s.startFeeds()
 	s.startMeshtastic()
 	s.histStop = make(chan struct{})
