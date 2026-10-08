@@ -335,7 +335,9 @@
       const font = "'Atkinson Hyperlegible Next', system-ui, sans-serif";
       ctx.font = "600 12px " + font;
       ctx.textBaseline = "middle";
+      const rank = { emergency: 0, friend: 1, hostile: 1, unknown: 2, point: 3, neutral: 4 };
       const sorted = this.markers.slice().sort((a, b) => (a.kind === "emergency") - (b.kind === "emergency"));
+      const labels = [];
       for (const m of sorted) {
         if (!Number.isFinite(m.lat) || !Number.isFinite(m.lon)) continue;
         const [x, y] = this.toScreen(m.lat, m.lon);
@@ -392,15 +394,22 @@
             ctx.stroke();
           }
         }
-        if (m.label) {
-          ctx.textAlign = "left";
-          ctx.lineWidth = 3.5;
-          ctx.lineJoin = "round";
-          ctx.strokeStyle = pal.halo;
-          ctx.strokeText(m.label, x + r + 6, y);
-          ctx.fillStyle = pal.text;
-          ctx.fillText(m.label, x + r + 6, y);
-        }
+        if (m.label) labels.push({ m: m, x: x + r + 6, y: y, r: r, p: m.uid === this.selected ? -1 : rank[m.kind] ?? 3 });
+      }
+      labels.sort((a, b) => a.p - b.p);
+      const placed = [];
+      ctx.textAlign = "left";
+      ctx.lineWidth = 3.5;
+      ctx.lineJoin = "round";
+      for (const l of labels) {
+        const w = ctx.measureText(l.m.label).width;
+        const box = { x0: l.x - 2, y0: l.y - 8, x1: l.x + w + 2, y1: l.y + 8 };
+        if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+        placed.push(box);
+        ctx.strokeStyle = pal.halo;
+        ctx.strokeText(l.m.label, l.x, l.y);
+        ctx.fillStyle = pal.text;
+        ctx.fillText(l.m.label, l.x, l.y);
       }
     }
 

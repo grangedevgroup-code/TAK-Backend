@@ -4,29 +4,71 @@ GolangTAK is a free, open source server for TAK clients such as ATAK, WinTAK, iT
 
 **GolangTAK is an independent open source project. It is not affiliated with, endorsed by, or associated with tak.gov, the TAK Product Center, or the makers of any TAK product.** Product names such as ATAK, WinTAK, iTAK, TAK Aware and TAK Server are used only to describe compatibility.
 
+![GolangTAK dashboard overview](docs/images/overview.png)
+
 ## Install
 
-One command installs GolangTAK as a service that starts at boot and restarts itself if it ever stops. It also opens the firewall, creates the certificate authority and the first administrator account, and tests every port before it finishes.
+Paste one command for your system. It installs GolangTAK as a service that starts at boot and restarts itself if it ever stops, opens the firewall, creates the certificate authority and the first administrator account, and tests every port before it finishes.
 
-Linux, Raspberry Pi, macOS, FreeBSD and other Unix systems:
+**Linux, Raspberry Pi, cloud VPS, macOS**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | sh
 ```
 
-Windows (PowerShell):
+**Linux without curl** (some minimal Debian and Ubuntu images)
+
+```sh
+wget -qO- https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | sh
+```
+
+**FreeBSD**
+
+```sh
+fetch -qo - https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | sh
+```
+
+**OpenBSD, NetBSD**
+
+```sh
+ftp -Vo - https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | sh
+```
+
+**Windows** (PowerShell; it asks for administrator approval)
 
 ```powershell
 irm https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.ps1 | iex
 ```
 
-When it finishes, the installer prints the dashboard address, the administrator user name and password, and a QR code that iTAK can scan. The password is also saved in `admin-password.txt` in the data directory until you change it.
+When it finishes, the installer prints the dashboard address, the administrator user name and password, and a QR code that iTAK can scan. Open the dashboard at `https://SERVER:8446` (or `http://SERVER:8080` on a trusted network) and sign in.
 
-Installer options are passed through to `golangtak install`:
+Lost the password? It stays in `admin-password.txt` until you change it:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | sh -s -- --address tak.example.org --name "Field Server"
+sudo cat /var/lib/golangtak/admin-password.txt
 ```
+
+```powershell
+Get-Content C:ProgramDataGolangTAKadmin-password.txt
+```
+
+### Update, uninstall, other versions
+
+| Task | Command |
+| --- | --- |
+| Update to the newest release | Run the install command again. Settings, users, certificates and data are kept. |
+| Install a specific release | `curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | GOLANGTAK_VERSION=1.0.1 sh` |
+| Set the address and name while installing | `curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | sh -s -- --address tak.example.org --name "Field Server"` |
+| Remove GolangTAK, keep its data | `sudo golangtak uninstall` |
+| Remove GolangTAK and all its data | `sudo golangtak uninstall --purge` |
+| Install with Go instead of a download | `go install github.com/grangedevgroup-code/TAK-Backend/GolangTAK/cmd/golangtak@latest` then `sudo "$(go env GOPATH)/bin/golangtak" install` |
+| Try it without installing | Download the binary from [releases](https://github.com/grangedevgroup-code/TAK-Backend/releases) and run `./golangtak` (or double-click `golangtak.exe`). It runs in that window until you press Ctrl+C. |
+
+On Windows, run `golangtak` commands from an administrator PowerShell and leave out `sudo`.
+
+### Installer options
+
+Options after `sh -s --` (or arguments to `golangtak install`):
 
 | Option | Effect |
 | --- | --- |
@@ -39,9 +81,39 @@ curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/mai
 
 Environment variables for the install scripts: `GOLANGTAK_VERSION=1.2.3` installs a specific release, `GOLANGTAK_SOURCE=1` builds from source with Go instead of downloading, and `GOLANGTAK_BINARY=/path/to/golangtak` installs a binary you already have.
 
-Without the scripts: download the binary for your system from the [releases](https://github.com/grangedevgroup-code/TAK-Backend/releases), then run `sudo ./golangtak install` (or `golangtak.exe install` from an administrator terminal on Windows). To try GolangTAK without installing anything, run `golangtak` (or double-click `golangtak.exe`) and it serves from the current window until you press Ctrl+C.
+### Everyday commands
 
-Running the installer again upgrades GolangTAK in place and keeps all data.
+| Task | Command |
+| --- | --- |
+| Is it running? | `sudo golangtak status` |
+| Add a user | `sudo golangtak user add alice --groups Blue --callsign ALPHA-1` |
+| Show QR codes to connect a device | `sudo golangtak qr alice` |
+| Save a connection package | `sudo golangtak user package alice` |
+| Follow the log | `sudo golangtak logs -f` |
+| Restart | `sudo golangtak restart` |
+| Test every port | `sudo golangtak selftest` |
+| Back up | `sudo golangtak backup` |
+
+The full list is under [Commands](#commands).
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Live map with team positions, aircraft from the ADS-B feed and an emergency](docs/images/map.png) | ![Server performance with CPU, memory, disk and message rates](docs/images/performance.png) |
+| **Map**: team positions, markers, aircraft from the ADS-B feed and an active emergency | **Performance**: CPU, memory, disk and message rates over the last ten minutes |
+| ![Connect a device with QR codes and connection packages](docs/images/connect.png) | ![Settings, Meshtastic section](docs/images/settings.png) |
+| **Connect a device**: QR codes for ATAK, WinTAK and iTAK, packages and manual settings | **Settings**: grouped sections with a save bar that tracks unsaved changes |
+| ![Overview in the light theme](docs/images/overview-light.png) | ![Sign-in screen](docs/images/sign-in.png) |
+| **Light theme**: follows the system setting, or choose it under My account | **Sign in** |
+
+<p>
+<img src="docs/images/phone-overview.png" alt="Overview on a phone" width="260">
+&nbsp;
+<img src="docs/images/phone-map.png" alt="Map on a phone" width="260">
+</p>
+
+The dashboard works on phones and tablets as well as desktops. Press Ctrl+K (or /) anywhere to jump to any page or setting.
 
 ## Connect devices
 
@@ -81,7 +153,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Administration**: web dashboard (map, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs, and a performance page with CPU, memory, disk, load and message rates over the last ten minutes), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
-- **Data feeds**: live aircraft from ADS-B exchanges (airplanes.live, adsb.lol and compatible services) and ships from AISHub, sent to everyone or to one group.
+- **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
 
 ## Ports

@@ -252,7 +252,7 @@ func DefaultConfig() Config {
 			IntervalSec: 60,
 		},
 		Feeds: FeedsConfig{
-			ADSB: ADSBFeed{URL: "https://api.airplanes.live/v2/point", RadiusNM: 25, IntervalSec: 30},
+			ADSB: ADSBFeed{URL: "https://api.adsb.lol/v2/point", RadiusNM: 25, IntervalSec: 30},
 			AIS:  AISFeed{South: -90, West: -180, North: 90, East: 180, IntervalSec: 120},
 		},
 		TileURL:  "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -342,7 +342,7 @@ func (c *Config) fill() {
 		rand.Read(b[:])
 		c.Meshtastic.NodeNum = (uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])) | 0x10000000
 	}
-	if c.Feeds.ADSB.URL == "" {
+	if c.Feeds.ADSB.URL == "" || strings.TrimRight(c.Feeds.ADSB.URL, "/") == "https://api.airplanes.live/v2/point" {
 		c.Feeds.ADSB.URL = d.Feeds.ADSB.URL
 	}
 	if c.Feeds.ADSB.RadiusNM <= 0 {

@@ -512,11 +512,15 @@
     clear(alertEl).append(icon("alert", 18), h("span", null, text), h("span", { class: "go" }, "View on map"));
   }
 
+  function isDevice(c) {
+    return !c.internal && c.kind !== "peer" && c.kind !== "federation";
+  }
+
   async function updateCount() {
     if (!countEl || !S.me) return;
     try {
       const list = await api("GET", "/api/clients");
-      countEl.textContent = String(list.filter((c) => !c.internal).length);
+      countEl.textContent = String(list.filter(isDevice).length);
     } catch (e) {}
   }
 
@@ -948,7 +952,7 @@
       api("GET", "/api/clients").catch(() => []),
       S.me.admin ? api("GET", "/api/performance").catch(() => null) : null,
     ]);
-    const online = clients.filter((c) => !c.internal);
+    const online = clients.filter(isDevice);
     pageHead(main, "Overview", st.name + " is running. Up " + fmtDuration(st.uptimeSeconds) + ", version " + st.version + ".", btn("Open map", go("#/map"), "", "map"), btn("Connect a device", go("#/connect"), "primary", "connect"));
 
     if (S.me.admin) {
@@ -1001,7 +1005,7 @@
           h("a", { class: "meta", href: "#/clients" }, online.length > 8 ? "View all " + online.length : "View list"),
           table(
             [
-              { title: "Callsign", render: (r) => h("b", null, name(r)) },
+              { title: "Callsign", cls: "nowrap", render: (r) => h("b", null, name(r)) },
               { title: "Software", render: (r) => (r.info ? [r.info.platform, r.info.version].filter(Boolean).join(" ") : "") || r.kind },
               { title: "Battery", cls: "num", render: (r) => (r.info && r.info.battery ? r.info.battery + "%" : "-") },
               { title: "Last seen", cls: "nowrap", render: (r) => fmtAgo(r.lastSeen) },
@@ -1051,9 +1055,9 @@
           S.me.admin ? h("a", { class: "meta", href: "#/links" }, "Manage") : null,
           table(
             [
-              { title: "Name", render: (r) => h("b", null, r.name) },
-              { title: "Kind", key: "kind" },
-              { title: "State", render: (r) => pill(r.state) },
+              { title: "Name", cls: "nowrap", render: (r) => h("b", null, r.name) },
+              { title: "Kind", cls: "nowrap", key: "kind" },
+              { title: "State", cls: "nowrap", render: (r) => pill(r.state) },
               { title: "Detail", render: (r) => h("span", { class: "small muted" }, r.detail || "-") },
             ],
             links,
@@ -2356,7 +2360,7 @@
         field("Radius (nautical miles)", n("fa_rad", fa.radiusNm)),
         field("Update every (seconds)", n("fa_int", fa.intervalSec)),
         field("Group", input("fa_group", fa.group, { placeholder: "everyone" }), "Only members of this group see the aircraft. Empty sends to everyone."),
-        field("Source URL", input("fa_url", fa.url), "airplanes.live, adsb.lol or any service with the same /point/lat/lon/radius API."),
+        field("Source URL", input("fa_url", fa.url), "adsb.lol by default. Any service with the same /point/lat/lon/radius API works."),
         field("API key", input("fa_key", fa.apiKey, { autocomplete: "off" })),
         sub("AIS ships (AISHub)"),
         field("Enabled", checkbox("fs_on", fs.enabled, "Show ships from AISHub")),

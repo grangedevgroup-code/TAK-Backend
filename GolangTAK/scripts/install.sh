@@ -60,6 +60,8 @@ download() {
 		wget -q -T 30 -t 3 -O "$out" "$url"
 	elif have fetch; then
 		command fetch -q -o "$out" "$url"
+	elif [ "$(uname -s)" = OpenBSD ] || [ "$(uname -s)" = NetBSD ]; then
+		ftp -V -o "$out" "$url" >/dev/null
 	else
 		die "curl or wget is required"
 	fi

@@ -171,6 +171,9 @@ func (s *Server) feedGet(ctx context.Context, hc *http.Client, u string, hdr map
 		if len(msg) > 200 {
 			msg = msg[:200]
 		}
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("the feed service refused the request (HTTP %d); check the API key, or switch the source URL to another service such as https://api.adsb.lol/v2/point: %s", resp.StatusCode, msg)
+		}
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, msg)
 	}
 	return json.Unmarshal(body, out)
