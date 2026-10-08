@@ -46,6 +46,9 @@ func (s *Server) initSubsystems() error {
 	if s.injectors, err = OpenInjectors(s.DataDir); err != nil {
 		return err
 	}
+	if s.acct, err = openAccountSecurity(s.DataDir); err != nil {
+		return err
+	}
 	if s.fedFeeds, err = store.Open[dataFeedView](filepath.Join(s.DataDir, "db", "federated-feeds.jsonl"), true); err != nil {
 		return err
 	}
@@ -152,6 +155,9 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.injectors != nil {
 		s.injectors.Close()
+	}
+	if s.acct != nil {
+		s.acct.Close()
 	}
 	if s.fedFeeds != nil {
 		s.fedFeeds.Close()

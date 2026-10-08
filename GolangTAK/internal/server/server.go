@@ -75,6 +75,7 @@ type Server struct {
 	live      *liveVideo
 	voice     *mumble.Server
 	injectors *Injectors
+	acct      *accountSecurity
 	mapLayers *MapLayers
 	fedFeeds  *store.Collection[dataFeedView]
 	control   string

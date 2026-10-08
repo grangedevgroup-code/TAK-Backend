@@ -35,6 +35,9 @@ type userView struct {
 	External  bool         `json:"external"`
 	Online    int          `json:"online"`
 	Password  bool         `json:"hasPassword"`
+	Email     string       `json:"email"`
+	TwoFactor string       `json:"twoFactor"`
+	Pending   string       `json:"pending,omitempty"`
 }
 
 func (s *Server) viewUser(u User) userView {
@@ -57,7 +60,7 @@ func (s *Server) viewUser(u User) userView {
 	}
 	return userView{Name: u.Name, Admin: u.Admin, Disabled: u.Disabled, In: nz(u.In), Out: nz(u.Out), Inactive: nz(u.Inactive),
 		Callsign: u.Callsign, Team: u.Team, TeamRole: u.TeamRole, Note: u.Note, Created: u.Created, LastLogin: u.LastLogin,
-		Certs: certs, External: u.External, Online: online, Password: u.Hash != ""}
+		Certs: certs, External: u.External, Online: online, Password: u.Hash != "", Email: u.Email, TwoFactor: u.TwoFactor, Pending: u.Pending}
 }
 
 func (s *Server) apiUsers(w http.ResponseWriter, r *http.Request) {
@@ -735,11 +738,31 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 	if cfg.LDAP.BindPassword != "" {
 		cfg.LDAP.BindPassword = "********"
 	}
+	if cfg.Email.Password != "" {
+		cfg.Email.Password = "********"
+	}
 	if cfg.Feeds.ADSB.APIKey != "" {
 		cfg.Feeds.ADSB.APIKey = "********"
 	}
 	plugins := make([]PluginConfig, len(cfg.Plugins))
+	local := identityOf(r).Via == "control"
 	for i, p := range cfg.Plugins {
+		if m := s.pluginManifest(p); m != nil && !local && len(p.Settings) > 0 {
+			settings := map[string]string{}
+			for k, v := range p.Settings {
+				settings[k] = v
+			}
+			for _, def := range m.Settings {
+				if def.Type == "secret" && settings[def.Key] != "" {
+					settings[def.Key] = secretMask
+				}
+			}
+			p.Settings = settings
+		}
+		if local {
+			plugins[i] = p
+			continue
+		}
 		if len(p.Env) > 0 {
 			env := map[string]string{}
 			for k := range p.Env {
@@ -763,13 +786,16 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	next, err := s.UpdateConfig(func(c *Config) error {
 		old := c.Peers
 		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
-		oldBind, oldKey := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey
+		oldBind, oldKey, oldMail := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
 		}
 		c.Plugins = oldPlugins
 		if c.LDAP.BindPassword == "********" {
 			c.LDAP.BindPassword = oldBind
+		}
+		if c.Email.Password == "********" {
+			c.Email.Password = oldMail
 		}
 		if c.Feeds.ADSB.APIKey == "********" {
 			c.Feeds.ADSB.APIKey = oldKey

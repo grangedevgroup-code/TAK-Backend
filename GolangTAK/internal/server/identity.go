@@ -79,6 +79,11 @@ type User struct {
 	Certs     []CertRecord `json:"certs,omitempty"`
 	External  bool         `json:"external,omitempty"`
 	Link      bool         `json:"link,omitempty"`
+	Email     string       `json:"email,omitempty"`
+	TwoFactor string       `json:"twoFactor,omitempty"`
+	TOTP      string       `json:"totp,omitempty"`
+	Recovery  []string     `json:"recovery,omitempty"`
+	Pending   string       `json:"pending,omitempty"`
 }
 
 type Group struct {
@@ -475,8 +480,13 @@ func (d *Directory) SetPassword(name, password string) error {
 		u.Hash = HashPassword(password)
 		return nil
 	})
+	d.vmu.Lock()
+	delete(d.verified, name)
+	d.vmu.Unlock()
 	return err
 }
+
+func (d *Directory) EndUserSessions(user string) { d.EndSessions(user) }
 
 func (d *Directory) ensureGroups(names []string) error {
 	for _, g := range names {

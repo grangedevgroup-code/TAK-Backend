@@ -54,10 +54,10 @@ func (s *Server) apiLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := s.dir.User(id.Name)
-	sess := s.dir.NewSession(u, 12*time.Hour)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: 12 * 3600})
-	s.log.Info("dashboard sign-in", "user", u.Name, "remote", requestIP(r))
-	writeJSON(w, http.StatusOK, map[string]any{"user": u.Name, "admin": u.Admin, "csrf": sess.CSRF})
+	if s.startLogin(w, r, u) {
+		return
+	}
+	s.finishLogin(w, r, u)
 }
 
 func (s *Server) apiLogout(w http.ResponseWriter, r *http.Request) {

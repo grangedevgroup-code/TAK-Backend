@@ -65,7 +65,7 @@
     } catch (e) {
       data = text;
     }
-    if (res.status === 401 && path !== "/api/login" && path !== "/api/me/password") {
+    if (res.status === 401 && !/^\/api\/(login|me\/password|password|register)/.test(path)) {
       S.me = null;
       showLogin();
       throw new Error("Please sign in again.");
@@ -887,15 +887,94 @@
       err.textContent = "";
       try {
         const r = await api("POST", "/api/login", { username: form.querySelector("#u").value.trim(), password: form.querySelector("#p").value });
+        if (r.twoFactor) return showCodeStep(r);
         S.csrf = r.csrf;
         await boot();
       } catch (e) {
         err.textContent = e.message === "invalid credentials" ? "Wrong user name or password." : e.message;
       }
     });
-    form.append(h("div", { class: "foot" }, "GolangTAK is open source and not affiliated with tak.gov or the TAK Product Center."));
+    const links = h("div", { class: "login-links" });
+    form.append(links, h("div", { class: "foot" }, "GolangTAK is open source and not affiliated with tak.gov or the TAK Product Center."));
     root.append(h("div", { class: "login-wrap" }, form));
     form.querySelector("#u").focus();
+    api("GET", "/api/auth/options")
+      .then((o) => {
+        if (o.passwordReset) links.append(h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), authScreen("forgot")) }, "Forgot password?"));
+        if (o.registration) links.append(h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), authScreen("register")) }, "Create an account"));
+      })
+      .catch(() => {});
+  }
+
+  function showCodeStep(ch) {
+    clear(root);
+    const err = h("div", { class: "err", role: "alert" });
+    const form = h(
+      "form",
+      { class: "login" },
+      mark(40),
+      h("h1", null, "Enter your code"),
+      h("p", { class: "lead" }, ch.twoFactor === "email" ? "We emailed you a 6-digit code." : "Open your authenticator app and enter the 6-digit code for this server.", " You can also use a recovery code."),
+      h("label", { for: "code" }, "Code"),
+      h("input", { id: "code", inputmode: "numeric", autocomplete: "one-time-code", required: true, autocapitalize: "none", spellcheck: "false" }),
+      h("button", { type: "submit", class: "primary" }, "Verify"),
+      h("div", { class: "login-links" }, h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), showLogin()) }, "Back")),
+      err
+    );
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      err.textContent = "";
+      try {
+        const r = await api("POST", "/api/login/verify", { challenge: ch.challenge, code: form.querySelector("#code").value });
+        S.csrf = r.csrf;
+        location.hash = "#/overview";
+        await boot();
+      } catch (e) {
+        err.textContent = e.message;
+      }
+    });
+    root.append(h("div", { class: "login-wrap" }, form));
+    form.querySelector("#code").focus();
+  }
+
+  function authScreen(kind, token) {
+    clear(root);
+    const err = h("div", { class: "err", role: "alert" });
+    const done = h("div", { class: "ok-msg", role: "status" });
+    const fields = {
+      forgot: ["Reset your password", "Enter your user name or email address. If the account has an email address, a reset link is sent to it.", [["login", "User name or email", "text", "username"]], "Send reset link"],
+      register: ["Create an account", "Your account becomes active after you confirm your email address.", [["username", "User name", "text", "username"], ["email", "Email", "email", "email"], ["password", "Password", "password", "new-password"]], "Create account"],
+      reset: ["Choose a new password", "Use at least 8 characters.", [["password", "New password", "password", "new-password"], ["password2", "Repeat new password", "password", "new-password"]], "Save password"],
+      verify: ["Confirming your email", "", [], ""],
+    }[kind];
+    const form = h("form", { class: "login" }, mark(40), h("h1", null, fields[0]), fields[1] ? h("p", { class: "lead" }, fields[1]) : null);
+    for (const [id, label, type, ac] of fields[2]) form.append(h("label", { for: id }, label), h("input", { id: id, type: type, autocomplete: ac, required: true, autocapitalize: "none", spellcheck: "false", minlength: type === "password" ? 8 : null }));
+    if (fields[3]) form.append(h("button", { type: "submit", class: "primary" }, fields[3]));
+    form.append(done, err, h("div", { class: "login-links" }, h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), (location.hash = ""), showLogin()) }, "Back to sign in")));
+    const v = (id) => form.querySelector("#" + id).value;
+    const submit = async () => {
+      err.textContent = done.textContent = "";
+      try {
+        let r;
+        if (kind === "forgot") r = await api("POST", "/api/password/forgot", { login: v("login").trim() });
+        if (kind === "register") r = await api("POST", "/api/register", { username: v("username").trim(), email: v("email").trim(), password: v("password") });
+        if (kind === "reset") {
+          if (v("password") !== v("password2")) throw new Error("The passwords do not match.");
+          await api("POST", "/api/password/reset", { token: token, password: v("password") });
+          r = { message: "Password changed. Sign in with it now." };
+        }
+        if (kind === "verify") r = await api("POST", "/api/register/verify", { token: token });
+        done.textContent = r.message;
+        for (const el of form.querySelectorAll("input,button[type=submit]")) el.disabled = true;
+      } catch (e) {
+        err.textContent = e.message;
+      }
+    };
+    form.addEventListener("submit", (ev) => (ev.preventDefault(), submit()));
+    root.append(h("div", { class: "login-wrap" }, form));
+    if (kind === "verify") submit();
+    const first = form.querySelector("input");
+    if (first) first.focus();
   }
 
   async function signOut() {
@@ -907,6 +986,11 @@
 
   async function boot() {
     theme();
+    const link = /^#\/(reset|verify)\/([A-Za-z0-9_-]+)$/.exec(location.hash);
+    if (link && !S.me) {
+      history.replaceState(null, "", location.pathname);
+      return authScreen(link[1], link[2]);
+    }
     try {
       S.me = await api("GET", "/api/me");
     } catch (e) {
@@ -2440,7 +2524,7 @@
         table(
           [
             { title: "Name", render: (r) => h("b", null, r.name) },
-            { title: "Role", render: (r) => (r.admin ? "admin" : "user") + (r.external ? ", directory" : "") + (r.disabled ? ", disabled" : "") },
+            { title: "Role", render: (r) => h("div", null, (r.admin ? "admin" : "user") + (r.external ? ", directory" : "") + (r.disabled && !r.pending ? ", disabled" : ""), r.pending ? h("span", { class: "pill problem", style: "margin-left:6px" }, r.pending === "verify" ? "email not confirmed" : "waiting for approval") : null, r.twoFactor ? h("span", { class: "pill", style: "margin-left:6px" }, "2-step") : null, r.email ? h("div", { class: "small muted" }, r.email) : null) },
             { title: "Callsign", key: "callsign" },
             { title: "Receives from", render: (r) => joined(r.in) },
             { title: "Sends to", render: (r) => joined(r.out) },
@@ -2450,7 +2534,7 @@
             {
               title: "",
               cls: "actions",
-              render: (r) => [btn("Enroll QR", () => enrollQR(r.name), "small"), h("a", { class: "button small", href: "/api/package?type=cert&user=" + enc(r.name) }, "Package"), btn("Password", () => setPassword(r), "small"), btn("Edit", () => editUser(r), "small")],
+              render: (r) => [r.pending === "approval" ? btn("Approve", async () => { try { await api("POST", "/api/users/" + enc(r.name) + "/approve"); toast("Approved"); load().catch(fail); } catch (e) { fail(e); } }, "small primary") : null, r.twoFactor ? btn("Reset 2-step", () => confirmAction("Reset two-step sign-in", "Let " + r.name + " sign in with only a password until they set it up again?", "Reset", async () => { await api("DELETE", "/api/users/" + enc(r.name) + "/2fa"); load().catch(fail); }), "small") : null, btn("Enroll QR", () => enrollQR(r.name), "small"), h("a", { class: "button small", href: "/api/package?type=cert&user=" + enc(r.name) }, "Package"), btn("Password", () => setPassword(r), "small"), btn("Edit", () => editUser(r), "small")],
             },
           ],
           users,
@@ -3066,6 +3150,7 @@
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
     { id: "voice", title: "Voice", keys: "mumble mumla murmur radio push to talk ptt" },
     { id: "locate", title: "Locate", keys: "location sharing search rescue lost person link" },
+    { id: "email", title: "Email and accounts", keys: "smtp mail registration sign up password reset two factor 2fa domains" },
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
     { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload" },
@@ -3077,7 +3162,7 @@
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -3152,6 +3237,26 @@
         field("Record these paths", input("vs_recp", (vs.recordPaths || []).join(", "), { placeholder: "live/uas, cameras" }), "Streams at or under these paths are always recorded. Comma separated."),
         field("Minutes per file", n("vs_recm", vs.recordMinutes), "Long recordings are split into files of this length."),
         field("Keep recordings for (days)", n("vs_recd", vs.recordDays), "0 keeps them forever."),
+      ],
+      email: [
+        "Email lets people reset forgotten passwords, receive sign-in codes and, if you allow it, create their own accounts.",
+        field("Enabled", checkbox("em_on", em.enabled, "Send email")),
+        field("Mail server", input("em_host", em.host || "", { placeholder: "smtp.example.org" })),
+        field("Port", n("em_port", em.port || ""), "587 for STARTTLS, 465 for TLS."),
+        field("Security", select("em_sec", [["starttls", "STARTTLS"], ["tls", "TLS"], ["none", "None (trusted networks only)"]], em.security || "starttls")),
+        field("User name", input("em_user", em.username || "", { autocomplete: "off" })),
+        field("Password", input("em_pw", em.password || "", { type: "password", autocomplete: "new-password" })),
+        field("From", input("em_from", em.from || "", { placeholder: "TAK Server <tak@example.org>" })),
+        field("Dashboard address", input("em_url", em.publicUrl || "", { placeholder: location.origin }), "Used in links in emails. Empty uses the address the request came to."),
+        field("Self-registration", checkbox("em_reg", em.allowRegistration, "Let people create accounts by confirming an email address")),
+        field("Approval", checkbox("em_appr", em.approveRegistrations, "An administrator approves new accounts")),
+        field("Allowed domains", input("em_allow", (em.allowedDomains || []).join(", "), { placeholder: "any" }), "Only these can register, for example example.org or .mil. Empty allows any."),
+        field("Blocked domains", input("em_block", (em.blockedDomains || []).join(", "))),
+        field("Groups for new accounts", input("em_groups", (em.registrationGroups || []).join(", "), { placeholder: "default group" })),
+        h("div", { class: "full" }, btn("Send a test email", async () => {
+          const tf = h("form", { class: "grid" }, field("Send to", input("em_to", "", { type: "email", required: true })));
+          modal("Test email", tf, [{ label: "Cancel" }, { label: "Send", primary: true, run: async () => { await api("POST", "/api/settings/email/test", { to: tf.querySelector("#em_to").value }); toast("Sent. Save the settings first if you changed them."); } }]);
+        })),
       ],
       locate: [
         h("span", null, "A web page where anyone you send the link to can share their position onto the map, for search and rescue or people without a TAK client. The page is ", h("a", { href: "/locate", target: "_blank", rel: "noopener" }, location.origin + "/locate"), "."),
@@ -3409,6 +3514,7 @@
           intervalSec: num(form, "mt_int"),
           group: val(form, "mt_group"),
         }),
+        email: Object.assign({}, em, { enabled: val(form, "em_on"), host: val(form, "em_host"), port: num(form, "em_port"), security: val(form, "em_sec"), username: val(form, "em_user"), password: val(form, "em_pw"), from: val(form, "em_from"), publicUrl: val(form, "em_url"), allowRegistration: val(form, "em_reg"), approveRegistrations: val(form, "em_appr"), allowedDomains: splitList(val(form, "em_allow")), blockedDomains: splitList(val(form, "em_block")), registrationGroups: splitList(val(form, "em_groups")) }),
         locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
         voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),
         videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max"), record: val(form, "vs_rec"), recordPaths: splitList(val(form, "vs_recp")), recordMinutes: num(form, "vs_recm"), recordDays: num(form, "vs_recd") }),
@@ -3583,10 +3689,69 @@
         fail(e);
       }
     });
+    const sec = h("div");
+    main.append(f, h("h2", null, "Email and two-step sign-in"), sec);
+    const loadSec = async () => {
+      const a = await api("GET", "/api/account");
+      const ef = h("form", { class: "grid" }, field("Email", input("aemail", a.email || "", { type: "email", autocomplete: "email" }), "Used for password resets" + (a.emailEnabled ? " and sign-in codes." : ". Email is not set up on this server yet.")), field("Password", input("apw", "", { type: "password", autocomplete: "current-password", required: true }), "Confirm with your password."), h("div", { class: "full" }, h("button", { type: "submit" }, "Save email")));
+      ef.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        try {
+          await api("PUT", "/api/account/email", { email: val(ef, "aemail"), password: ef.querySelector("#apw").value });
+          toast("Email saved");
+          loadSec().catch(fail);
+        } catch (e) {
+          fail(e);
+        }
+      });
+      const showCodes = (codes) => modal("Save your recovery codes", h("div", null, h("p", null, "Each code signs you in once if you lose your phone or email. Keep them somewhere safe; they are not shown again."), h("pre", { class: "mono codes" }, codes.join("\n")), copyButton(codes.join("\n"), "Copy codes")), [{ label: "I saved them", primary: true }]);
+      const twoStep = h("div", { class: "grid" });
+      if (a.twoFactor) {
+        twoStep.append(
+          h("p", { class: "full" }, "Two-step sign-in is on with " + (a.twoFactor === "totp" ? "an authenticator app" : "email codes") + ". " + a.recoveryCodes + " recovery codes left."),
+          h("div", { class: "full" }, btn("Turn off", () => {
+            const pf = h("form", { class: "grid" }, field("Password", input("offpw", "", { type: "password", autocomplete: "current-password", required: true })));
+            modal("Turn off two-step sign-in", pf, [{ label: "Cancel" }, { label: "Turn off", primary: true, run: async () => { await api("DELETE", "/api/account/2fa", { password: pf.querySelector("#offpw").value }); toast("Two-step sign-in is off"); loadSec().catch(fail); } }]);
+          }))
+        );
+      } else {
+        twoStep.append(
+          h("p", { class: "full" }, "Ask for a code from your phone or email after your password when you sign in to this dashboard. TAK apps keep using the password or certificate alone."),
+          h(
+            "div",
+            { class: "full toolbar" },
+            btn("Use an authenticator app", async () => {
+              try {
+                const st = await api("POST", "/api/account/2fa/totp");
+                const qr = h("div", { class: "qr" });
+                qr.innerHTML = st.qr;
+                const cf = h("form", { class: "grid" }, h("div", { class: "full" }, qr), h("p", { class: "full small" }, "Scan this in Google Authenticator, Microsoft Authenticator or a similar app, or enter the key ", h("span", { class: "mono" }, st.secret.replace(/(.{4})/g, "$1 ").trim()), "."), field("Code from the app", input("tcode", "", { inputmode: "numeric", autocomplete: "one-time-code", required: true })));
+                modal("Set up an authenticator app", cf, [{ label: "Cancel" }, { label: "Turn on", primary: true, run: async () => { const r = await api("POST", "/api/account/2fa/enable", { method: "totp", code: cf.querySelector("#tcode").value }); loadSec().catch(fail); setTimeout(() => showCodes(r.recoveryCodes), 50); } }]);
+              } catch (e) {
+                fail(e);
+              }
+            }, "primary"),
+            a.emailEnabled && a.email
+              ? btn("Use email codes", async () => {
+                  try {
+                    await api("POST", "/api/account/2fa/enable", { method: "email" });
+                    const cf = h("form", { class: "grid" }, h("p", { class: "full" }, "We sent a code to " + a.email + "."), field("Code", input("ecode", "", { inputmode: "numeric", autocomplete: "one-time-code", required: true })));
+                    modal("Confirm email codes", cf, [{ label: "Cancel" }, { label: "Turn on", primary: true, run: async () => { const r = await api("POST", "/api/account/2fa/enable", { method: "email", code: cf.querySelector("#ecode").value }); loadSec().catch(fail); setTimeout(() => showCodes(r.recoveryCodes), 50); } }]);
+                  } catch (e) {
+                    fail(e);
+                  }
+                })
+              : null
+          )
+        );
+      }
+      clear(sec).append(ef, twoStep);
+    };
+    loadSec().catch(fail);
     const t = theme();
     const themeSel = select("theme", [["auto", "Follow the system"], ["light", "Light"], ["dark", "Dark"]], t);
     themeSel.addEventListener("change", () => setTheme(themeSel.value));
-    main.append(f, h("h2", null, "Display"), h("form", { class: "grid" }, field("Theme", themeSel)));
+    main.append(h("h2", null, "Display"), h("form", { class: "grid" }, field("Theme", themeSel)));
   }
 
   window.addEventListener("hashchange", route);

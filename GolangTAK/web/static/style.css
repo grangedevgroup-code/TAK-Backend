@@ -591,3 +591,7 @@ details.more > .inner { padding: 16px; }
 .live-player .live-video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
 .live-status { margin-top: 8px; }
 .plugin-frame { display: block; width: 100%; height: calc(100vh - 210px); min-height: 420px; border: 1px solid var(--border-strong); background: var(--panel); }
+.login-links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; }
+.login .ok-msg { color: var(--ok); margin-top: 10px; }
+pre.codes { padding: 12px; border: 1px solid var(--border-strong); background: var(--canvas); line-height: 1.8; }
+.qr svg { width: 200px; height: 200px; background: #fff; padding: 8px; }

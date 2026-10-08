@@ -193,6 +193,7 @@ type Config struct {
 	Video          VideoServerConfig `json:"videoServer"`
 	Voice          VoiceConfig       `json:"voice"`
 	Locate         LocateConfig      `json:"locate"`
+	Email          EmailConfig       `json:"email"`
 	TileURL        string            `json:"tileUrl"`
 	LogLevel       string            `json:"logLevel"`
 	ACMEEmail      string            `json:"acmeEmail"`
