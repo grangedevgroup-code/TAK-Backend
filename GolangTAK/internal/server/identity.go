@@ -66,6 +66,7 @@ type User struct {
 	LastLogin time.Time    `json:"lastLogin,omitempty"`
 	Certs     []CertRecord `json:"certs,omitempty"`
 	External  bool         `json:"external,omitempty"`
+	Link      bool         `json:"link,omitempty"`
 }
 
 type Group struct {
@@ -158,6 +159,7 @@ type Identity struct {
 	Cert    *x509.Certificate
 	Anon    bool
 	TokenID string
+	Link    bool
 }
 
 type Session struct {
@@ -341,7 +343,7 @@ func activeList(all []string, inactive []string, dir string) []string {
 func (d *Directory) identityFor(u User, via string) *Identity {
 	in := activeList(u.In, u.Inactive, DirIn)
 	out := activeList(u.Out, u.Inactive, DirOut)
-	return &Identity{Name: u.Name, Admin: u.Admin, Via: via, In: d.Mask(in), Out: d.Mask(out)}
+	return &Identity{Name: u.Name, Admin: u.Admin, Via: via, In: d.Mask(in), Out: d.Mask(out), Link: u.Link}
 }
 
 func (d *Directory) Identity(name, via string) (*Identity, error) {

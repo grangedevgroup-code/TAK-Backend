@@ -179,6 +179,13 @@ func (s *Server) routes() *http.ServeMux {
 	a("GET /api/feeds", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, s.feedStatus()) })
 	a("POST /api/ldap/test", s.apiLDAPTest)
 	a("GET /api/performance", s.apiPerformance)
+	a("GET /api/server-plugins", s.apiServerPluginsList)
+	a("POST /api/links/invite", s.apiLinkInvite)
+	a("POST /api/links/join", s.apiLinkJoin)
+	a("GET /api/server-plugins/{name}/logs", s.apiServerPluginLogs)
+	a("POST /api/server-plugins/{name}/{action}", s.apiServerPluginAction)
+	a("PUT /api/server-plugins/{name}", s.apiServerPluginPut)
+	a("DELETE /api/server-plugins/{name}", s.apiServerPluginDelete)
 	a("GET /api/meshtastic", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, s.meshStatus()) })
 
 	mux.HandleFunc("/Marti/", s.martiUnknown)

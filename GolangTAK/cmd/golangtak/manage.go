@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -471,6 +472,35 @@ func cmdPeer(a *args) error {
 		return err
 	}
 	sub, name := strings.ToLower(a.arg(0)), a.arg(1)
+	switch sub {
+	case "invite":
+		if name == "" {
+			return errUsage
+		}
+		return withClient(a, func(c *client) error {
+			var inv server.LinkInvite
+			if err := c.call("POST", "/api/links/invite", map[string]any{"name": name, "groups": splitList(a.val("groups"))}, &inv); err != nil {
+				return err
+			}
+			fmt.Printf("Link code for %s (connects to %s, valid until %s):\n\n%s\n\nOn the other GolangTAK server run:\n  golangtak peer join CODE\nor paste it under Server links, Use a link code. Anyone with the code can link to this server, so send it privately.\n", name, inv.URL, inv.Expires.Format("2006-01-02"), inv.Code)
+			return nil
+		})
+	case "join":
+		if name == "" {
+			return errUsage
+		}
+		return withClient(a, func(c *client) error {
+			var res struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			}
+			if err := c.call("POST", "/api/links/join", map[string]any{"code": name, "name": a.val("name"), "groups": splitList(a.val("groups"))}, &res); err != nil {
+				return err
+			}
+			fmt.Printf("Linked to %s as %s. Check it with: golangtak peer list\n", res.URL, res.Name)
+			return nil
+		})
+	}
 	return withClient(a, func(c *client) error {
 		cfg, err := getSettings(c)
 		if err != nil {
@@ -873,4 +903,127 @@ func cmdLogs(a *args) error {
 		offset += n
 		f.Close()
 	}
+}
+
+func cmdPlugin(a *args) error {
+	if err := need(a, 1); err != nil {
+		return err
+	}
+	sub, name := strings.ToLower(a.arg(0)), a.arg(1)
+	return withClient(a, func(c *client) error {
+		switch sub {
+		case "list", "ls":
+			var list []server.PluginStatus
+			if err := c.call("GET", "/api/server-plugins", nil, &list); err != nil {
+				return err
+			}
+			if len(list) == 0 {
+				fmt.Println("No server plugins. Add one with: golangtak plugin add NAME COMMAND [ARGS...]")
+				return nil
+			}
+			t := table()
+			fmt.Fprintln(t, "NAME\tSTATE\tPID\tRESTARTS\tCOMMAND")
+			for _, p := range list {
+				state := p.State
+				if p.LastExit != "" && p.State != "running" {
+					state += " (" + p.LastExit + ")"
+				}
+				pid := "-"
+				if p.PID > 0 {
+					pid = strconv.Itoa(p.PID)
+				}
+				fmt.Fprintf(t, "%s\t%s\t%s\t%d\t%s\n", p.Name, state, pid, p.Restarts, strings.TrimSpace(p.Command+" "+strings.Join(p.Args, " ")))
+			}
+			return t.Flush()
+		case "add", "set":
+			command := a.arg(2)
+			if name == "" || command == "" {
+				return errUsage
+			}
+			if strings.ContainsAny(command, `/\`) && !filepath.IsAbs(command) {
+				abs, err := filepath.Abs(command)
+				if err != nil {
+					return err
+				}
+				command = abs
+			}
+			p := server.PluginConfig{Name: name, Command: command, Args: a.pos[3:], Dir: a.val("dir"), Enabled: !a.on("disabled"), Admin: a.on("admin"), Groups: splitList(a.val("groups"))}
+			if p.Dir != "" {
+				abs, err := filepath.Abs(p.Dir)
+				if err != nil {
+					return err
+				}
+				p.Dir = abs
+			}
+			for _, kv := range splitEnv(a.val("env")) {
+				k, v, ok := strings.Cut(kv, "=")
+				if !ok || k == "" {
+					return fmt.Errorf("--env expects NAME=VALUE pairs separated by commas, got %q", kv)
+				}
+				if p.Env == nil {
+					p.Env = map[string]string{}
+				}
+				p.Env[k] = v
+			}
+			if err := c.call("PUT", "/api/server-plugins/"+url.PathEscape(name), p, nil); err != nil {
+				return err
+			}
+			if c.online() {
+				fmt.Printf("Plugin %s saved and started. Check it with: golangtak plugin logs %s\n", name, name)
+			} else {
+				fmt.Printf("Plugin %s saved. It starts with the server.\n", name)
+			}
+			return nil
+		case "del", "delete", "rm", "remove":
+			if name == "" {
+				return errUsage
+			}
+			if err := c.call("DELETE", "/api/server-plugins/"+url.PathEscape(name), nil, nil); err != nil {
+				return err
+			}
+			fmt.Printf("Plugin %s removed.\n", name)
+			return nil
+		case "enable", "disable", "restart":
+			if name == "" {
+				return errUsage
+			}
+			if err := c.call("POST", "/api/server-plugins/"+url.PathEscape(name)+"/"+sub, nil, nil); err != nil {
+				return err
+			}
+			fmt.Printf("Plugin %s: %s done.\n", name, sub)
+			return nil
+		case "logs", "log":
+			if name == "" {
+				return errUsage
+			}
+			var lines []string
+			if err := c.call("GET", "/api/server-plugins/"+url.PathEscape(name)+"/logs", nil, &lines); err != nil {
+				return err
+			}
+			if !c.online() {
+				fmt.Println("The server is not running, so there is no plugin output yet.")
+			}
+			for _, l := range lines {
+				fmt.Println(l)
+			}
+			return nil
+		}
+		return errUsage
+	})
+}
+
+var envStart = regexp.MustCompile(`^\s*[A-Za-z_][A-Za-z0-9_]*=`)
+
+func splitEnv(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if len(out) > 0 && !envStart.MatchString(part) {
+			out[len(out)-1] += "," + part
+			continue
+		}
+		if strings.TrimSpace(part) != "" {
+			out = append(out, strings.TrimSpace(part))
+		}
+	}
+	return out
 }

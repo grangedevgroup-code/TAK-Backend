@@ -737,6 +737,18 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 	if cfg.Feeds.ADSB.APIKey != "" {
 		cfg.Feeds.ADSB.APIKey = "********"
 	}
+	plugins := make([]PluginConfig, len(cfg.Plugins))
+	for i, p := range cfg.Plugins {
+		if len(p.Env) > 0 {
+			env := map[string]string{}
+			for k := range p.Env {
+				env[k] = "********"
+			}
+			p.Env = env
+		}
+		plugins[i] = p
+	}
+	cfg.Plugins = plugins
 	writeJSON(w, http.StatusOK, cfg)
 }
 
@@ -749,10 +761,12 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	before := s.Config()
 	next, err := s.UpdateConfig(func(c *Config) error {
 		old := c.Peers
+		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
 		oldBind, oldKey := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
 		}
+		c.Plugins = oldPlugins
 		if c.LDAP.BindPassword == "********" {
 			c.LDAP.BindPassword = oldBind
 		}

@@ -182,6 +182,7 @@ type Config struct {
 	Feeds          FeedsConfig      `json:"feeds"`
 	LDAP           LDAPConfig       `json:"ldap"`
 	Meshtastic     MeshtasticConfig `json:"meshtastic"`
+	Plugins        []PluginConfig   `json:"plugins"`
 	TileURL        string           `json:"tileUrl"`
 	LogLevel       string           `json:"logLevel"`
 	ACMEEmail      string           `json:"acmeEmail"`

@@ -65,6 +65,7 @@ type Server struct {
 	feeds    *feedState
 	mesh     *meshBridge
 	perf     *perfSampler
+	plugins  *pluginManager
 	control  string
 	lock     *flock.Lock
 	localMux http.Handler
@@ -279,6 +280,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.wg.Add(2)
 	go s.maintenance()
 	go s.perfLoop()
+	s.startPlugins()
 	s.log.Info("GolangTAK started", "version", s.Version, "address", cfg.Address, "data", s.DataDir,
 		"tcp", cfg.Ports.TCP, "tls", cfg.Ports.TLS, "http", cfg.Ports.HTTP, "https", cfg.Ports.HTTPS, "enroll", cfg.Ports.Enroll)
 	return nil

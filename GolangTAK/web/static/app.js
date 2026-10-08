@@ -2049,10 +2049,44 @@
   }
 
   async function pageLinks(main) {
-    pageHead(main, "Server links", "Exchange traffic in both directions with TAK Server, OpenTAKServer, FreeTAKServer, zyrntopo-tak-server, another GolangTAK, or any software that speaks CoT over TCP, TLS, UDP or WebSocket.", btn("Add link", () => editPeer(null), "primary", "plus"));
+    pageHead(
+      main,
+      "Server links",
+      "Share traffic in both directions with other servers: another GolangTAK, TAK Server, OpenTAKServer, FreeTAKServer, zyrntopo-tak-server, or any software that speaks CoT.",
+      btn("Use a link code", () => joinCode(), "", "links"),
+      btn("Create a link code", () => inviteCode(), "", "key"),
+      btn("Add link", () => editPeer(null), "primary", "plus")
+    );
     const box = h("div");
     const fedBox = h("div");
-    main.append(h("h2", null, "Links"), box, h("h2", null, "Federation"), fedBox);
+    main.append(
+      h(
+        "details",
+        { class: "more" },
+        h("summary", null, "Which way should I link?"),
+        h(
+          "div",
+          { class: "inner" },
+          table(
+            [
+              { title: "Other side", render: (r) => h("b", null, r[0]) },
+              { title: "How", render: (r) => r[1] },
+            ],
+            [
+              ["Another GolangTAK", "Create a link code on one server and use it on the other. It sets up the encrypted connection, certificates and trust in one step."],
+              ["TAK Server", "Federation: turn it on below and exchange CA certificates, or add a link to its SSL port with a client certificate it issued."],
+              ["OpenTAKServer", "Add a link to its SSL port 8089 with a certificate from OpenTAKServer, or to its TCP port 8088 on a trusted network."],
+              ["FreeTAKServer", "Add a link to its TCP port 8087, or its SSL port 8089 with a certificate."],
+              ["zyrntopo-tak-server and browser software", "Add a WebSocket link (ws:// or wss://)."],
+            ]
+          )
+        )
+      ),
+      h("h2", null, "Links"),
+      box,
+      h("h2", null, "Federation"),
+      fedBox
+    );
     let cfg;
     const save = async (peers) => {
       const r = await api("PUT", "/api/settings", { peers: peers });
@@ -2090,7 +2124,7 @@
             },
           ],
           peers,
-          "No links. Add one to connect this server to another."
+          h("span", null, "No links yet. Linking two GolangTAK servers? Use ", h("b", null, "Create a link code"), " on one and ", h("b", null, "Use a link code"), " on the other.")
         )
       );
       const fed = await api("GET", "/api/federation");
@@ -2118,14 +2152,94 @@
         form
       );
     };
-    const editPeer = (p) => {
-      const isNew = !p;
-      p = p || { enabled: true, direction: "both", groups: [] };
+    const inviteCode = () => {
       const f = h(
         "form",
         { class: "grid" },
+        field("Other server", input("iname", "", { required: true, placeholder: "hq" }), "A short name for the server that will connect here, for example hq or partner-team."),
+        field("Groups", input("igroups", ""), "Groups the other server's traffic goes to, comma separated. Empty means the default group.")
+      );
+      const addr = (cfg && cfg.address) || "";
+      if (!addr || /^(127\.|localhost$|::1$)/.test(addr)) {
+        f.prepend(h("div", { class: "notice inv full" }, "This server's address is " + (addr || "not set") + ". The other server must be able to reach it; set the public address under Settings, General first."));
+      }
+      modal("Create a link code", f, [
+        { label: "Cancel" },
+        {
+          label: "Create code",
+          primary: true,
+          run: async () => {
+            const r = await api("POST", "/api/links/invite", { name: val(f, "iname"), groups: splitList(val(f, "igroups")) });
+            const code = h("textarea", { readOnly: true, rows: 6, style: "font-size:12px" });
+            code.value = r.code;
+            modal(
+              "Link code ready",
+              h(
+                "div",
+                null,
+                h("p", null, "On the other GolangTAK server, open Server links, choose ", h("b", null, "Use a link code"), " and paste this. Or run ", h("span", { class: "mono" }, "golangtak peer join CODE"), " there."),
+                code,
+                h("p", { class: "small muted" }, "It connects to " + r.url + " and is valid until " + fmtDate(r.expires) + ". Anyone with the code can link to this server, so send it privately. To cut the link later, delete the user " + r.user + ".")
+              ),
+              [{ label: "Copy code", run: () => (copy(r.code), true) }, { label: "Done", primary: true }]
+            );
+            load().catch(fail);
+          },
+        },
+      ]);
+    };
+    const joinCode = () => {
+      const f = h(
+        "form",
+        { class: "grid" },
+        field("Link code", h("textarea", { id: "jcode", rows: 5, required: true, placeholder: "golangtak-link:...", style: "font-size:12px" }), "Created on the other server under Server links, Create a link code."),
+        field("Name", input("jname", ""), "Optional. A short name for the link; the other server's name is used if empty."),
+        field("Groups", input("jgroups", ""), "Groups whose traffic is shared over the link, comma separated. Empty means the default group.")
+      );
+      modal("Use a link code", f, [
+        { label: "Cancel" },
+        {
+          label: "Link servers",
+          primary: true,
+          run: async () => {
+            const r = await api("POST", "/api/links/join", { code: f.querySelector("#jcode").value, name: val(f, "jname"), groups: splitList(val(f, "jgroups")) });
+            toast("Linked as " + r.name + ". Connecting...");
+            load().catch(fail);
+            setTimeout(() => load().catch(() => {}), 3000);
+          },
+        },
+      ]);
+    };
+    const kinds = [
+      ["golangtak", "Another GolangTAK", "tls://HOST:8089", "Easiest: use a link code instead. Otherwise sign in with a user name and password from the other server."],
+      ["takserver", "TAK Server", "tls://HOST:8089", "Use a client certificate (.p12) issued by the TAK Server and its truststore. For federation use fed://HOST:9000 and give each side the other's CA."],
+      ["ots", "OpenTAKServer", "tls://HOST:8089", "Use a certificate from OpenTAKServer, or tcp://HOST:8088 for its unencrypted port on a trusted network."],
+      ["fts", "FreeTAKServer", "tcp://HOST:8087", "FreeTAKServer accepts CoT on TCP 8087, or SSL on 8089 with a certificate."],
+      ["ws", "zyrntopo-tak-server or WebSocket software", "wss://HOST/", "One CoT XML event per WebSocket message. Use ws:// for unencrypted connections."],
+      ["other", "Other CoT software", "tcp://HOST:PORT", "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation)."],
+    ];
+    const editPeer = (p) => {
+      const isNew = !p;
+      p = p || { enabled: true, direction: "both", groups: [] };
+      const urlInput = input("purl", p.url, { required: true, placeholder: "tls://tak.example.org:8089" });
+      const urlField = field("URL", urlInput, "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation).");
+      const hint = urlField[1].querySelector(".hint");
+      let template = "";
+      const kindSel = select("pkind", kinds.map((k) => [k[0], k[1]]), "golangtak");
+      const applyKind = () => {
+        const k = kinds.find((x) => x[0] === kindSel.value);
+        if (!urlInput.value || urlInput.value === template) urlInput.value = k[2];
+        template = k[2];
+        urlInput.placeholder = k[2];
+        hint.textContent = k[3] + " Replace HOST with the other server's address.";
+      };
+      kindSel.addEventListener("change", applyKind);
+      const f = h(
+        "form",
+        { class: "grid" },
+        isNew ? field("Other side", kindSel) : null,
         field("Name", input("pname", p.name, { required: true, readOnly: !isNew })),
-        field("URL", input("purl", p.url, { required: true, placeholder: "tls://tak.example.org:8089" }), "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation)."),
+        urlField,
         field("Direction", select("pdir", [["both", "Both ways"], ["out", "Send only"], ["in", "Receive only"]], p.direction || "both")),
         field("Groups", input("pgroups", (p.groups || []).join(", ")), "Traffic from these groups is sent; received traffic goes to them. Empty means the default group."),
         field("User name", input("puser", p.username || "", { autocomplete: "off" })),
@@ -2135,6 +2249,7 @@
         field("Trusted CA", input("ptrust", p.trustFile || ""), "Path on this server to the other server's CA (.pem or .p12)."),
         field("Options", h("div", null, checkbox("pins", p.insecure, "Do not verify the other server's certificate"), h("br"), checkbox("pnop", p.noPresence, "Do not announce this server as a contact")))
       );
+      if (isNew) applyKind();
       modal(isNew ? "Add server link" : "Edit " + p.name, f, [
         { label: "Cancel" },
         {
@@ -2166,10 +2281,69 @@
   }
 
   async function pagePlugins(main) {
-    pageHead(main, "Plugins and profiles", "Publish ATAK plugins through the update server, and push settings to devices when they enroll or connect.");
+    pageHead(main, "Plugins and profiles", "Run your own programs alongside the server, publish ATAK plugins through the update server, and push settings to devices.");
+    const spBox = h("div");
+    main.append(
+      h("h2", null, "Server plugins"),
+      h("p", null, "Programs that run next to GolangTAK and use its API: bots, bridges to other systems, alerting, logging. GolangTAK starts them, gives each one an API token, and restarts them if they stop. For safety, plugins are added only on the server itself, with ", h("span", { class: "mono" }, "golangtak plugin add NAME COMMAND"), "."),
+      spBox
+    );
+    const showLogs = async (name) => {
+      const view = h("div", { class: "log-view", style: "height:50vh" });
+      const fill = async () => {
+        const lines = await api("GET", "/api/server-plugins/" + enc(name) + "/logs");
+        clear(view).append(...lines.map((l) => h("div", { class: /GolangTAK: .*(exited|failed)/.test(l) ? "warn" : "" }, l)));
+        view.scrollTop = view.scrollHeight;
+      };
+      await fill();
+      const t = setInterval(() => fill().catch(() => {}), 3000);
+      const close = modal("Output of " + name, view, [{ label: "Close", primary: true }]);
+      const obs = new MutationObserver(() => {
+        if (!document.body.contains(view)) {
+          clearInterval(t);
+          obs.disconnect();
+        }
+      });
+      obs.observe(document.body, { childList: true });
+      return close;
+    };
+    const loadServerPlugins = async () => {
+      const list = await api("GET", "/api/server-plugins");
+      clear(spBox).append(
+        table(
+          [
+            { title: "Name", render: (r) => h("b", null, r.name) },
+            { title: "State", render: (r) => h("div", null, r.state === "disabled" ? h("span", { class: "pill" }, "disabled") : pill(r.state), r.lastExit && r.state !== "running" ? h("div", { class: "small muted", style: "margin-top:4px" }, r.lastExit) : null) },
+            { title: "Process", cls: "num", render: (r) => (r.pid ? String(r.pid) : "-") },
+            { title: "Restarts", cls: "num", render: (r) => String(r.restarts) },
+            { title: "Command", render: (r) => h("span", { class: "mono small break" }, [r.command].concat(r.args || []).join(" ")) },
+            {
+              title: "",
+              cls: "actions",
+              render: (r) => [
+                btn("Output", () => showLogs(r.name).catch(fail), "small"),
+                btn("Restart", async () => {
+                  await api("POST", "/api/server-plugins/" + enc(r.name) + "/restart").catch(fail);
+                  setTimeout(() => loadServerPlugins().catch(() => {}), 800);
+                }, "small"),
+                btn(r.enabled ? "Disable" : "Enable", async () => {
+                  await api("POST", "/api/server-plugins/" + enc(r.name) + "/" + (r.enabled ? "disable" : "enable")).catch(fail);
+                  setTimeout(() => loadServerPlugins().catch(() => {}), 800);
+                }, "small"),
+              ],
+            },
+          ],
+          list,
+          h("span", null, "No server plugins. On the server run ", h("span", { class: "mono" }, "golangtak plugin add NAME COMMAND"), " to add one.")
+        )
+      );
+    };
+    await loadServerPlugins();
+    const spTimer = setInterval(() => loadServerPlugins().catch(() => {}), 5000);
+    main.append(h("h2", null, "ATAK plugins"));
     const cfg = await api("GET", "/api/connect");
     const url = "https://" + (cfg.host.includes(":") ? "[" + cfg.host + "]" : cfg.host) + ":" + cfg.ports.https + "/api/packages";
-    main.append(h("h2", null, "Update server"), h("p", null, "In ATAK: Settings, Plugins (or Tool Preferences, Package Management), Update Server URL: ", h("span", { class: "mono" }, url)));
+    main.append(h("p", null, "In ATAK: Settings, Plugins (or Tool Preferences, Package Management), Update Server URL: ", h("span", { class: "mono" }, url)));
     const apk = h("input", { type: "file", accept: ".apk", id: "apk" });
     const pbox = h("div");
     main.append(
@@ -2272,6 +2446,7 @@
       ]);
     };
     await Promise.all([loadPlugins(), loadProfiles()]);
+    return () => clearInterval(spTimer);
   }
 
   const SETTINGS_SECTIONS = [

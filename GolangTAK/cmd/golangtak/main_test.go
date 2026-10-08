@@ -114,3 +114,14 @@ func TestFirewallRules(t *testing.T) {
 		t.Fatal("rules do not round trip")
 	}
 }
+
+func TestSplitEnv(t *testing.T) {
+	got := splitEnv("WELCOME_MESSAGE=Welcome, %s. Radio check,A=1, B_2=x")
+	want := []string{"WELCOME_MESSAGE=Welcome, %s. Radio check", "A=1", "B_2=x"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("splitEnv = %q", got)
+	}
+	if len(splitEnv("")) != 0 {
+		t.Fatal("empty input produced values")
+	}
+}

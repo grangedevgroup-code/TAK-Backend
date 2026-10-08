@@ -156,6 +156,62 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Data feeds**: live aircraft from ADS-B exchanges (adsb.lol by default, or any service with the same API) and ships from AISHub, sent to everyone or to one group.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
 
+## Link servers together
+
+Linking lets devices on different servers see each other: an HQ server and field servers, two teams on their own servers, or a server in the cloud and one on a Raspberry Pi in a vehicle. Every link carries traffic both ways, and loop protection stops messages from echoing back.
+
+**Two GolangTAK servers.** On the server the other one will connect to:
+
+```sh
+sudo golangtak peer invite field-team
+```
+
+It prints a link code. On the other server:
+
+```sh
+sudo golangtak peer join golangtak-link:...
+```
+
+The code carries the address, a client certificate and the certificate authority, so the link is encrypted and trusted in both directions with nothing else to set up. In the dashboard the same thing is under **Server links**, **Create a link code** and **Use a link code**. Add `--groups Blue` to either command to share only some groups. To cut the link, delete the `link-field-team` user on the first server. Send codes privately: anyone with a code can link to your server.
+
+**Other servers and software.** Use **Server links**, **Add link** (or `golangtak peer add`) and choose what is on the other side:
+
+| Other side | Link |
+| --- | --- |
+| TAK Server | Federation: turn it on under Server links and exchange CA certificates, or `fed://HOST:9000` to connect out. Or a TLS link to its port 8089 with a client certificate it issued. |
+| OpenTAKServer | `tls://HOST:8089` with a certificate from OpenTAKServer, or `tcp://HOST:8088` on a trusted network |
+| FreeTAKServer | `tcp://HOST:8087`, or `tls://HOST:8089` with a certificate |
+| zyrntopo-tak-server and WebSocket software | `wss://HOST/` or `ws://HOST:PORT/` |
+| Anything else that speaks CoT | `tcp://`, `tls://`, `udp://` or `ws://` |
+
+## Server plugins
+
+A server plugin is any program you want running next to GolangTAK: a bot that answers in chat, a bridge to a dispatch or alerting system, a logger, a sensor feed. GolangTAK starts it with the server, restarts it if it stops (waiting a little longer each time, up to a minute), stops it on shutdown, and keeps its recent output for the dashboard.
+
+```sh
+sudo golangtak plugin add welcome /opt/plugins/welcome --env "WELCOME_MESSAGE=Welcome aboard, %s."
+sudo golangtak plugin list
+sudo golangtak plugin logs welcome
+```
+
+Put `--` before plugin arguments that start with a dash: `golangtak plugin add notify /usr/bin/python3 -- /opt/notify.py --verbose`. Plugins can be written in any language. Each one gets its own user account (`plugin-NAME`) and these environment variables:
+
+| Variable | Contents |
+| --- | --- |
+| `GOLANGTAK_URL` | Base URL of the REST API on this machine |
+| `GOLANGTAK_STREAM_URL` | WebSocket URL of the live event stream (JSON, one event per message) |
+| `GOLANGTAK_TOKEN` | API token: send it as `Authorization: Bearer TOKEN` |
+| `GOLANGTAK_CA` | The server's CA certificate, for HTTPS |
+| `GOLANGTAK_COT_TCP` | Address of the plain CoT TCP port, when it is on |
+| `GOLANGTAK_PLUGIN`, `GOLANGTAK_PLUGIN_DATA` | The plugin's name, and a folder it can keep files in (also its working folder) |
+| `GOLANGTAK_SERVER_NAME`, `GOLANGTAK_VERSION` | Server name and version |
+
+The plugin account is a normal user, not an administrator. Add `--admin` to give it full access, and `--groups` to choose what it sees. With its token a plugin can read the event stream, send chat (`POST /api/chat`), place markers (`POST /api/markers`), and use everything else the dashboard uses.
+
+[`examples/plugins/welcome`](examples/plugins/welcome/main.go) is a complete example: it watches the event stream and sends each newly seen device a welcome message. Build it with `go build ./examples/plugins/welcome`.
+
+The dashboard (**Plugins and profiles**) shows each plugin's state, process and output, and can restart, enable or disable it. Plugins can only be added, changed or removed on the server itself, with the `golangtak plugin` command or in `config.json`, so a stolen dashboard password cannot be used to run programs on the server.
+
 ## Ports
 
 | Port | Protocol | Use |
@@ -185,7 +241,8 @@ Set any port to 0 to turn that service off.
 | `golangtak connect` / `qr [USER]` | Connection details and QR codes |
 | `golangtak user list` / `add NAME` / `del NAME` / `passwd NAME` / `groups NAME` / `package NAME` | Manage users |
 | `golangtak group list` / `add NAME` / `del NAME` | Manage groups |
-| `golangtak peer list` / `add NAME URL` / `del NAME` | Links to other servers |
+| `golangtak peer list` / `invite NAME` / `join CODE` / `add NAME URL` / `del NAME` | Links to other servers |
+| `golangtak plugin list` / `add NAME COMMAND` / `del NAME` / `restart NAME` / `logs NAME` | Server plugins |
 | `golangtak config show` / `get KEY` / `set KEY VALUE` | Settings |
 | `golangtak cert info` / `renew` / `import-ca CERT KEY` | Certificates |
 | `golangtak logs [-f]` | Server log |

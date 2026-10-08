@@ -129,7 +129,13 @@ func (s *Server) serveStream(conn net.Conn, kind string) {
 			}
 		}
 	}
+	if id != nil && id.Link && id.Cert != nil {
+		kind = KindPeer
+	}
 	c := s.hub.NewClient(kind, remote, id)
+	if kind == KindPeer {
+		c.Name = strings.TrimPrefix(id.Name, "link-")
+	}
 	c.onClose = func() { conn.Close() }
 	st := &clientState{}
 	if id != nil {
