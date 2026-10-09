@@ -32,11 +32,12 @@ type VideoServerConfig struct {
 }
 
 type VideoSource struct {
-	Name    string   `json:"name"`
-	URL     string   `json:"url"`
-	Path    string   `json:"path"`
-	Groups  []string `json:"groups"`
-	Enabled bool     `json:"enabled"`
+	Name     string   `json:"name"`
+	URL      string   `json:"url"`
+	Path     string   `json:"path"`
+	Groups   []string `json:"groups"`
+	Enabled  bool     `json:"enabled"`
+	Insecure bool     `json:"insecure,omitempty"`
 }
 
 type sourceState struct {
@@ -206,7 +207,7 @@ func (s *Server) startVideoSource(src VideoSource) {
 		delay := time.Second
 		for s.ctx.Err() == nil {
 			started := time.Now()
-			err := media.Pull(s.ctx, src.URL, &tls.Config{InsecureSkipVerify: true}, s.live.reg, path, firstNonEmpty(src.Name, "source"))
+			err := media.Pull(s.ctx, src.URL, &tls.Config{InsecureSkipVerify: src.Insecure}, s.live.reg, path, firstNonEmpty(src.Name, "source"))
 			if s.ctx.Err() != nil {
 				return
 			}

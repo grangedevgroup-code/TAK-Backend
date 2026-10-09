@@ -1181,5 +1181,7 @@
  "{n} {x} free of {n} {x}": "{n} {x} вільно з {n} {x}",
  "{n} {x} of {n} {x}": "{n} {x} з {n} {x}",
  "{user} is replaced by the sign-in name.": "{user} замінюється на ім'я для входу.",
- "{x} is running. Up {x}, version {x}.": "{x} працює. Час роботи {x}, версія {x}."
+ "{x} is running. Up {x}, version {x}.": "{x} працює. Час роботи {x}, версія {x}.",
+ "Do not verify the camera certificate": "Не перевіряти сертифікат камери",
+ "Only for RTSPS cameras with a self-signed certificate.": "Лише для камер RTSPS із самопідписаним сертифікатом."
 }

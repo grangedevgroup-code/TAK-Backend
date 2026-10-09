@@ -1141,5 +1141,7 @@
  "{n} {x} free of {n} {x}": "{n} {x} frei von {n} {x}",
  "{n} {x} of {n} {x}": "{n} {x} von {n} {x}",
  "{user} is replaced by the sign-in name.": "{user} wird durch den Anmeldenamen ersetzt.",
- "{x} is running. Up {x}, version {x}.": "{x} läuft. Seit {x}, Version {x}."
+ "{x} is running. Up {x}, version {x}.": "{x} läuft. Seit {x}, Version {x}.",
+ "Do not verify the camera certificate": "Kamerazertifikat nicht prüfen",
+ "Only for RTSPS cameras with a self-signed certificate.": "Nur für RTSPS-Kameras mit selbstsigniertem Zertifikat."
 }

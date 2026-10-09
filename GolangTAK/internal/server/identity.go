@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
@@ -633,8 +634,20 @@ func (d *Directory) forget(name string) {
 	d.vmu.Unlock()
 }
 
+var verifyKey = func() []byte {
+	k := make([]byte, 32)
+	rand.Read(k)
+	return k
+}()
+
 func digest(name, pw string) [32]byte {
-	return sha256.Sum256([]byte(name + "\x00" + pw))
+	m := hmac.New(sha256.New, verifyKey)
+	m.Write([]byte(name))
+	m.Write([]byte{0})
+	m.Write([]byte(pw))
+	var out [32]byte
+	copy(out[:], m.Sum(nil))
+	return out
 }
 
 func (d *Directory) CheckPassword(ip, name, pw string) (*Identity, error) {

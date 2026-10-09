@@ -2326,7 +2326,8 @@
         field("Camera URL", input("vsurl", src.url || "", { required: true, placeholder: "rtsp://user:password@192.168.1.20:554/stream1" }), "RTSP or RTSPS. The server pulls it and republishes it."),
         field("Path", input("vspath", src.path || "", { placeholder: "cameras/gate" }), "Where the stream is published on this server. Empty uses the name."),
         field("Groups", input("vsgroups", (src.groups || []).join(", ")), "Only these groups can watch. Empty means everyone."),
-        field("Enabled", checkbox("vson", src.enabled !== false, "Pull this source"))
+        field("Enabled", checkbox("vson", src.enabled !== false, "Pull this source")),
+        field("Skip certificate check", checkbox("vsins", src.insecure, "Do not verify the camera certificate"), "Only for RTSPS cameras with a self-signed certificate.")
       );
       modal(isNew ? "Add pull source" : "Edit " + src.name, f, [
         { label: "Cancel" },
@@ -2334,7 +2335,7 @@
           label: "Save",
           primary: true,
           run: async () => {
-            const next = { name: val(f, "vsname"), url: val(f, "vsurl"), path: val(f, "vspath"), groups: splitList(val(f, "vsgroups")), enabled: val(f, "vson") };
+            const next = { name: val(f, "vsname"), url: val(f, "vsurl"), path: val(f, "vspath"), groups: splitList(val(f, "vsgroups")), enabled: val(f, "vson"), insecure: val(f, "vsins") || undefined };
             const list = ((cfg.videoServer || {}).sources || []).filter((x) => x.name !== src.name && x.name !== next.name);
             list.push(next);
             await saveSources(list);

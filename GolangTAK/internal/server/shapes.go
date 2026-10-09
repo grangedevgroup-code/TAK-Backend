@@ -24,11 +24,15 @@ type shapeView struct {
 }
 
 func argbColor(v string) string {
-	n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
-	if err != nil {
+	v = strings.TrimSpace(v)
+	var u uint32
+	if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+		u = uint32(int32(n))
+	} else if n, err := strconv.ParseUint(v, 10, 32); err == nil {
+		u = uint32(n)
+	} else {
 		return ""
 	}
-	u := uint32(n)
 	a := float64(u>>24) / 255
 	return fmt.Sprintf("rgba(%d,%d,%d,%.2f)", (u>>16)&0xff, (u>>8)&0xff, u&0xff, a)
 }

@@ -85,7 +85,7 @@ func fields(b []byte, fn func(f field)) error {
 
 func appendVarint(b []byte, v uint64) []byte {
 	for v >= 0x80 {
-		b = append(b, byte(v)|0x80)
+		b = append(b, byte(v&0x7f)|0x80)
 		v >>= 7
 	}
 	return append(b, byte(v))

@@ -713,7 +713,7 @@ func (b *meshBridge) downlinkLoop() {
 			team, role := e.Team()
 			t := &meshtastic.TAKPacket{Callsign: e.Callsign(), DeviceCallsign: e.UID, Team: meshtastic.TeamNumber(team), Role: meshtastic.RoleNumber(role)}
 			if st := e.D("status"); st != nil {
-				if v, err := strconv.Atoi(strings.TrimSpace(st.Attr("battery"))); err == nil && v > 0 {
+				if v, err := strconv.ParseUint(strings.TrimSpace(st.Attr("battery")), 10, 32); err == nil && v > 0 {
 					t.Battery = uint32(min(v, 100))
 				}
 			}
