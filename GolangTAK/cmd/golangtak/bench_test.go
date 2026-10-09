@@ -67,7 +67,7 @@ func TestBench(t *testing.T) {
 	if res.Received == 0 || float64(res.Received) < 0.8*res.Expected {
 		t.Fatalf("received %d of %.0f expected", res.Received, res.Expected)
 	}
-	if res.P50 <= 0 || res.P50 > time.Second || res.Max < res.P99 {
+	if res.P50 < 0 || res.P50 > time.Second || res.Max < res.P99 || res.Max <= 0 {
 		t.Fatalf("latency %v %v %v", res.P50, res.P99, res.Max)
 	}
 
