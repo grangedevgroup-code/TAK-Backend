@@ -750,6 +750,9 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 	if cfg.Metrics.Token != "" {
 		cfg.Metrics.Token = "********"
 	}
+	if cfg.Certificates.External.Password != "" {
+		cfg.Certificates.External.Password = "********"
+	}
 	dfs := make([]DataFeedConfig, len(cfg.DataFeeds))
 	for i, f := range cfg.DataFeeds {
 		if f.Password != "" {
@@ -801,7 +804,7 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		old := c.Peers
 		oldFeeds := c.DataFeeds
 		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
-		oldBind, oldKey, oldMail, oldTG, oldMetrics := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password, c.Telegram.Token, c.Metrics.Token
+		oldBind, oldKey, oldMail, oldTG, oldMetrics, oldCA := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password, c.Telegram.Token, c.Metrics.Token, c.Certificates.External.Password
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
 		}
@@ -822,6 +825,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.Metrics.Token == "********" {
 			c.Metrics.Token = oldMetrics
+		}
+		if c.Certificates.External.Password == "********" {
+			c.Certificates.External.Password = oldCA
 		}
 		if c.Telegram.Token == "********" {
 			c.Telegram.Token = oldTG

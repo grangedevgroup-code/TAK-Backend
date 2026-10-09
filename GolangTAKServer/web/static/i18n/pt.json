@@ -1274,5 +1274,19 @@
  "Link or federate name the traffic comes from. * matches any; names may end with *.": "Nome do link ou federado de onde vem o tráfego. * corresponde a qualquer um; nomes podem terminar com *.",
  "Optional CoT types, comma separated. Empty passes everything.": "Tipos CoT opcionais separados por vírgulas. Vazio deixa passar tudo.",
  "Act as a hub between other servers: each partner links or federates here once, and the rules decide whose traffic reaches whom. Without the hub, traffic flows between all links that share groups.": "Funcionar como hub entre outros servidores: cada parceiro se conecta aqui uma vez, e as regras decidem qual tráfego chega a quem. Sem o hub, o tráfego flui entre todos os links que compartilham grupos.",
- "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Ainda não há regras. Com o hub ligado e sem regras, links e federados não trocam tráfego."
+ "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Ainda não há regras. Com o hub ligado e sem regras, links e federados não trocam tráfego.",
+ "External certificate authority": "Autoridade certificadora externa",
+ "Sign device certificates with": "Assinar certificados de dispositivos com",
+ "This server's own CA": "A CA própria deste servidor",
+ "Microsoft AD CS web enrollment (certsrv)": "Inscrição web do Microsoft AD CS (certsrv)",
+ "A command (certreq, step-ca, Vault...)": "Um comando (certreq, step-ca, Vault...)",
+ "The server's own certificate and server links always use this server's CA.": "O certificado do próprio servidor e os links entre servidores sempre usam a CA deste servidor.",
+ "certsrv address": "Endereço do certsrv",
+ "Basic authentication must be enabled on the certsrv site.": "A autenticação básica precisa estar ativada no site certsrv.",
+ "Certificate template": "Modelo de certificado",
+ "Do not verify the certsrv HTTPS certificate": "Não verificar o certificado HTTPS do certsrv",
+ "Signing command": "Comando de assinatura",
+ "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM.": "Recebe a solicitação (PEM) na entrada padrão e GOLANGTAKSERVER_CN, e imprime o certificado e sua cadeia em PEM.",
+ "CA chain to trust": "Cadeia de CA confiável",
+ "Optional. Fetched from certsrv or taken from the command output when empty.": "Opcional. Se vazio, é obtida do certsrv ou da saída do comando."
 }

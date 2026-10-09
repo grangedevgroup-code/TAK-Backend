@@ -1295,5 +1295,19 @@
  "Link or federate name the traffic comes from. * matches any; names may end with *.": "Назва зв'язку чи федерата, звідки йде трафік. * означає будь-який; назви можуть закінчуватися на *.",
  "Optional CoT types, comma separated. Empty passes everything.": "Необов'язкові типи CoT через кому. Порожнє поле пропускає все.",
  "Act as a hub between other servers: each partner links or federates here once, and the rules decide whose traffic reaches whom. Without the hub, traffic flows between all links that share groups.": "Працювати як хаб між іншими серверами: кожен партнер під'єднується сюди один раз, а правила визначають, чий трафік до кого доходить. Без хаба трафік іде між усіма зв'язками зі спільними групами.",
- "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Правил ще немає. Коли хаб увімкнено без правил, зв'язки й федерати не передають трафік одне одному."
+ "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Правил ще немає. Коли хаб увімкнено без правил, зв'язки й федерати не передають трафік одне одному.",
+ "External certificate authority": "Зовнішній центр сертифікації",
+ "Sign device certificates with": "Підписувати сертифікати пристроїв за допомогою",
+ "This server's own CA": "Власний ЦС цього сервера",
+ "Microsoft AD CS web enrollment (certsrv)": "Веб-реєстрація Microsoft AD CS (certsrv)",
+ "A command (certreq, step-ca, Vault...)": "Команди (certreq, step-ca, Vault...)",
+ "The server's own certificate and server links always use this server's CA.": "Власний сертифікат сервера та зв'язки з серверами завжди використовують ЦС цього сервера.",
+ "certsrv address": "Адреса certsrv",
+ "Basic authentication must be enabled on the certsrv site.": "На сайті certsrv має бути ввімкнена базова автентифікація.",
+ "Certificate template": "Шаблон сертифіката",
+ "Do not verify the certsrv HTTPS certificate": "Не перевіряти HTTPS-сертифікат certsrv",
+ "Signing command": "Команда підпису",
+ "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM.": "Отримує запит (PEM) зі стандартного входу та GOLANGTAKSERVER_CN і виводить сертифікат і його ланцюжок у PEM.",
+ "CA chain to trust": "Довірений ланцюжок ЦС",
+ "Optional. Fetched from certsrv or taken from the command output when empty.": "Необов'язково. Якщо порожньо, береться з certsrv або з виводу команди."
 }

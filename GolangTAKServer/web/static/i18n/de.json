@@ -1255,5 +1255,19 @@
  "Link or federate name the traffic comes from. * matches any; names may end with *.": "Name der Verbindung oder des Partners, von dem der Verkehr kommt. * passt auf alle; Namen dürfen mit * enden.",
  "Optional CoT types, comma separated. Empty passes everything.": "Optionale CoT-Typen, durch Kommas getrennt. Leer lässt alles durch.",
  "Act as a hub between other servers: each partner links or federates here once, and the rules decide whose traffic reaches whom. Without the hub, traffic flows between all links that share groups.": "Als Hub zwischen anderen Servern arbeiten: Jeder Partner verbindet sich einmal hierher, und die Regeln entscheiden, wessen Verkehr wen erreicht. Ohne Hub fließt Verkehr zwischen allen Verbindungen mit gemeinsamen Gruppen.",
- "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Noch keine Regeln. Mit eingeschaltetem Hub und ohne Regeln geben Verbindungen und Partner keinen Verkehr untereinander weiter."
+ "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Noch keine Regeln. Mit eingeschaltetem Hub und ohne Regeln geben Verbindungen und Partner keinen Verkehr untereinander weiter.",
+ "External certificate authority": "Externe Zertifizierungsstelle",
+ "Sign device certificates with": "Gerätezertifikate signieren mit",
+ "This server's own CA": "Eigene CA dieses Servers",
+ "Microsoft AD CS web enrollment (certsrv)": "Microsoft AD CS Webregistrierung (certsrv)",
+ "A command (certreq, step-ca, Vault...)": "Ein Befehl (certreq, step-ca, Vault...)",
+ "The server's own certificate and server links always use this server's CA.": "Das eigene Zertifikat des Servers und Serververbindungen nutzen immer die CA dieses Servers.",
+ "certsrv address": "certsrv-Adresse",
+ "Basic authentication must be enabled on the certsrv site.": "Auf der certsrv-Seite muss Basic-Authentifizierung aktiviert sein.",
+ "Certificate template": "Zertifikatvorlage",
+ "Do not verify the certsrv HTTPS certificate": "HTTPS-Zertifikat von certsrv nicht prüfen",
+ "Signing command": "Signierbefehl",
+ "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM.": "Erhält die Anfrage (PEM) auf der Standardeingabe sowie GOLANGTAKSERVER_CN und gibt das Zertifikat und seine Kette als PEM aus.",
+ "CA chain to trust": "Vertrauenswürdige CA-Kette",
+ "Optional. Fetched from certsrv or taken from the command output when empty.": "Optional. Wird bei leerem Feld von certsrv geholt oder aus der Befehlsausgabe übernommen."
 }

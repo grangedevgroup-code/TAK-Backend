@@ -3921,7 +3921,7 @@
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {}, vbm = cfg.vbm || {}, cl = cfg.calls || {};
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {}, vbm = cfg.vbm || {}, cl = cfg.calls || {}, xca = (cfg.certificates && cfg.certificates.external) || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -4122,6 +4122,15 @@
         field("Package password", input("cpw", c.password), "Password of the .p12 files in connection packages."),
         field("Client validity (days)", n("cdays", c.clientDays)),
         field("Server validity (days)", n("sdays", c.serverDays)),
+        sub("External certificate authority"),
+        field("Sign device certificates with", select("xca_mode", [["", "This server's own CA"], ["certsrv", "Microsoft AD CS web enrollment (certsrv)"], ["command", "A command (certreq, step-ca, Vault...)"]], xca.mode || ""), "The server's own certificate and server links always use this server's CA."),
+        field("certsrv address", input("xca_url", xca.url || "", { placeholder: "https://ca.corp.example/certsrv" }), "Basic authentication must be enabled on the certsrv site."),
+        field("Certificate template", input("xca_tpl", xca.template || "", { placeholder: "User" })),
+        field("User name", input("xca_user", xca.username || "", { placeholder: "CORP\\takserver" })),
+        field("Password", input("xca_pw", xca.password || "", { type: "password" })),
+        field("Skip certificate check", checkbox("xca_ins", xca.insecure, "Do not verify the certsrv HTTPS certificate")),
+        field("Signing command", input("xca_cmd", [xca.command || "", ...(xca.args || [])].filter(Boolean).join(" "), { placeholder: "/usr/local/bin/sign-csr --profile tak" }), "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM."),
+        field("CA chain to trust", h("textarea", { id: "xca_chain", rows: 4, style: "font-size:12px", placeholder: "-----BEGIN CERTIFICATE-----" }, xca.chainPem || ""), "Optional. Fetched from certsrv or taken from the command output when empty."),
       ],
       updates: [
         "New releases are published on GitHub. Installing one keeps all settings and data.",
@@ -4338,7 +4347,17 @@
         vbm: { vbmEnabled: val(form, "vbm_on"), saDisabled: val(form, "vbm_sa"), chatDisabled: val(form, "vbm_chat"), networkClassification: val(form, "vbm_class"), copTool: val(form, "vbm_tool") },
         updates: { auto: val(form, "upd_auto"), hour: Math.min(23, num(form, "upd_hour")) },
         rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },
-        certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
+        certificates: Object.assign({}, c, {
+          organization: val(form, "corg"),
+          unit: val(form, "cunit"),
+          password: val(form, "cpw"),
+          clientDays: num(form, "cdays"),
+          serverDays: num(form, "sdays"),
+          external: (() => {
+            const parts = val(form, "xca_cmd").split(/\s+/).filter(Boolean);
+            return { mode: val(form, "xca_mode"), url: val(form, "xca_url"), template: val(form, "xca_tpl"), username: val(form, "xca_user"), password: val(form, "xca_pw"), insecure: val(form, "xca_ins"), command: parts[0] || "", args: parts.slice(1), chainPem: form.querySelector("#xca_chain").value.trim() };
+          })(),
+        }),
         ldap: ldapFromForm(),
         meshtastic: Object.assign({}, mt, {
           enabled: val(form, "mt_on"),

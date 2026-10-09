@@ -25,22 +25,32 @@ func (s *Server) streamTLSConfig(requireCert bool) *tls.Config {
 	if requireCert {
 		auth = tls.RequireAndVerifyClientCert
 	}
-	return &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		ClientAuth: auth,
-		ClientCAs:  s.pki.ClientPool(),
-		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-			return s.pki.ServerCert(), nil
-		},
-		VerifyPeerCertificate: func(_ [][]byte, chains [][]*x509.Certificate) error {
-			for _, chain := range chains {
-				if len(chain) > 0 && s.dir.IsRevoked(chain[0].SerialNumber.Text(16)) {
-					return errors.New("certificate has been revoked")
+	build := func() *tls.Config {
+		return &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			ClientAuth: auth,
+			ClientCAs:  s.pki.ClientPool(),
+			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+				return s.pki.ServerCert(), nil
+			},
+			VerifyPeerCertificate: func(_ [][]byte, chains [][]*x509.Certificate) error {
+				for _, chain := range chains {
+					if len(chain) > 0 && s.dir.IsRevoked(chain[0].SerialNumber.Text(16)) {
+						return errors.New("certificate has been revoked")
+					}
 				}
-			}
-			return nil
-		},
+				return nil
+			},
+		}
 	}
+	cfg := build()
+	cfg.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+		if s.pki.external() == nil {
+			return nil, nil
+		}
+		return build(), nil
+	}
+	return cfg
 }
 
 func (s *Server) identityFromCert(cert *x509.Certificate) (*Identity, error) {

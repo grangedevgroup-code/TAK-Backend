@@ -42,12 +42,13 @@ type MeshConfig struct {
 }
 
 type CertConfig struct {
-	Organization string `json:"organization"`
-	Unit         string `json:"unit"`
-	Password     string `json:"password"`
-	KeyBits      int    `json:"keyBits"`
-	ClientDays   int    `json:"clientDays"`
-	ServerDays   int    `json:"serverDays"`
+	Organization string           `json:"organization"`
+	Unit         string           `json:"unit"`
+	Password     string           `json:"password"`
+	KeyBits      int              `json:"keyBits"`
+	ClientDays   int              `json:"clientDays"`
+	ServerDays   int              `json:"serverDays"`
+	External     ExternalCAConfig `json:"external"`
 }
 
 type RetentionConfig struct {

@@ -427,6 +427,10 @@ golangtakserver bench --host tak.example.org --clients 500 --duration 60
 golangtakserver bench --tls --cert alice.p12 --trust truststore.p12 --clients 200
 ```
 
+## Company certificate authority
+
+Device certificates can come from an existing certificate authority instead of the server's own. Under **Settings**, **Certificates**, **External certificate authority**, choose Microsoft AD CS web enrollment (certsrv, with a certificate template and an account that may enroll, Basic authentication enabled) or a signing command that receives the request as PEM on standard input and prints the certificate and chain (for `certreq`, step-ca, HashiCorp Vault and similar). Enrollment, QR codes and data packages then hand out certificates from that CA, and devices presenting them are accepted. The server's own certificate and server links keep using the server's CA.
+
 ## Settings and data
 
 | System | Data directory |

@@ -26,6 +26,8 @@ type PKI struct {
 	leaf    *x509.Certificate
 	trust   []byte
 	trustPw string
+	extMu   sync.RWMutex
+	ext     *externalCA
 }
 
 func certDir(dataDir string) string { return filepath.Join(dataDir, "certs") }
@@ -205,18 +207,16 @@ func (p *PKI) TrustStore() ([]byte, error) {
 	return t, nil
 }
 
-func (p *PKI) ClientPool() *x509.CertPool { return p.CA.Pool() }
-
 func (p *PKI) NewClientP12(cn string, validity time.Duration, channels bool) ([]byte, *x509.Certificate, error) {
 	key, err := pki.NewKey(2048)
 	if err != nil {
 		return nil, nil, err
 	}
-	cert, err := p.CA.IssueClient(cn, &key.PublicKey, channels, validity)
+	cert, chain, err := p.issueClientKey(cn, key, channels, validity)
 	if err != nil {
 		return nil, nil, err
 	}
-	data, err := pki.EncodePKCS12(key, cert, []*x509.Certificate{p.CA.Cert}, p.trustPw, cn)
+	data, err := pki.EncodePKCS12(key, cert, chain, p.trustPw, cn)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,7 +228,7 @@ func (p *PKI) NewClientPEM(cn string, validity time.Duration) (certPEM, keyPEM [
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	cert, err = p.CA.IssueClient(cn, &key.PublicKey, false, validity)
+	cert, _, err = p.issueClientKey(cn, key, false, validity)
 	if err != nil {
 		return nil, nil, nil, err
 	}

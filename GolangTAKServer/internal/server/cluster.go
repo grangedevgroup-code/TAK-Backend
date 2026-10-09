@@ -394,7 +394,7 @@ func (s *Server) clusterFetchBlob(key string, raw []byte, del bool) {
 }
 
 func (s *Server) clusterTLS(host string) *tls.Config {
-	return &tls.Config{RootCAs: s.pki.ClientPool(), ServerName: host, MinVersion: tls.VersionTLS12}
+	return &tls.Config{RootCAs: s.pki.CA.Pool(), ServerName: host, MinVersion: tls.VersionTLS12}
 }
 
 func (s *Server) clusterDownload(base, hash string) error {

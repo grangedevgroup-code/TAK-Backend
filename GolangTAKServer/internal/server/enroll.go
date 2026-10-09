@@ -52,7 +52,7 @@ func (s *Server) signFromRequest(w http.ResponseWriter, r *http.Request) (*x509.
 	clientUID := firstNonEmpty(q.Get("clientUid"), q.Get("clientUID"))
 	channels := q.Get("version") != "" || s.Config().Channels
 	validity := time.Duration(s.Config().Certificates.ClientDays) * 24 * time.Hour
-	cert, err := s.pki.CA.IssueClient(id.Name, csr.PublicKey, channels, validity)
+	cert, err := s.pki.issueClientCSR(id.Name, csr, channels, validity)
 	if err != nil {
 		s.log.Error("certificate signing failed", "user", id.Name, "err", err)
 		writeText(w, http.StatusInternalServerError, "certificate signing failed")

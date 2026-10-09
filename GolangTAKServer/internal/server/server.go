@@ -151,6 +151,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 		s.logs.Close()
 		return nil, err
 	}
+	s.pki.SetExternal(cfg.Certificates.External)
 	s.hub = NewHub(s, s.log, cfg.Limits.QueueLength, cfg.Limits.MaxClients, cfg.Limits.CacheLimit)
 	s.hub.SetRateLimits(cfg.RateLimits)
 	s.hub.vbm.Store(&cfg.VBM)
@@ -196,6 +197,9 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	s.hub.SetRateLimits(next.RateLimits)
 	s.hub.vbm.Store(&next.VBM)
 	s.hub.fedHub.Store(&next.FederationHub)
+	if s.pki != nil {
+		s.pki.SetExternal(next.Certificates.External)
+	}
 	s.level.Set(ParseLevel(next.LogLevel))
 	return next, nil
 }
