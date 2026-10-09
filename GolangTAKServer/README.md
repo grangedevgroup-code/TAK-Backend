@@ -263,6 +263,10 @@ golangtakserver config set federation.enabled true ports.federation 9000 ports.f
 
 Give the other server this server's CA (`/api/ca.pem`) and add its CA under **Server links**, **Federation**. Version 2 also shares public missions, their files, logs, parent missions and expiration with TAK Server, both ways and including missions that existed before the link. Federated deletes are off unless you allow them (`federation.allowFederatedDelete`), and `federation.disableMissionFederation` turns mission sharing off.
 
+## Federation hub
+
+Turn on **Server links**, **Federation hub** to broker traffic between partner servers. Each partner links or federates with this server once, and rules decide whose traffic reaches whom, optionally limited to certain CoT types (for example only positions from partner A to partner B, everything from partner B to all). **Broker only** keeps federated traffic off this server's own devices. TAK Servers federate with the hub the usual way (federation v2 on port 9001, or v1 on 9000).
+
 ## Clusters
 
 Run several servers as one, for more devices or so a server can fail without taking everyone offline. Devices connect to any node with the same certificates and see everyone on every node. Users, groups, certificates, missions, files, devices, data packages and pending chats are shared, and live traffic passes between all nodes.

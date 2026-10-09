@@ -39,6 +39,7 @@ type Hub struct {
 	RateRefused atomic.Uint64
 	limits      atomic.Pointer[RateLimitConfig]
 	vbm         atomic.Pointer[VBMConfig]
+	fedHub      atomic.Pointer[FederationHubConfig]
 	connects    connLimiter
 	queueLen    int
 	maxClients  int
@@ -461,7 +462,7 @@ func (h *Hub) broadcast(m *Message) {
 	defer h.mu.RUnlock()
 	vb := h.vbmBlocks(m)
 	for _, c := range h.clients {
-		if c == m.Source || !h.visible(c, m) || (vb && !c.Relay) || !h.allowDelivery(c, m) {
+		if c == m.Source || !h.visible(c, m) || (vb && !c.Relay) || !h.fedHubAllows(m, c) || !h.allowDelivery(c, m) {
 			continue
 		}
 		if c.Send(m) {
@@ -487,7 +488,7 @@ func (h *Hub) deliverExplicit(m *Message, dests []cot.Dest) {
 			missing = append(missing, d)
 			continue
 		}
-		if target == m.Source || seen[target] || (!target.Relay && h.vbmBlocks(m)) {
+		if target == m.Source || seen[target] || (!target.Relay && h.vbmBlocks(m)) || !h.fedHubAllows(m, target) {
 			continue
 		}
 		seen[target] = true

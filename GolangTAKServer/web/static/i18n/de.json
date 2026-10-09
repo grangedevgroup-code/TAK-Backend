@@ -1241,5 +1241,19 @@
  "Stop sharing data and traffic with the other nodes? This server keeps its data and certificates.": "Daten und Verkehr nicht mehr mit den anderen Knoten teilen? Dieser Server behält seine Daten und Zertifikate.",
  "The code contains this cluster's certificate authority, so send it privately. Use it on a fresh server: the new node takes the cluster's users, devices, missions and files.": "Der Code enthält die Zertifizierungsstelle dieses Clusters, senden Sie ihn also vertraulich. Verwenden Sie ihn auf einem neuen Server: Der neue Knoten übernimmt Benutzer, Geräte, Missionen und Dateien des Clusters.",
  "This server is a node of a cluster. Nodes share users, groups, certificates, missions, files and devices, and pass live traffic to each other, so devices can connect to any node.": "Dieser Server ist ein Knoten eines Clusters. Knoten teilen Benutzer, Gruppen, Zertifikate, Missionen, Dateien und Geräte und geben Live-Verkehr weiter, sodass sich Geräte mit jedem Knoten verbinden können.",
- "Run several servers as one: devices connect to any node, and users, certificates, missions, files and live traffic are shared. Start a cluster here, then join other servers to it.": "Mehrere Server als einen betreiben: Geräte verbinden sich mit einem beliebigen Knoten, und Benutzer, Zertifikate, Missionen, Dateien und Live-Verkehr werden geteilt. Starten Sie hier einen Cluster und lassen Sie andere Server beitreten."
+ "Run several servers as one: devices connect to any node, and users, certificates, missions, files and live traffic are shared. Start a cluster here, then join other servers to it.": "Mehrere Server als einen betreiben: Geräte verbinden sich mit einem beliebigen Knoten, und Benutzer, Zertifikate, Missionen, Dateien und Live-Verkehr werden geteilt. Starten Sie hier einen Cluster und lassen Sie andere Server beitreten.",
+ "Federation hub": "Föderations-Hub",
+ "Broker": "Vermittler",
+ "To": "An",
+ "Types": "Typen",
+ "All": "Alle",
+ "Add rule": "Regel hinzufügen",
+ "Edit rule": "Regel bearbeiten",
+ "Only these types": "Nur diese Typen",
+ "Route traffic between links and federates only as the rules allow": "Verkehr zwischen Verbindungen und Föderationspartnern nur nach den Regeln weiterleiten",
+ "Broker only: do not show federated traffic on this server's own devices": "Nur vermitteln: föderierten Verkehr nicht auf den eigenen Geräten dieses Servers zeigen",
+ "Link or federate name the traffic comes from. * matches any; names may end with *.": "Name der Verbindung oder des Partners, von dem der Verkehr kommt. * passt auf alle; Namen dürfen mit * enden.",
+ "Optional CoT types, comma separated. Empty passes everything.": "Optionale CoT-Typen, durch Kommas getrennt. Leer lässt alles durch.",
+ "Act as a hub between other servers: each partner links or federates here once, and the rules decide whose traffic reaches whom. Without the hub, traffic flows between all links that share groups.": "Als Hub zwischen anderen Servern arbeiten: Jeder Partner verbindet sich einmal hierher, und die Regeln entscheiden, wessen Verkehr wen erreicht. Ohne Hub fließt Verkehr zwischen allen Verbindungen mit gemeinsamen Gruppen.",
+ "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other.": "Noch keine Regeln. Mit eingeschaltetem Hub und ohne Regeln geben Verbindungen und Partner keinen Verkehr untereinander weiter."
 }

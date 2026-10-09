@@ -154,6 +154,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 	s.hub = NewHub(s, s.log, cfg.Limits.QueueLength, cfg.Limits.MaxClients, cfg.Limits.CacheLimit)
 	s.hub.SetRateLimits(cfg.RateLimits)
 	s.hub.vbm.Store(&cfg.VBM)
+	s.hub.fedHub.Store(&cfg.FederationHub)
 	s.perf = &perfSampler{}
 	s.dir.OnChange = s.refreshUser
 	s.dir.External = s.ldapAuth
@@ -194,6 +195,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	s.cfgMu.Unlock()
 	s.hub.SetRateLimits(next.RateLimits)
 	s.hub.vbm.Store(&next.VBM)
+	s.hub.fedHub.Store(&next.FederationHub)
 	s.level.Set(ParseLevel(next.LogLevel))
 	return next, nil
 }

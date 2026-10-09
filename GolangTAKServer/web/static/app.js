@@ -3400,7 +3400,70 @@
       clear(fedBox).append(
         h("p", null, "Federation shares traffic with TAK Server instances that connect with mutual TLS. Give the other side this server's CA certificate (", h("a", { href: "/api/ca.pem" }, "download"), ") and add theirs below. To connect out to a federation server, add a link with a fed:// URL for version 1 or fed2:// for version 2."),
         table([{ title: "Federate", key: "name" }, { title: "Address", key: "remote" }, { title: "Protocol", render: (r) => h("span", { class: "pill" }, r.version || "v1") }, { title: "Direction", key: "direction" }, { title: "Contacts", key: "contacts" }, { title: "Since", render: (r) => fmtAgo(r.since) }], (fed && fed.federates) || [], "No federates connected."),
-        form
+        form,
+        hubPanel(cfg.federationHub || {}, [...peers.map((p) => p.name), ...((fed && fed.federates) || []).map((f) => f.name)])
+      );
+    };
+    const hubPanel = (hub, names) => {
+      const rules = (hub.rules || []).slice();
+      const saveHub = async (next) => {
+        await api("PUT", "/api/settings", { federationHub: next });
+        toast("Saved");
+        load().catch(fail);
+      };
+      const editRule = (idx) => {
+        const r = idx >= 0 ? rules[idx] : { from: "", to: "*", types: [] };
+        const list = h("datalist", { id: "hubnames" }, ["*", ...new Set(names)].map((n) => h("option", { value: n })));
+        const f = h(
+          "form",
+          { class: "grid" },
+          list,
+          field("From", input("hfrom", r.from, { required: true, list: "hubnames", placeholder: "partner-a or *" }), "Link or federate name the traffic comes from. * matches any; names may end with *."),
+          field("To", input("hto", r.to, { required: true, list: "hubnames", placeholder: "partner-b or *" })),
+          field("Only these types", input("htypes", (r.types || []).join(", "), { placeholder: "a-f-*, b-t-f" }), "Optional CoT types, comma separated. Empty passes everything.")
+        );
+        modal(idx >= 0 ? "Edit rule" : "Add rule", f, [
+          { label: "Cancel" },
+          {
+            label: "Save",
+            primary: true,
+            run: async () => {
+              const next = { from: val(f, "hfrom"), to: val(f, "hto"), types: splitList(val(f, "htypes")) };
+              if (idx >= 0) rules[idx] = next;
+              else rules.push(next);
+              await saveHub(Object.assign({}, hub, { rules }));
+            },
+          },
+        ]);
+      };
+      const on = checkbox("hub_on", hub.enabled, "Route traffic between links and federates only as the rules allow");
+      const broker = checkbox("hub_broker", hub.brokerOnly, "Broker only: do not show federated traffic on this server's own devices");
+      const toggles = h("form", { class: "grid" }, field("Federation hub", on), field("Broker", broker));
+      for (const el of toggles.querySelectorAll("input")) el.addEventListener("change", () => saveHub({ enabled: val(toggles, "hub_on"), brokerOnly: val(toggles, "hub_broker"), rules }).catch(fail));
+      return h(
+        "div",
+        null,
+        h("h2", null, "Federation hub"),
+        h("p", { class: "muted" }, "Act as a hub between other servers: each partner links or federates here once, and the rules decide whose traffic reaches whom. Without the hub, traffic flows between all links that share groups."),
+        toggles,
+        table(
+          [
+            { title: "From", render: (r) => h("b", null, r.from) },
+            { title: "To", render: (r) => h("b", null, r.to) },
+            { title: "Types", render: (r) => ((r.types || []).length ? r.types.join(", ") : "All") },
+            {
+              title: "",
+              render: (r) =>
+                h("div", { class: "cluster-actions" }, btn("Edit", () => editRule(rules.indexOf(r)), "small", "edit"), btn("Delete", () => {
+                  rules.splice(rules.indexOf(r), 1);
+                  saveHub(Object.assign({}, hub, { rules })).catch(fail);
+                }, "small danger", "trash")),
+            },
+          ],
+          rules,
+          "No rules yet. With the hub on and no rules, links and federates do not pass traffic to each other."
+        ),
+        h("div", { class: "cluster-actions" }, btn("Add rule", () => editRule(-1), "primary", "plus"))
       );
     };
     const inviteCode = () => {
