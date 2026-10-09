@@ -170,6 +170,10 @@ main() {
 
 	"$BIN" version || die "the downloaded program does not run on this system ($OS/$ARCH)"
 
+	if [ -n "${GOLANGTAK_ZEROTIER:-}" ]; then
+		set -- "$@" --zerotier "$GOLANGTAK_ZEROTIER"
+	fi
+
 	status=0
 	if [ "$(id -u)" -ne 0 ]; then
 		if have sudo; then

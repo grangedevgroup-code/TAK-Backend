@@ -88,6 +88,7 @@ function Install-GolangTAK {
         if ($LASTEXITCODE -ne 0) { throw 'the downloaded program does not run on this system' }
 
         $installArgs = @('install') + @($Arguments | Where-Object { $_ })
+        if ($env:GOLANGTAK_ZEROTIER) { $installArgs += @('--zerotier', $env:GOLANGTAK_ZEROTIER) }
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
         $isAdmin = (New-Object Security.Principal.WindowsPrincipal($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if ($isAdmin) {

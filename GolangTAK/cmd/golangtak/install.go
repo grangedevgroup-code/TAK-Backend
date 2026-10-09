@@ -397,6 +397,19 @@ func cmdInstall(a *args) error {
 		}
 	}
 
+	if id := a.val("zerotier"); id != "" {
+		step("Joining ZeroTier network %s", id)
+		ips, err := zerotierJoin(dir, id, 60*time.Second)
+		switch {
+		case err != nil:
+			warn("ZeroTier: %v", err)
+		case len(ips) > 0:
+			step("ZeroTier address %s (added to the server certificate)", strings.Join(ips, ", "))
+		default:
+			warn("ZeroTier has not assigned an address yet; authorize this node, then run 'golangtak zerotier status'")
+		}
+	}
+
 	fmt.Printf("\nGolangTAK %s is installed and running", version)
 	if failed > 0 {
 		fmt.Printf(" (%d self-test check(s) failed, see above)", failed)

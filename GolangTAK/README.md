@@ -49,8 +49,22 @@ sudo cat /var/lib/golangtak/admin-password.txt
 ```
 
 ```powershell
-Get-Content C:ProgramDataGolangTAKadmin-password.txt
+Get-Content C:\ProgramData\GolangTAK\admin-password.txt
 ```
+
+### Reach the server from anywhere with ZeroTier
+
+Behind a router you cannot change, or on a phone network? Create a free network at [my.zerotier.com](https://my.zerotier.com), then add its network ID to the install command. GolangTAK installs ZeroTier, joins the network and adds its ZeroTier address to the server certificate. Devices with the ZeroTier app on the same network connect to that address, with no ports opened to the internet.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.sh | GOLANGTAK_ZEROTIER=NETWORK_ID sh
+```
+
+```powershell
+$env:GOLANGTAK_ZEROTIER = 'NETWORK_ID'; irm https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAK/scripts/install.ps1 | iex
+```
+
+On a private network, authorize the server in the network's member list; `golangtak zerotier status` shows its node ID and address. An installed server can join later with `golangtak zerotier join NETWORK_ID`.
 
 ### Update, uninstall, other versions
 
@@ -309,6 +323,7 @@ Set any port to 0 to turn that service off.
 | `golangtak logs [-f]` | Server log |
 | `golangtak selftest` | Test every port of the running server |
 | `golangtak backup [FILE]` | Save settings, users, certificates and missions |
+| `golangtak zerotier status` / `join NETWORK_ID` / `leave NETWORK_ID` | Install ZeroTier and join a virtual network |
 | `golangtak bench [--clients N] [--every S] [--duration S]` | Load test this or any TAK server with simulated clients: throughput, delivery and latency |
 
 `golangtak help COMMAND` shows every option. Commands work whether the server is running or stopped. Add `--data DIR` to use another data directory.
