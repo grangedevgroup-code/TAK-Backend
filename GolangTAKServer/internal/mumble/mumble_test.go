@@ -268,6 +268,9 @@ func TestVoiceSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.expect(msgUserState, func(p []byte) bool { m, _ := pbParse(p); return m.str(3) == "bravo" })
+	for deadline := time.Now().Add(2 * time.Second); len(s.Users()) != 2 && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if len(s.Users()) != 2 {
 		t.Fatalf("users %v", s.Users())
 	}

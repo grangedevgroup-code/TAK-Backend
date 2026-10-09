@@ -29,6 +29,7 @@ type ACMEConfig struct {
 	Domains       []string `json:"domains"`
 	Directory     string   `json:"directory,omitempty"`
 	ChallengePort int      `json:"challengePort"`
+	Off           bool     `json:"off,omitempty"`
 }
 
 type acmeState struct {
@@ -39,6 +40,24 @@ type acmeState struct {
 	lastErr    string
 	lastTry    time.Time
 	running    bool
+}
+
+func (s *Server) autoACME() bool {
+	ac := s.Config().ACME
+	if ac.Enabled || ac.Off || len(s.publicNames()) == 0 {
+		return false
+	}
+	if s.pubCert != nil && s.refreshPublicCert(false) != nil {
+		return false
+	}
+	return true
+}
+
+func (s *Server) acmeTargets() []string {
+	if d := s.acmeDomains(); len(d) > 0 || s.Config().ACME.Enabled {
+		return d
+	}
+	return s.publicNames()
 }
 
 func (s *Server) acmeDomains() []string {
@@ -126,7 +145,7 @@ func (s *Server) startACME() {
 		defer t.Stop()
 		delay := time.Duration(0)
 		for {
-			if s.Config().ACME.Enabled {
+			if s.Config().ACME.Enabled || s.autoACME() {
 				var err error
 				s.runJobFn("letsencrypt", false, func() error {
 					err = s.renewACME(false)
@@ -157,7 +176,7 @@ func (s *Server) needsACME() bool {
 	if c == nil || c.Leaf == nil || time.Until(c.Leaf.NotAfter) < 30*24*time.Hour {
 		return true
 	}
-	for _, d := range s.acmeDomains() {
+	for _, d := range s.acmeTargets() {
 		if c.Leaf.VerifyHostname(d) != nil {
 			return true
 		}
@@ -167,7 +186,7 @@ func (s *Server) needsACME() bool {
 
 func (s *Server) renewACME(force bool) error {
 	ac := s.Config().ACME
-	domains := s.acmeDomains()
+	domains := s.acmeTargets()
 	if len(domains) == 0 {
 		return s.acmeFail(errors.New("add at least one DNS name that points at this server"))
 	}
@@ -199,6 +218,10 @@ func (s *Server) renewACME(force bool) error {
 	if port != s.Config().Ports.HTTP {
 		ln, err := s.listenTCP(port)
 		if err != nil {
+			if !ac.Enabled {
+				s.log.Debug("automatic Let's Encrypt skipped: port is in use", "port", port)
+				return nil
+			}
 			return s.acmeFail(errors.New("port " + strconv.Itoa(port) + " is needed for Let's Encrypt validation: " + err.Error()))
 		}
 		mux := http.NewServeMux()

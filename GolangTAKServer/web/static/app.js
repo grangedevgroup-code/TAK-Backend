@@ -1913,6 +1913,10 @@
       clear(body);
       const enrollBox = h("div", { class: "qr" }, h("h3", null, "ATAK and WinTAK enrollment"), h("p", { class: "muted small" }, "Creates a one-time code for " + user + ". In ATAK: Settings, Network, Servers, Add, Scan QR."));
       const enrollOut = h("div");
+      const ipHost = /^[0-9.]+$|:/.test(host);
+      if (!info.enrollTrusted || ipHost) {
+        enrollBox.append(h("div", { class: "notice" }, "ATAK checks the certificate on port " + info.ports.enroll + " before it enrolls, and this server's own certificate is not one it trusts, so the QR code ends with \"TAK server cannot be verified\". Use a connection package with a certificate (it carries the trust store), or give the server a DNS name: it then gets a Let's Encrypt certificate on its own, or uses the one a reverse proxy such as Caddy or certbot already has."));
+      }
       enrollBox.append(
         enrollOut,
         btn("Create enrollment QR code", async () => {

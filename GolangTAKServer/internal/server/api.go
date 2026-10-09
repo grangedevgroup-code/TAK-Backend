@@ -170,9 +170,17 @@ func (s *Server) connectHosts() []string {
 func (s *Server) apiConnect(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Config()
 	host := firstNonEmpty(r.URL.Query().Get("host"), cfg.Address)
+	wsURL := "ws://" + HostForURL(host) + ":" + itoa(cfg.Ports.WebSocket) + "/"
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") && r.URL.Query().Get("host") == "" {
+		wsURL = "wss://" + HostForURL(s.hostOf(r)) + "/"
+	}
 	tcpPort := cfg.Ports.TCP
 	if tcpPort == 0 {
 		tcpPort = cfg.Ports.TCPAlt
+	}
+	trusted, trustSource := s.EnrollTrust()
+	if trusted && net.ParseIP(strings.Trim(host, "[]")) != nil {
+		trusted = false
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": cfg.Name, "host": host, "hosts": s.connectHosts(), "ports": cfg.Ports,
@@ -182,10 +190,12 @@ func (s *Server) apiConnect(w http.ResponseWriter, r *http.Request) {
 		"tcpConnect":         host + ":" + itoa(tcpPort) + ":tcp",
 		"enrollUrl":          "https://" + HostForURL(host) + ":" + itoa(cfg.Ports.Enroll),
 		"dashboardUrl":       "https://" + HostForURL(host) + ":" + itoa(cfg.Ports.Enroll) + "/",
-		"websocketUrl":       "ws://" + HostForURL(host) + ":" + itoa(cfg.Ports.WebSocket) + "/",
+		"websocketUrl":       wsURL,
 		"caFingerprint":      pki.Fingerprint(s.pki.CA.Cert),
 		"truststorePassword": cfg.Certificates.Password,
 		"allowAnonymous":     cfg.AllowAnonymous,
+		"enrollTrusted":      trusted,
+		"enrollTrustSource":  trustSource,
 	})
 }
 

@@ -188,6 +188,8 @@ Open the dashboard and go to **Connect a device**:
 
 The same is available from a terminal: `golangtakserver qr USER` prints enrollment QR codes and `golangtakserver user package USER` saves a connection package.
 
+ATAK checks the certificate on the enrollment port (8446) before it enrolls by QR code. When the server has a DNS name, port 8446 uses a publicly trusted certificate automatically: a Let's Encrypt certificate it requests itself when port 80 is free, or the one Caddy or certbot already keeps for that name on the same machine (including Caddy in Docker), reloaded when it renews. Set `certificates.publicCertFile` and `certificates.publicKeyFile` to use another one, and `letsEncrypt.off` to stop the automatic request. A server reached only by an IP address keeps its own certificate, so ATAK reports "TAK server cannot be verified" for the QR code; use a connection package with a certificate instead, which carries the trust store.
+
 ## Works with
 
 | Software | How it connects |

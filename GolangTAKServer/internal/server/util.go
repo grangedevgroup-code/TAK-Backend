@@ -25,7 +25,7 @@ func remoteIP(addr string) string {
 
 func requestIP(r *http.Request) string {
 	ip := remoteIP(r.RemoteAddr)
-	if p := net.ParseIP(ip); p != nil && p.IsLoopback() {
+	if p := net.ParseIP(ip); p != nil && (p.IsLoopback() || p.IsPrivate()) {
 		if f := r.Header.Get("X-Forwarded-For"); f != "" {
 			return strings.TrimSpace(strings.Split(f, ",")[0])
 		}

@@ -86,6 +86,7 @@ type Server struct {
 	injectors *Injectors
 	acct      *accountSecurity
 	acme      *acmeState
+	pubCert   *publicCertState
 	mapLayers *MapLayers
 	fedFeeds  *store.Collection[dataFeedView]
 	control   string

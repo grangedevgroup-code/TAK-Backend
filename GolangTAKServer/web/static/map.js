@@ -188,7 +188,7 @@
       const img = new Image();
       t = { img: img, ok: false, failed: false };
       img.decoding = "async";
-      img.referrerPolicy = "no-referrer";
+      img.referrerPolicy = "strict-origin-when-cross-origin";
       img.onload = () => {
         t.ok = true;
         this.draw();

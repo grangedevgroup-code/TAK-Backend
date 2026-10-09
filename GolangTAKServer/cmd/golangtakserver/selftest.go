@@ -116,7 +116,12 @@ func selfTest(dir string, cfg server.Config) []checkResult {
 		add(fmt.Sprintf("Web port %d", cfg.Ports.HTTP), httpCheck("http://"+addr(cfg.Ports.HTTP)+"/api/ca.pem", nil, caPEM))
 	}
 	if cfg.Ports.Enroll > 0 {
-		add(fmt.Sprintf("Enrollment port %d", cfg.Ports.Enroll), httpCheck("https://"+addr(cfg.Ports.Enroll)+"/api/ca.pem", &tls.Config{RootCAs: pool, ServerName: cfg.Address, MinVersion: tls.VersionTLS12}, caPEM))
+		public, err := x509.SystemCertPool()
+		if err != nil || public == nil {
+			public = x509.NewCertPool()
+		}
+		public.AppendCertsFromPEM(caPEM)
+		add(fmt.Sprintf("Enrollment port %d", cfg.Ports.Enroll), httpCheck("https://"+addr(cfg.Ports.Enroll)+"/api/ca.pem", &tls.Config{RootCAs: public, ServerName: cfg.Address, MinVersion: tls.VersionTLS12}, caPEM))
 	}
 	if cfg.Ports.HTTPS > 0 {
 		tc, err := clientTLS()
