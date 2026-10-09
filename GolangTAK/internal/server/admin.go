@@ -744,6 +744,9 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 	if cfg.Feeds.ADSB.APIKey != "" {
 		cfg.Feeds.ADSB.APIKey = "********"
 	}
+	if cfg.Telegram.Token != "" {
+		cfg.Telegram.Token = "********"
+	}
 	dfs := make([]DataFeedConfig, len(cfg.DataFeeds))
 	for i, f := range cfg.DataFeeds {
 		if f.Password != "" {
@@ -795,7 +798,7 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		old := c.Peers
 		oldFeeds := c.DataFeeds
 		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
-		oldBind, oldKey, oldMail := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password
+		oldBind, oldKey, oldMail, oldTG := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password, c.Telegram.Token
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
 		}
@@ -808,6 +811,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if c.Feeds.ADSB.APIKey == "********" {
 			c.Feeds.ADSB.APIKey = oldKey
+		}
+		if c.Telegram.Token == "********" {
+			c.Telegram.Token = oldTG
 		}
 		for i := range c.DataFeeds {
 			if c.DataFeeds[i].Password != "********" {
@@ -847,9 +853,11 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	vn, _ := json.Marshal(next.Video)
 	fn, _ := json.Marshal(next.DataFeeds)
 	mb, _ := json.Marshal(before.Meshtastic)
+	tb, _ := json.Marshal(before.Telegram)
+	tn, _ := json.Marshal(next.Telegram)
 	mn, _ := json.Marshal(next.Meshtastic)
 	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
-		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn) || string(ob) != string(on)
+		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn) || string(ob) != string(on) || string(tb) != string(tn)
 	if string(ab) != string(an) && next.ACME.Enabled && s.acme != nil {
 		select {
 		case s.acme.kick <- struct{}{}:

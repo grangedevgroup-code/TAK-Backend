@@ -67,6 +67,9 @@ type Server struct {
 	reports   *Reports
 	feeds     *feedState
 	mesh      *meshBridge
+	telegram  *telegramBridge
+	jobs      jobRegistry
+	feedKick  map[string]chan struct{}
 	perf      *perfSampler
 	plugins   *pluginManager
 	fig2      *fig2Server
@@ -313,13 +316,11 @@ func (s *Server) maintenance() {
 		case <-s.ctx.Done():
 			return
 		case <-repeat.C:
-			if s.Config().Repeater.Enabled {
-				s.hub.RepeatEmergencies()
-			}
+			s.runJob("emergencies")
 		case <-minute.C:
 			s.hub.Prune()
-			s.minuteTasks()
-			s.repeatAll()
+			s.runJob("sync")
+			s.runJob("repeated")
 			if ips := strings.Join(LocalIPs(), ","); ips != lastIPs {
 				lastIPs = ips
 				if err := s.pki.EnsureServer(s.Config()); err != nil {
@@ -329,10 +330,14 @@ func (s *Server) maintenance() {
 				}
 			}
 		case <-hourly.C:
-			if err := s.pki.EnsureServer(s.Config()); err != nil {
-				s.log.Error("server certificate renewal failed", "err", err)
-			}
-			s.housekeeping()
+			s.runJobFn("certificate", false, func() error {
+				err := s.pki.EnsureServer(s.Config())
+				if err != nil {
+					s.log.Error("server certificate renewal failed", "err", err)
+				}
+				return err
+			})
+			s.runJob("cleanup")
 		}
 	}
 }

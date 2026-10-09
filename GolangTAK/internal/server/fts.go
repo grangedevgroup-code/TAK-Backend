@@ -677,12 +677,26 @@ func (s *Server) ftsRoutes() *http.ServeMux {
 	g("GET /GenerateQR", s.ftsQR)
 	g("GET /MissionTable", s.ftsMissions)
 	mux.HandleFunc("GET /ManageSystemUser/getAll", s.guard(accessAdmin, s.ftsSystemUsers))
+	ad := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.guard(accessAdmin, h)) }
+	ad("POST /ManageSystemUser/postSystemUser", s.ftsSystemUserPost)
+	ad("PUT /ManageSystemUser/putSystemUser", s.ftsSystemUserPut)
+	ad("DELETE /ManageSystemUser/deleteSystemUser", s.ftsSystemUserDelete)
+	ad("GET /FederationTable", s.ftsFederationTable)
+	ad("POST /FederationTable", s.ftsFederationTable)
+	ad("PUT /FederationTable", s.ftsFederationTable)
+	ad("DELETE /FederationTable", s.ftsFederationTable)
+	g("GET /ExCheckTable", s.ftsExCheckTable)
+	g("POST /ExCheckTable", s.ftsExCheckTable)
+	g("DELETE /ExCheckTable", s.ftsExCheckTable)
+	g("POST /ManageKML/postKML", s.ftsKML)
+	g("GET /ManageGeoObject/getGeoObjectByZone", s.ftsGeoByZone)
 	mux.HandleFunc("GET /manageAPI/getHelp", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"APIs": []string{"/ManageGeoObject/postGeoObject", "/ManageGeoObject/putGeoObject", "/ManageGeoObject/getGeoObject", "/ManageGeoObject/GetRepeatedMessages", "/ManageGeoObject/DeleteRepeatedMessage",
 			"/ManageChat/postChatToAll", "/ManagePresence/postPresence", "/ManagePresence/putPresence", "/ManageRoute/postRoute",
 			"/ManageEmergency/postEmergency", "/ManageEmergency/getEmergency", "/ManageEmergency/deleteEmergency", "/Sensor/postDrone", "/Sensor/postSPI",
 			"/ManageVideoStream/getVideoStream", "/ManageVideoStream/postVideoStream", "/ManageVideoStream/deleteVideoStream", "/Clients", "/RecentCoT", "/URL",
-			"/checkStatus", "/DataPackageTable", "/BroadcastDataPackage", "/GenerateQR", "/MissionTable", "/ManageSystemUser/getAll"}})
+			"/checkStatus", "/DataPackageTable", "/BroadcastDataPackage", "/GenerateQR", "/MissionTable", "/ManageSystemUser/getAll",
+			"/ManageSystemUser/postSystemUser", "/ManageSystemUser/putSystemUser", "/ManageSystemUser/deleteSystemUser", "/FederationTable", "/ExCheckTable", "/ManageKML/postKML", "/ManageGeoObject/getGeoObjectByZone"}})
 	})
 	return mux
 }

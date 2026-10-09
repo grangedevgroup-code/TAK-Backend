@@ -127,7 +127,12 @@ func (s *Server) startACME() {
 		delay := time.Duration(0)
 		for {
 			if s.Config().ACME.Enabled {
-				if err := s.renewACME(false); err != nil {
+				var err error
+				s.runJobFn("letsencrypt", false, func() error {
+					err = s.renewACME(false)
+					return err
+				})
+				if err != nil {
 					delay = min(max(delay*2, 10*time.Minute), 6*time.Hour)
 				} else {
 					delay = 0

@@ -303,8 +303,13 @@ func (s *Server) apiPackageLink(w http.ResponseWriter, r *http.Request) {
 	if body.Minutes <= 0 || body.Minutes > 7*24*60 {
 		body.Minutes = 30
 	}
+	u := s.packageLink(PackageKind(firstNonEmpty(body.Type, "cert")), body.User, body.Host, body.Minutes, body.Plain)
+	writeJSON(w, http.StatusOK, map[string]any{"url": u, "import": ImportURI(u), "qr": qrSVG(ImportURI(u)), "expires": time.Now().Add(time.Duration(body.Minutes) * time.Minute)})
+}
+
+func (s *Server) packageLink(kind PackageKind, user, host string, minutes int, plain bool) string {
 	cfg := s.Config()
-	host := firstNonEmpty(body.Host, cfg.Address)
+	host = firstNonEmpty(host, cfg.Address)
 	tok := NewSecret(24)
 	s.linkMu.Lock()
 	for k, l := range s.links {
@@ -312,14 +317,13 @@ func (s *Server) apiPackageLink(w http.ResponseWriter, r *http.Request) {
 			delete(s.links, k)
 		}
 	}
-	s.links[tok] = &downloadLink{kind: PackageKind(firstNonEmpty(body.Type, "cert")), user: body.User, host: host, expires: time.Now().Add(time.Duration(body.Minutes) * time.Minute), uses: 1}
+	s.links[tok] = &downloadLink{kind: kind, user: user, host: host, expires: time.Now().Add(time.Duration(minutes) * time.Minute), uses: 1}
 	s.linkMu.Unlock()
 	scheme, port := "https", cfg.Ports.Enroll
-	if body.Plain && cfg.Ports.HTTP > 0 {
+	if plain && cfg.Ports.HTTP > 0 {
 		scheme, port = "http", cfg.Ports.HTTP
 	}
-	u := scheme + "://" + HostForURL(host) + ":" + itoa(port) + "/dl/" + tok
-	writeJSON(w, http.StatusOK, map[string]any{"url": u, "import": ImportURI(u), "qr": qrSVG(ImportURI(u)), "expires": time.Now().Add(time.Duration(body.Minutes) * time.Minute)})
+	return scheme + "://" + HostForURL(host) + ":" + itoa(port) + "/dl/" + tok
 }
 
 func (s *Server) downloadByLink(w http.ResponseWriter, r *http.Request) {

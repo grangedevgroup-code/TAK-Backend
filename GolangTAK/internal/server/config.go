@@ -188,6 +188,7 @@ type Config struct {
 	Feeds          FeedsConfig       `json:"feeds"`
 	LDAP           LDAPConfig        `json:"ldap"`
 	Meshtastic     MeshtasticConfig  `json:"meshtastic"`
+	Telegram       TelegramConfig    `json:"telegram"`
 	Plugins        []PluginConfig    `json:"plugins"`
 	DataFeeds      []DataFeedConfig  `json:"dataFeeds"`
 	Video          VideoServerConfig `json:"videoServer"`
@@ -259,7 +260,8 @@ func DefaultConfig() Config {
 			Groups:  []string{"__ANON__"},
 			MaxHops: 4,
 		},
-		LDAP: LDAPConfig{UserFilter: "(|(uid={user})(sAMAccountName={user})(userPrincipalName={user}))"},
+		LDAP:     LDAPConfig{UserFilter: "(|(uid={user})(sAMAccountName={user})(userPrincipalName={user}))"},
+		Telegram: TelegramConfig{Chat: true, Alerts: true, Locations: true},
 		Meshtastic: MeshtasticConfig{
 			BrokerPort:  1883,
 			Root:        "msh/US",

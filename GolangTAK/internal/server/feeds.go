@@ -81,6 +81,7 @@ func (s *Server) feedStatus() []FeedStatus {
 
 func (s *Server) startFeeds() {
 	hc := &http.Client{Timeout: 30 * time.Second}
+	s.feedKick = map[string]chan struct{}{"adsb": make(chan struct{}, 1), "ais": make(chan struct{}, 1)}
 	run := func(name string, interval func() time.Duration, enabled func() bool, poll func(context.Context, *http.Client) (int, error)) {
 		s.wg.Add(1)
 		go func() {
@@ -89,11 +90,18 @@ func (s *Server) startFeeds() {
 			tick := time.NewTicker(time.Second)
 			defer tick.Stop()
 			failures := 0
+			kick := s.feedKick[name]
 			for {
+				forced := false
 				select {
 				case <-s.ctx.Done():
 					return
 				case <-tick.C:
+				case <-kick:
+					forced = true
+				}
+				if !forced && s.jobPaused(name) {
+					continue
 				}
 				if !enabled() {
 					s.feeds.set(name, false, 0, nil)
@@ -105,13 +113,18 @@ func (s *Server) startFeeds() {
 				if failures > 0 {
 					wait = min(wait*time.Duration(1<<min(failures, 4)), 10*time.Minute)
 				}
-				if time.Since(last) < wait {
+				if !forced && time.Since(last) < wait {
 					continue
 				}
 				last = time.Now()
-				ctx, cancel := context.WithTimeout(s.ctx, 45*time.Second)
-				n, err := poll(ctx, hc)
-				cancel()
+				var n int
+				var err error
+				s.runJobFn(name, true, func() error {
+					ctx, cancel := context.WithTimeout(s.ctx, 45*time.Second)
+					defer cancel()
+					n, err = poll(ctx, hc)
+					return err
+				})
 				s.feeds.set(name, true, n, err)
 				if err != nil {
 					failures++

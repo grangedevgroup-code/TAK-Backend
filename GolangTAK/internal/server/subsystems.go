@@ -91,6 +91,7 @@ func (s *Server) initSubsystems() error {
 }
 
 func (s *Server) startSubsystems() error {
+	s.registerJobs()
 	if err := s.startUDP(); err != nil {
 		return err
 	}
@@ -115,6 +116,7 @@ func (s *Server) startSubsystems() error {
 	s.startACME()
 	s.startFeeds()
 	s.startMeshtastic()
+	s.startTelegram()
 	s.histStop = make(chan struct{})
 	s.wg.Add(1)
 	go func() {

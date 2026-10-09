@@ -3271,6 +3271,7 @@
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
     { id: "voice", title: "Voice", keys: "mumble mumla murmur radio push to talk ptt" },
+    { id: "telegram", title: "Telegram", keys: "telegram bot chat group alerts messaging" },
     { id: "locate", title: "Locate", keys: "location sharing search rescue lost person link" },
     { id: "letsencrypt", title: "Let's Encrypt", keys: "acme certificate https browser trusted domain ssl tls" },
     { id: "email", title: "Email and accounts", keys: "smtp mail registration sign up password reset two factor 2fa domains" },
@@ -3297,12 +3298,60 @@
     }
   }
 
+  async function loadTGStatus() {
+    const box = document.getElementById("tg_status");
+    if (!box) return;
+    try {
+      const st = await api("GET", "/api/telegram");
+      if (!st.enabled) return clear(box);
+      const text = st.error ? "Last error: " + st.error : st.running ? "Connected" + (st.bot ? " as @" + st.bot : "") + ". " + (st.received || 0) + " received, " + (st.sent || 0) + " sent." : "Not running. Save and restart to start it.";
+      clear(box).append(h("p", { class: "small" + (st.error ? " bad" : " muted") }, text), st.running ? btn("Send a test message", async () => { try { await api("POST", "/api/telegram"); toast("Sent"); } catch (e) { fail(e); } loadTGStatus(); }, "small") : null);
+    } catch (e) {
+      clear(box);
+    }
+  }
+
+  async function loadJobs() {
+    const box = document.getElementById("jobs_box");
+    if (!box) return;
+    let jobs = [];
+    try {
+      jobs = await api("GET", "/api/jobs");
+    } catch (e) {
+      return;
+    }
+    const act = (j, a) => async () => {
+      try {
+        await api("POST", "/api/jobs/" + enc(j.id) + "/" + a);
+        toast(a === "run" ? "Started" : a === "pause" ? "Paused" : "Resumed");
+      } catch (e) {
+        fail(e);
+      }
+      setTimeout(loadJobs, a === "run" ? 1500 : 100);
+    };
+    clear(box).append(
+      table(
+        [
+          { title: "Job", render: (r) => h("b", null, r.name) },
+          { title: "Runs", render: (r) => r.every },
+          { title: "Last run", render: (r) => (r.runs ? fmtAgo(r.lastRun) + " (" + (r.durationMs < 1000 ? Math.round(r.durationMs) + " ms" : (r.durationMs / 1000).toFixed(1) + " s") + ")" : "-") },
+          { title: "State", render: (r) => (r.error ? h("div", null, pill("problem", "error"), h("div", { class: "small muted" }, r.error)) : pill(r.running ? "running" : r.paused ? "stopped" : "ok", r.running ? "running" : r.paused ? "paused" : "ok")) },
+          { title: "", cls: "actions", render: (r) => [btn("Run now", act(r, "run"), "small"), r.paused ? btn("Resume", act(r, "resume"), "small") : btn("Pause", act(r, "pause"), "small")] },
+        ],
+        jobs,
+        "No background jobs."
+      )
+    );
+  }
+
   async function pageSettings(main, params) {
     setTimeout(loadLEStatus, 200);
+    setTimeout(loadTGStatus, 200);
+    setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
-    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {};
+    const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -3357,7 +3406,18 @@
         field("Open broker", checkbox("mt_anon", mt.brokerAnonymous, "Accept nodes without a GolangTAK user name and password")),
         field("Upstream broker", input("mt_up", mt.upstream, { placeholder: "mqtt://user:password@mqtt.example.org:1883" }), "Optional. Also exchange traffic through another MQTT broker."),
         field("Topic root", input("mt_root", mt.root), "Must match the nodes' MQTT root topic, for example msh/US or msh/EU_868."),
-        field("Channels", input("mt_ch", (mt.channels || []).map((c) => c.name + "=" + c.key).join(", ")), "name=key pairs. The default channel is LongFast=AQ==."),
+        field("Channels", input("mt_ch", (mt.channels || []).map((c) => c.name + "=" + c.key).join(", ")), ["name=key pairs. The default channel is LongFast=AQ==. ", btn("Add a channel with a new key", () => {
+          const el = document.getElementById("mt_ch");
+          const b = new Uint8Array(32);
+          crypto.getRandomValues(b);
+          const key = btoa(String.fromCharCode(...b));
+          const names = el.value.split(",").map((x) => x.split("=")[0].trim());
+          let i = 1;
+          while (names.includes("Private" + (i > 1 ? i : ""))) i++;
+          el.value = (el.value.trim() ? el.value.trim() + ", " : "") + "Private" + (i > 1 ? i : "") + "=" + key;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          toast("Added. Use the same name and key on the radios.");
+        }, "small")]),
         field("Send TAK traffic to the mesh", checkbox("mt_down", mt.downlink, "Positions and All Chat Rooms messages (nodes need downlink enabled)")),
         field("Downlink channel", input("mt_dch", mt.downlinkChannel, { placeholder: "first channel" })),
         field("Seconds between positions", n("mt_int", mt.intervalSec), "Per TAK user, to protect the mesh's airtime."),
@@ -3377,6 +3437,15 @@
         field("Record these paths", input("vs_recp", (vs.recordPaths || []).join(", "), { placeholder: "live/uas, cameras" }), "Streams at or under these paths are always recorded. Comma separated."),
         field("Minutes per file", n("vs_recm", vs.recordMinutes), "Long recordings are split into files of this length."),
         field("Keep recordings for (days)", n("vs_recd", vs.recordDays), "0 keeps them forever."),
+      ],
+      telegram: [
+        "Connect a Telegram group with TAK. Create a bot with @BotFather, add it to the group, and send /start there. The group's ID is shown by bots such as @getidsbot, and starts with -100 for groups.",
+        field("Enabled", checkbox("tg_on", tg.enabled, "Bridge a Telegram group and TAK")),
+        field("Bot token", input("tg_token", tg.token || "", { type: "password", autocomplete: "off", placeholder: "123456:ABC..." })),
+        field("Chat ID", input("tg_chat", tg.chatId || "", { placeholder: "-1001234567890" }), "Only messages from this chat are accepted."),
+        field("Share", h("div", null, checkbox("tg_msg", tg.chat !== false, "Chat in both directions with All Chat Rooms"), h("br"), checkbox("tg_alert", tg.alerts !== false, "Send emergencies to Telegram"), h("br"), checkbox("tg_loc", tg.locations !== false, "Show locations shared in Telegram on the map"))),
+        field("Group", input("tg_group", tg.group || "", { placeholder: "everyone" }), "Telegram traffic goes to this group, and only its traffic goes to Telegram. Empty means everyone."),
+        h("div", { class: "full", id: "tg_status" }),
       ],
       letsencrypt: [
         "A free certificate browsers and phones trust, used on the dashboard and enrollment port when it is opened by name. TAK streaming keeps this server's own certificate authority. Each name must point at this server and port 80 must be reachable from the internet.",
@@ -3515,7 +3584,10 @@
             })),
             row("Download a backup", "Settings, users, certificates, missions and the certificate authority. Keep it somewhere safe.", linkBtn("Download backup", "/api/backup", "", "download")),
             row("Download a full backup", "Everything above plus all stored files. Can be large.", linkBtn("Download with files", "/api/backup?files=1", "", "download"))
-          )
+          ),
+          h("h3", { style: "margin-top:24px" }, "Background jobs"),
+          h("p", { class: "intro" }, "Work the server does on a schedule. Run one now, or pause it until the next restart."),
+          h("div", { id: "jobs_box" }, "Loading...")
         );
       } else {
         const raw = h("textarea", { id: "raw", style: "min-height:420px", "aria-label": "All settings as JSON" });
@@ -3662,6 +3734,7 @@
           intervalSec: num(form, "mt_int"),
           group: val(form, "mt_group"),
         }),
+        telegram: Object.assign({}, tg, { enabled: val(form, "tg_on"), token: val(form, "tg_token"), chatId: val(form, "tg_chat"), chat: val(form, "tg_msg"), alerts: val(form, "tg_alert"), locations: val(form, "tg_loc"), group: val(form, "tg_group") }),
         letsEncrypt: Object.assign({}, le, { enabled: val(form, "le_on"), domains: splitList(val(form, "le_dom")), email: val(form, "le_mail"), challengePort: num(form, "le_port") }),
         email: Object.assign({}, em, { enabled: val(form, "em_on"), host: val(form, "em_host"), port: num(form, "em_port"), security: val(form, "em_sec"), username: val(form, "em_user"), password: val(form, "em_pw"), from: val(form, "em_from"), publicUrl: val(form, "em_url"), allowRegistration: val(form, "em_reg"), approveRegistrations: val(form, "em_appr"), allowedDomains: splitList(val(form, "em_allow")), blockedDomains: splitList(val(form, "em_block")), registrationGroups: splitList(val(form, "em_groups")) }),
         locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
