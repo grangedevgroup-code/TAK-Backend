@@ -58,6 +58,7 @@ func (s *Server) initSubsystems() error {
 	s.links = map[string]*downloadLink{}
 	s.feeds = &feedState{status: map[string]*FeedStatus{}}
 	s.restart = make(chan struct{}, 1)
+	s.upd.exit = make(chan struct{})
 	s.peers = newPeerManager(s)
 	s.fed = newFederation(s)
 	s.ensureExCheckTemplates()

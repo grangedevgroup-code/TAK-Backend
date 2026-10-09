@@ -76,6 +76,7 @@ type Server struct {
 	fig2Out   sync.Map
 	dfeeds    *dataFeeds
 	uasSeen   sync.Map
+	upd       updateState
 	live      *liveVideo
 	voice     *mumble.Server
 	injectors *Injectors
@@ -341,6 +342,7 @@ func (s *Server) maintenance() {
 				return err
 			})
 			s.runJob("cleanup")
+			s.runJob("updates")
 		}
 	}
 }

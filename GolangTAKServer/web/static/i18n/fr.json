@@ -1162,5 +1162,14 @@
  "only administrators can read metrics": "seuls les administrateurs peuvent lire les métriques",
  "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Les collecteurs l'envoient comme jeton bearer. Les administrateurs peuvent aussi se connecter avec leur nom d'utilisateur et leur mot de passe. ",
  "Generate a token": "Générer un jeton",
- "Copy the token now. After saving it is hidden.": "Copiez le jeton maintenant. Après l'enregistrement il est masqué."
+ "Copy the token now. After saving it is hidden.": "Copiez le jeton maintenant. Après l'enregistrement il est masqué.",
+ "Updates": "Mises à jour",
+ "New releases are published on GitHub. Installing one keeps all settings and data.": "Les nouvelles versions sont publiées sur GitHub. L'installation conserve tous les réglages et données.",
+ "Automatic updates": "Mises à jour automatiques",
+ "Install new releases by themselves": "Installer les nouvelles versions automatiquement",
+ "The server checks every hour and installs at the hour below, then restarts. Devices reconnect by themselves.": "Le serveur vérifie chaque heure, installe à l'heure ci-dessous puis redémarre. Les appareils se reconnectent seuls.",
+ "Install at (hour, 0 to 23, server time)": "Installer à (heure, 0 à 23, heure du serveur)",
+ "Check now": "Vérifier maintenant",
+ "Install update": "Installer la mise à jour",
+ "Installed. Restarting...": "Installée. Redémarrage..."
 }

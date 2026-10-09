@@ -130,6 +130,7 @@ func (s *Server) registerJobs() {
 	s.registerJob("sync", "Save devices and missions, refresh voice channels", "every minute", func() error { s.minuteTasks(); return nil })
 	s.registerJob("adsb", "ADS-B aircraft", "every feed interval", nil)
 	s.registerJob("ais", "AIS ships", "every feed interval", nil)
+	s.registerJob("updates", "Check for and install updates", "every hour", s.updateJob)
 	s.registerJob("letsencrypt", "Let's Encrypt renewal", "every 12 hours", func() error {
 		if !s.Config().ACME.Enabled || s.acme == nil {
 			return errors.New("the Let's Encrypt setting is off")

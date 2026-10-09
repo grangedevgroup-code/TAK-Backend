@@ -78,6 +78,7 @@ func commands() []command {
 		{name: "tailscale", usage: "tailscale status | up [AUTH_KEY] [--auth-key KEY] [--hostname NAME] | down", summary: "Install Tailscale and join your tailnet so devices anywhere can reach this server without opening ports (no key: sign in with a link)", values: []string{"auth-key", "hostname"}, run: cmdTailscale},
 		{name: "bench", usage: "bench [--host HOST] [--port PORT] [--clients N] [--every SECONDS] [--duration SECONDS] [--ramp SECONDS] [--tls --cert USER.p12 [--cert-password PW] [--trust CA.pem|TRUST.p12] [--insecure]]", summary: "Load test a TAK server with simulated clients and report throughput and delivery latency", values: []string{"host", "port", "clients", "every", "duration", "ramp", "cert", "cert-password", "trust", "trust-password"}, bools: []string{"tls", "insecure"}, run: cmdBench},
 		{name: "backup", usage: "backup [FILE] [--files]", summary: "Save settings, users, certificates and missions to a zip file", bools: []string{"files"}, run: cmdBackup},
+		{name: "update", usage: "update [--check] [--force]", summary: "Install the newest release (--check only reports whether one is available). Automatic updates can be turned on under Settings, Updates", bools: []string{"check", "force"}, run: cmdUpdate},
 		{name: "version", usage: "version", summary: "Print the version", run: cmdVersion},
 		{name: "help", usage: "help [COMMAND]", summary: "Show help", run: cmdHelp},
 		{name: "service", usage: "service --data DIR", summary: "Entry point used by the Windows service manager", run: cmdService, hidden: true},

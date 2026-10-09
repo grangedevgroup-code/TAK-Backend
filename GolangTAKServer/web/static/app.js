@@ -3288,6 +3288,7 @@
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
     { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload rate limit throttle flood qos" },
+    { id: "updates", title: "Updates", keys: "update upgrade version release automatic" },
     { id: "monitoring", title: "Monitoring", keys: "metrics prometheus grafana monitoring alerting" },
     { id: "maintenance", title: "Maintenance", keys: "restart renew backup" },
     { id: "advanced", title: "Advanced (JSON)", keys: "config.json raw" },
@@ -3304,6 +3305,31 @@
       if (st.running) parts.push("Requesting a certificate now.");
       if (st.error) parts.push("Last attempt failed: " + st.error);
       clear(box).append(h("p", { class: "small" + (st.error ? " bad" : " muted") }, parts.join(" ")), st.enabled ? btn("Request now", async () => { await api("POST", "/api/letsencrypt").catch(fail); toast("Requested"); setTimeout(loadLEStatus, 4000); }, "small") : null);
+    } catch (e) {
+      clear(box);
+    }
+  }
+
+  async function loadUpdStatus(check) {
+    const box = document.getElementById("upd_status");
+    if (!box) return;
+    try {
+      const st = await api(check ? "POST" : "GET", check ? "/api/update/check" : "/api/update");
+      const parts = ["This server runs version " + st.current + "."];
+      if (st.latest) parts.push(st.available ? "Version " + st.latest + " is available." : "It is up to date (newest release " + st.latest + ").");
+      if (st.error) parts.push("Last check failed: " + st.error);
+      if (st.blocked) parts.push(st.blocked.charAt(0).toUpperCase() + st.blocked.slice(1) + ".");
+      clear(box).append(
+        h("p", { class: "small" + (st.error ? " bad" : " muted") }, parts.join(" ")),
+        btn("Check now", () => loadUpdStatus(true).catch(fail), "small"),
+        st.available && !st.blocked
+          ? btn("Install " + st.latest + " now", () =>
+              confirmAction("Install update", "Install version " + st.latest + "? The server restarts and devices reconnect by themselves.", "Install", async () => {
+                await api("POST", "/api/update/install");
+                toast("Installed. Restarting...");
+              }), "small primary")
+          : null
+      );
     } catch (e) {
       clear(box);
     }
@@ -3358,10 +3384,11 @@
   async function pageSettings(main, params) {
     setTimeout(loadLEStatus, 200);
     setTimeout(loadTGStatus, 200);
+    setTimeout(() => loadUpdStatus(false), 200);
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {};
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -3551,6 +3578,12 @@
         field("Package password", input("cpw", c.password), "Password of the .p12 files in connection packages."),
         field("Client validity (days)", n("cdays", c.clientDays)),
         field("Server validity (days)", n("sdays", c.serverDays)),
+      ],
+      updates: [
+        "New releases are published on GitHub. Installing one keeps all settings and data.",
+        field("Automatic updates", checkbox("upd_auto", up.auto, "Install new releases by themselves"), "The server checks every hour and installs at the hour below, then restarts. Devices reconnect by themselves."),
+        field("Install at (hour, 0 to 23, server time)", n("upd_hour", up.hour)),
+        h("div", { class: "full", id: "upd_status" }, "Checking..."),
       ],
       monitoring: [
         "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.",
@@ -3749,6 +3782,7 @@
         retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
+        updates: { auto: val(form, "upd_auto"), hour: Math.min(23, num(form, "upd_hour")) },
         rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
         ldap: ldapFromForm(),

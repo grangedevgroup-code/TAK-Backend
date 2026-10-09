@@ -114,7 +114,8 @@ Optional variables: `GOLANGTAKSERVER_NAME` and `GOLANGTAKSERVER_ADMIN_PASSWORD` 
 
 | Task | Command |
 | --- | --- |
-| Update to the newest release | Run the install command again. Settings, users, certificates and data are kept. |
+| Update to the newest release | Run the install command again, or `sudo golangtakserver update`, or **Settings**, **Updates**, **Install now**. Settings, users, certificates and data are kept. |
+| Update automatically | Turn on **Settings**, **Updates**, **Automatic updates**. The server checks every hour, installs at the hour you choose, verifies the download against SHA256SUMS and restarts. |
 | Upgrade from GolangTAK (1.5.0 and older) | Run the install command. It replaces the old `golangtak` service and program, moves the data to the new data directory and removes the old firewall rules. Users, certificates, settings, links and plugins carry over, and old link codes still work. |
 | Install a specific release | `curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAKServer/scripts/install.sh | GOLANGTAKSERVER_VERSION=1.6.0 sh` |
 | Set the address and name while installing | `curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAKServer/scripts/install.sh | sh -s -- --address tak.example.org --name "Field Server"` |

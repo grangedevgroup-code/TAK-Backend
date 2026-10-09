@@ -137,6 +137,9 @@ func serve(dir string, console io.Writer, stop <-chan struct{}, banner bool, wai
 			s.Log().Info("restarting")
 			s.Stop()
 			wait = 30 * time.Second
+		case <-s.UpdateExit():
+			s.Stop()
+			return errUpdated
 		}
 	}
 }

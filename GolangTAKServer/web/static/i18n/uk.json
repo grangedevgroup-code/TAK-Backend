@@ -1207,5 +1207,14 @@
  "only administrators can read metrics": "лише адміністратори можуть читати метрики",
  "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Збирачі надсилають його як bearer-токен. Адміністратори також можуть увійти з іменем користувача та паролем. ",
  "Generate a token": "Створити токен",
- "Copy the token now. After saving it is hidden.": "Скопіюйте токен зараз. Після збереження його буде приховано."
+ "Copy the token now. After saving it is hidden.": "Скопіюйте токен зараз. Після збереження його буде приховано.",
+ "Updates": "Оновлення",
+ "New releases are published on GitHub. Installing one keeps all settings and data.": "Нові версії публікуються на GitHub. Під час встановлення всі налаштування й дані зберігаються.",
+ "Automatic updates": "Автоматичні оновлення",
+ "Install new releases by themselves": "Встановлювати нові версії самостійно",
+ "The server checks every hour and installs at the hour below, then restarts. Devices reconnect by themselves.": "Сервер перевіряє щогодини, встановлює о вказаній нижче годині й перезапускається. Пристрої перепідключаються самі.",
+ "Install at (hour, 0 to 23, server time)": "Встановлювати о (година, від 0 до 23, час сервера)",
+ "Check now": "Перевірити зараз",
+ "Install update": "Встановити оновлення",
+ "Installed. Restarting...": "Встановлено. Перезапуск..."
 }

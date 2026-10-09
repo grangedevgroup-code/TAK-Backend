@@ -183,6 +183,7 @@ type Config struct {
 	Retention      RetentionConfig   `json:"retention"`
 	RateLimits     RateLimitConfig   `json:"rateLimits"`
 	Metrics        MetricsConfig     `json:"metrics"`
+	Updates        UpdatesConfig     `json:"updates"`
 	Limits         LimitsConfig      `json:"limits"`
 	Repeater       RepeaterConfig    `json:"repeater"`
 	Federation     FederationConfig  `json:"federation"`
@@ -240,6 +241,7 @@ func DefaultConfig() Config {
 			ServerDays:   825,
 		},
 		RateLimits: defaultRateLimits(),
+		Updates:    UpdatesConfig{Hour: 4},
 		Retention: RetentionConfig{
 			HistoryDays: 30,
 			ChatDays:    7,

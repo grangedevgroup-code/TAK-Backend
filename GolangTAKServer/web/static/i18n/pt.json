@@ -1186,5 +1186,14 @@
  "only administrators can read metrics": "somente administradores podem ler as métricas",
  "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Os coletores o enviam como token bearer. Administradores também podem entrar com usuário e senha. ",
  "Generate a token": "Gerar um token",
- "Copy the token now. After saving it is hidden.": "Copie o token agora. Depois de salvar ele fica oculto."
+ "Copy the token now. After saving it is hidden.": "Copie o token agora. Depois de salvar ele fica oculto.",
+ "Updates": "Atualizações",
+ "New releases are published on GitHub. Installing one keeps all settings and data.": "Novas versões são publicadas no GitHub. Instalar uma mantém todas as configurações e dados.",
+ "Automatic updates": "Atualizações automáticas",
+ "Install new releases by themselves": "Instalar novas versões sozinho",
+ "The server checks every hour and installs at the hour below, then restarts. Devices reconnect by themselves.": "O servidor verifica a cada hora, instala no horário abaixo e reinicia. Os dispositivos se reconectam sozinhos.",
+ "Install at (hour, 0 to 23, server time)": "Instalar às (hora, 0 a 23, horário do servidor)",
+ "Check now": "Verificar agora",
+ "Install update": "Instalar atualização",
+ "Installed. Restarting...": "Instalada. Reiniciando..."
 }
