@@ -2,6 +2,8 @@
 
 GolangTAK is a free, open source server for TAK clients such as ATAK, WinTAK, iTAK and TAK Aware, and for any other software that exchanges Cursor on Target (CoT) messages. It is a single program with no runtime dependencies, no containers and no database server. It runs on Linux, Windows, macOS, FreeBSD, OpenBSD, NetBSD, Raspberry Pi and other ARM boards, MIPS routers and cloud VPSs.
 
+New to it? The [step by step documentation](https://tak-backend.pages.dev/docs) covers installing, connecting devices, linking servers, video, voice, feeds and the APIs.
+
 **GolangTAK is an independent open source project. It is not affiliated with, endorsed by, or associated with tak.gov, the TAK Product Center, or the makers of any TAK product.** Product names such as ATAK, WinTAK, iTAK, TAK Aware and TAK Server are used only to describe compatibility.
 
 ![GolangTAK dashboard overview](docs/images/overview.png)

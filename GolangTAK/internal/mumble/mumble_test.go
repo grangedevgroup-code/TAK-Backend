@@ -223,14 +223,23 @@ func startTestServer(t *testing.T) (*Server, string) {
 		return nil, ErrRejected
 	}
 	s.SetChannels([]Channel{{Name: "Blue", Group: "Blue"}, {Name: "Red", Group: "Red"}, {Name: "Lobby"}})
-	ln, err := tls.Listen("tcp", "127.0.0.1:0", testTLS(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ta := ln.Addr().(*net.TCPAddr)
-	uc, err := net.ListenUDP("udp", &net.UDPAddr{IP: ta.IP, Port: ta.Port})
-	if err != nil {
-		t.Fatal(err)
+	var ln net.Listener
+	var uc *net.UDPConn
+	for attempt := 0; ; attempt++ {
+		l, err := tls.Listen("tcp", "127.0.0.1:0", testTLS(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ta := l.Addr().(*net.TCPAddr)
+		u, err := net.ListenUDP("udp", &net.UDPAddr{IP: ta.IP, Port: ta.Port})
+		if err == nil {
+			ln, uc = l, u
+			break
+		}
+		l.Close()
+		if attempt == 20 {
+			t.Fatal(err)
+		}
 	}
 	s.ListenUDP(uc)
 	go s.Serve(ln)

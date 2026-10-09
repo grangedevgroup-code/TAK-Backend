@@ -132,7 +132,7 @@ func (s *Server) registerJobs() {
 	s.registerJob("ais", "AIS ships", "every feed interval", nil)
 	s.registerJob("letsencrypt", "Let's Encrypt renewal", "every 12 hours", func() error {
 		if !s.Config().ACME.Enabled || s.acme == nil {
-			return errors.New("Let's Encrypt is off")
+			return errors.New("the Let's Encrypt setting is off")
 		}
 		return s.renewACME(false)
 	})
@@ -175,7 +175,7 @@ func (s *Server) jobRunner(id string) func() error {
 	case "letsencrypt":
 		return func() error {
 			if !s.Config().ACME.Enabled || s.acme == nil {
-				return errors.New("Let's Encrypt is off")
+				return errors.New("the Let's Encrypt setting is off")
 			}
 			return s.renewACME(true)
 		}
