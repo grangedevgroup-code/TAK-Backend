@@ -244,3 +244,43 @@ jobs:
           if ($LASTEXITCODE -eq 0) { Write-Host 'old firewall rule still present'; exit 1 }
           $global:LASTEXITCODE = 0
           & $g uninstall --purge
+
+  container:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the image
+        run: docker build --build-arg VERSION=ci -t golangtakserver:ci .
+      - name: Run the container
+        run: |
+          set -e
+          docker run -d --name gts -e GOLANGTAKSERVER_ADDRESS=127.0.0.1 -e GOLANGTAKSERVER_ADMIN_PASSWORD=ci-admin-password \
+            -p 8089:8089 -p 8446:8446 -p 8080:8080 golangtakserver:ci
+          for _ in $(seq 1 30); do
+            sleep 2
+            if docker exec gts golangtakserver selftest; then break; fi
+          done
+          docker exec gts golangtakserver selftest
+          docker exec gts golangtakserver user add carol --groups Blue
+          docker exec gts golangtakserver user list | grep -q carol
+          code=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:8446/)
+          test "$code" = 200
+          docker restart gts
+          for _ in $(seq 1 30); do
+            sleep 2
+            if docker exec gts golangtakserver selftest; then break; fi
+          done
+          docker exec gts golangtakserver user list | grep -q carol
+          for _ in $(seq 1 30); do
+            state=$(docker inspect -f '{{.State.Health.Status}}' gts)
+            if [ "$state" = healthy ]; then exit 0; fi
+            sleep 3
+          done
+          docker logs gts
+          exit 1
+      - name: Check the compose files
+        run: |
+          for f in docker/compose*.yml; do
+            GOLANGTAKSERVER_ADDRESS=example.org TS_AUTHKEY=x docker compose -f "$f" config -q
+          done

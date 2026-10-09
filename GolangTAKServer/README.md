@@ -1,6 +1,6 @@
 # GolangTAKServer
 
-GolangTAKServer is a free, open source server for TAK clients such as ATAK, WinTAK, iTAK and TAK Aware, and for any other software that exchanges Cursor on Target (CoT) messages. It is a single program with no runtime dependencies, no containers and no database server. It runs on Linux, Windows, macOS, FreeBSD, OpenBSD, NetBSD, Raspberry Pi and other ARM boards, MIPS routers and cloud VPSs.
+GolangTAKServer is a free, open source server for TAK clients such as ATAK, WinTAK, iTAK and TAK Aware, and for any other software that exchanges Cursor on Target (CoT) messages. It is a single program with no runtime dependencies and no database server. It needs no containers, and a Docker image is there if you want one. It runs on Linux, Windows, macOS, FreeBSD, OpenBSD, NetBSD, Raspberry Pi and other ARM boards, MIPS routers and cloud VPSs.
 
 New to it? The [step by step documentation](https://tak-backend.pages.dev/docs) covers installing, connecting devices, linking servers, video, voice, feeds and the APIs.
 
@@ -67,6 +67,48 @@ $env:GOLANGTAKSERVER_ZEROTIER = 'NETWORK_ID'; irm https://raw.githubusercontent.
 ```
 
 On a private network, authorize the server in the network's member list; `golangtakserver zerotier status` shows its node ID and address. An installed server can join later with `golangtakserver zerotier join NETWORK_ID`.
+
+### Reach the server from anywhere with Tailscale
+
+Create an auth key under Settings, Keys in the [Tailscale admin console](https://login.tailscale.com/admin/settings/keys) and add it to the install command. GolangTAKServer installs Tailscale, joins your tailnet and adds its Tailscale addresses and MagicDNS name to the server certificate. Devices with the Tailscale app on the same tailnet connect to that name, with no ports opened to the internet.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAKServer/scripts/install.sh | GOLANGTAKSERVER_TAILSCALE=tskey-auth-XXXX sh
+```
+
+```powershell
+$env:GOLANGTAKSERVER_TAILSCALE = 'tskey-auth-XXXX'; irm https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/main/GolangTAKServer/scripts/install.ps1 | iex
+```
+
+Use `login` instead of a key to sign in with a link. An installed server can join later with `golangtakserver tailscale up [AUTH_KEY]`; `golangtakserver tailscale status` shows its addresses.
+
+### Run in Docker
+
+The native install is the simplest and fastest option. If you already run everything in containers, use the image instead (Linux on amd64, arm64, armv7, ppc64le and s390x):
+
+```sh
+docker run -d --name golangtakserver --restart unless-stopped \
+  -e GOLANGTAKSERVER_ADDRESS=203.0.113.10 \
+  -p 8087:8087 -p 8087:8087/udp -p 8088:8088 -p 8089:8089 -p 8080:8080 -p 8443:8443 -p 8446:8446 -p 8090:8090 -p 19023:19023 \
+  -p 8554:8554 -p 1935:1935 -p 8000-8001:8000-8001/udp -p 64738:64738 -p 64738:64738/udp \
+  -v golangtakserver-data:/data ghcr.io/grangedevgroup-code/golangtakserver:latest
+docker logs golangtakserver
+```
+
+Set `GOLANGTAKSERVER_ADDRESS` to the IP address or name devices use to reach the host. The log shows the dashboard address, the administrator password and a QR code. Run commands inside the container with `docker exec golangtakserver golangtakserver user add NAME`.
+
+| Setup | Compose file |
+| --- | --- |
+| Published ports | [docker/compose.yml](docker/compose.yml) |
+| Host network: mesh SA multicast and any ports you add later work without changes (Linux) | [docker/compose.host.yml](docker/compose.host.yml) |
+| Tailscale sidecar: reachable only on your tailnet, no ports opened | [docker/compose.tailscale.yml](docker/compose.tailscale.yml) |
+
+```sh
+GOLANGTAKSERVER_ADDRESS=203.0.113.10 docker compose -f docker/compose.yml up -d
+TS_AUTHKEY=tskey-auth-XXXX GOLANGTAKSERVER_ADDRESS=golangtakserver.your-tailnet.ts.net docker compose -f docker/compose.tailscale.yml up -d
+```
+
+Optional variables: `GOLANGTAKSERVER_NAME` and `GOLANGTAKSERVER_ADMIN_PASSWORD` (used only when the first administrator is created). Data lives in the `golangtakserver-data` volume; to use a host folder instead, give it to user 65532 (`sudo chown -R 65532:65532 FOLDER`). Update with `docker pull` and recreate the container. Build the image yourself with `docker build -t golangtakserver .` in this folder.
 
 ### Update, uninstall, other versions
 
@@ -329,6 +371,7 @@ Set any port to 0 to turn that service off.
 | `golangtakserver selftest` | Test every port of the running server |
 | `golangtakserver backup [FILE]` | Save settings, users, certificates and missions |
 | `golangtakserver zerotier status` / `join NETWORK_ID` / `leave NETWORK_ID` | Install ZeroTier and join a virtual network |
+| `golangtakserver tailscale status` / `up [AUTH_KEY]` / `down` | Install Tailscale and join your tailnet |
 | `golangtakserver bench [--clients N] [--every S] [--duration S]` | Load test this or any TAK server with simulated clients: throughput, delivery and latency |
 
 `golangtakserver help COMMAND` shows every option. Commands work whether the server is running or stopped. Add `--data DIR` to use another data directory.

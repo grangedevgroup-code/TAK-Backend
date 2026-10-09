@@ -89,6 +89,7 @@ function Install-GolangTAKServer {
 
         $installArgs = @('install') + @($Arguments | Where-Object { $_ })
         if ($env:GOLANGTAKSERVER_ZEROTIER) { $installArgs += @('--zerotier', $env:GOLANGTAKSERVER_ZEROTIER) }
+        if ($env:GOLANGTAKSERVER_TAILSCALE) { $installArgs += @('--tailscale', $env:GOLANGTAKSERVER_TAILSCALE) }
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
         $isAdmin = (New-Object Security.Principal.WindowsPrincipal($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if ($isAdmin) {

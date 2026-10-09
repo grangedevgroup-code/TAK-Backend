@@ -173,6 +173,9 @@ main() {
 	if [ -n "${GOLANGTAKSERVER_ZEROTIER:-}" ]; then
 		set -- "$@" --zerotier "$GOLANGTAKSERVER_ZEROTIER"
 	fi
+	if [ -n "${GOLANGTAKSERVER_TAILSCALE:-}" ]; then
+		set -- "$@" --tailscale "$GOLANGTAKSERVER_TAILSCALE"
+	fi
 
 	status=0
 	if [ "$(id -u)" -ne 0 ]; then

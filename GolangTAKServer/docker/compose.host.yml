@@ -1,0 +1,15 @@
+services:
+  golangtakserver:
+    image: ghcr.io/grangedevgroup-code/golangtakserver:latest
+    container_name: golangtakserver
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      GOLANGTAKSERVER_ADDRESS: ${GOLANGTAKSERVER_ADDRESS:-}
+      GOLANGTAKSERVER_NAME: ${GOLANGTAKSERVER_NAME:-GolangTAKServer}
+      GOLANGTAKSERVER_ADMIN_PASSWORD: ${GOLANGTAKSERVER_ADMIN_PASSWORD:-}
+    volumes:
+      - golangtakserver-data:/data
+
+volumes:
+  golangtakserver-data:

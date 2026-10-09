@@ -57,8 +57,8 @@ type command struct {
 
 func commands() []command {
 	return []command{
-		{name: "run", usage: "run [--data DIR]", summary: "Run the server in this window (Ctrl+C stops it)", bools: []string{"service", "quiet"}, run: cmdRun},
-		{name: "install", usage: "install [--address HOST] [--name NAME] [--admin-password PW] [--zerotier NETWORK_ID] [--no-anonymous] [--no-firewall] [--no-start]", summary: "Install as a system service that starts at boot, open the firewall, create the admin account and test everything (--zerotier NETWORK_ID also installs ZeroTier and joins that network)", values: []string{"address", "name", "admin-password", "zerotier"}, bools: []string{"no-anonymous", "no-firewall", "no-start", "yes"}, run: cmdInstall},
+		{name: "run", usage: "run [--data DIR] [--address HOST] [--name NAME] [--admin-password PW]", summary: "Run the server in this window (Ctrl+C stops it). In containers the options can also come from GOLANGTAKSERVER_ADDRESS, GOLANGTAKSERVER_NAME and GOLANGTAKSERVER_ADMIN_PASSWORD", values: []string{"address", "name", "admin-password"}, bools: []string{"service", "quiet"}, run: cmdRun},
+		{name: "install", usage: "install [--address HOST] [--name NAME] [--admin-password PW] [--zerotier NETWORK_ID] [--tailscale AUTH_KEY|login] [--tailscale-hostname NAME] [--no-anonymous] [--no-firewall] [--no-start]", summary: "Install as a system service that starts at boot, open the firewall, create the admin account and test everything (--zerotier NETWORK_ID joins a ZeroTier network; --tailscale AUTH_KEY, or login to sign in with a link, joins your tailnet)", values: []string{"address", "name", "admin-password", "zerotier", "tailscale", "tailscale-hostname"}, bools: []string{"no-anonymous", "no-firewall", "no-start", "yes"}, run: cmdInstall},
 		{name: "uninstall", usage: "uninstall [--purge]", summary: "Remove the service, firewall rules and program (--purge also deletes all data)", bools: []string{"purge", "yes"}, run: cmdUninstall},
 		{name: "start", usage: "start", summary: "Start the service", run: cmdStart},
 		{name: "stop", usage: "stop", summary: "Stop the service", run: cmdStop},
@@ -75,6 +75,7 @@ func commands() []command {
 		{name: "logs", usage: "logs [-f] [-n LINES]", summary: "Show the server log (-f follows new lines)", values: []string{"n"}, bools: []string{"f", "follow"}, run: cmdLogs},
 		{name: "selftest", usage: "selftest", summary: "Check that the running server accepts TAK connections", run: cmdSelfTest},
 		{name: "zerotier", usage: "zerotier status | join NETWORK_ID | leave NETWORK_ID", summary: "Install ZeroTier and join a virtual network so devices anywhere can reach this server without opening ports", run: cmdZeroTier},
+		{name: "tailscale", usage: "tailscale status | up [AUTH_KEY] [--auth-key KEY] [--hostname NAME] | down", summary: "Install Tailscale and join your tailnet so devices anywhere can reach this server without opening ports (no key: sign in with a link)", values: []string{"auth-key", "hostname"}, run: cmdTailscale},
 		{name: "bench", usage: "bench [--host HOST] [--port PORT] [--clients N] [--every SECONDS] [--duration SECONDS] [--ramp SECONDS] [--tls --cert USER.p12 [--cert-password PW] [--trust CA.pem|TRUST.p12] [--insecure]]", summary: "Load test a TAK server with simulated clients and report throughput and delivery latency", values: []string{"host", "port", "clients", "every", "duration", "ramp", "cert", "cert-password", "trust", "trust-password"}, bools: []string{"tls", "insecure"}, run: cmdBench},
 		{name: "backup", usage: "backup [FILE] [--files]", summary: "Save settings, users, certificates and missions to a zip file", bools: []string{"files"}, run: cmdBackup},
 		{name: "version", usage: "version", summary: "Print the version", run: cmdVersion},

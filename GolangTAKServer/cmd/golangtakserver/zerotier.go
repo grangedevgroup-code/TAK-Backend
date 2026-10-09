@@ -233,7 +233,9 @@ func zerotierJoin(dir, id string, wait time.Duration) ([]string, error) {
 	}
 }
 
-func addZeroTierNames(dir string, ips []string) {
+func addZeroTierNames(dir string, ips []string) { addCertNames(dir, ips, "ZeroTier") }
+
+func addCertNames(dir string, ips []string, label string) {
 	c, err := openClient(dir)
 	if err != nil {
 		return
@@ -261,7 +263,7 @@ func addZeroTierNames(dir string, ips []string) {
 	}
 	if changed {
 		if err := putSettings(c, map[string]any{"extraNames": names}); err != nil {
-			warn("could not add the ZeroTier address to the server certificate: %v", err)
+			warn("could not add the %s address to the server certificate: %v", label, err)
 		}
 	}
 }

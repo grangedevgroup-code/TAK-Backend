@@ -1,0 +1,36 @@
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: golangtakserver-tailscale
+    hostname: ${TS_HOSTNAME:-golangtakserver}
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY to a Tailscale auth key}
+      TS_HOSTNAME: ${TS_HOSTNAME:-golangtakserver}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+
+  golangtakserver:
+    image: ghcr.io/grangedevgroup-code/golangtakserver:latest
+    container_name: golangtakserver
+    restart: unless-stopped
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    environment:
+      GOLANGTAKSERVER_ADDRESS: ${GOLANGTAKSERVER_ADDRESS:?set GOLANGTAKSERVER_ADDRESS to the Tailscale name, for example golangtakserver.your-tailnet.ts.net}
+      GOLANGTAKSERVER_NAME: ${GOLANGTAKSERVER_NAME:-GolangTAKServer}
+      GOLANGTAKSERVER_ADMIN_PASSWORD: ${GOLANGTAKSERVER_ADMIN_PASSWORD:-}
+    volumes:
+      - golangtakserver-data:/data
+
+volumes:
+  tailscale-state:
+  golangtakserver-data:

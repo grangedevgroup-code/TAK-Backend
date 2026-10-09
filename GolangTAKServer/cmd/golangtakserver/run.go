@@ -41,6 +41,9 @@ func underJournal() bool {
 
 func cmdRun(a *args) error {
 	dir := dataDir(a)
+	if err := applyRunSettings(a, dir); err != nil {
+		return err
+	}
 	if a.on("service") {
 		var console io.Writer
 		if underJournal() && !a.on("quiet") {
@@ -113,7 +116,7 @@ func serve(dir string, console io.Writer, stop <-chan struct{}, banner bool, wai
 			return nil
 		}
 		reapplyFirewall(dir)
-		user, pw, created, err := s.EnsureAdmin("")
+		user, pw, created, err := s.EnsureAdmin(runAdminPassword)
 		if err != nil {
 			s.Log().Error("could not create the administrator account", "err", err)
 		}
@@ -278,4 +281,32 @@ func cmdSupervise(a *args) error {
 			backoff *= 2
 		}
 	}
+}
+
+var runAdminPassword string
+
+func applyRunSettings(a *args, dir string) error {
+	runAdminPassword = firstNonEmpty(a.val("admin-password"), os.Getenv("GOLANGTAKSERVER_ADMIN_PASSWORD"))
+	addr := strings.TrimSpace(firstNonEmpty(a.val("address"), os.Getenv("GOLANGTAKSERVER_ADDRESS")))
+	name := strings.TrimSpace(firstNonEmpty(a.val("name"), os.Getenv("GOLANGTAKSERVER_NAME")))
+	if addr == "" && name == "" {
+		return nil
+	}
+	cfg, err := server.LoadConfig(dir)
+	if err != nil {
+		return err
+	}
+	if (addr == "" || cfg.Address == addr) && (name == "" || cfg.Name == name) {
+		return nil
+	}
+	if addr != "" {
+		cfg.Address = addr
+	}
+	if name != "" {
+		cfg.Name = name
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return server.SaveConfig(dir, cfg)
 }

@@ -1,0 +1,29 @@
+services:
+  golangtakserver:
+    image: ghcr.io/grangedevgroup-code/golangtakserver:latest
+    container_name: golangtakserver
+    restart: unless-stopped
+    environment:
+      GOLANGTAKSERVER_ADDRESS: ${GOLANGTAKSERVER_ADDRESS:?set GOLANGTAKSERVER_ADDRESS to the IP address or name devices use to reach this server}
+      GOLANGTAKSERVER_NAME: ${GOLANGTAKSERVER_NAME:-GolangTAKServer}
+      GOLANGTAKSERVER_ADMIN_PASSWORD: ${GOLANGTAKSERVER_ADMIN_PASSWORD:-}
+    ports:
+      - "8087:8087/tcp"
+      - "8087:8087/udp"
+      - "8088:8088"
+      - "8089:8089"
+      - "8080:8080"
+      - "8443:8443"
+      - "8446:8446"
+      - "8090:8090"
+      - "19023:19023"
+      - "8554:8554"
+      - "1935:1935"
+      - "8000-8001:8000-8001/udp"
+      - "64738:64738/tcp"
+      - "64738:64738/udp"
+    volumes:
+      - golangtakserver-data:/data
+
+volumes:
+  golangtakserver-data:

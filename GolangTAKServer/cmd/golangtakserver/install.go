@@ -414,6 +414,15 @@ func cmdInstall(a *args) error {
 			warn("ZeroTier has not assigned an address yet; authorize this node, then run 'golangtakserver zerotier status'")
 		}
 	}
+	if key := a.val("tailscale"); key != "" {
+		step("Connecting to Tailscale")
+		names, err := tailscaleUp(dir, key, a.val("tailscale-hostname"), 90*time.Second)
+		if err != nil {
+			warn("Tailscale: %v", err)
+		} else {
+			step("Tailscale address %s (added to the server certificate)", strings.Join(names, ", "))
+		}
+	}
 
 	fmt.Printf("\nGolangTAKServer %s is installed and running", version)
 	if failed > 0 {

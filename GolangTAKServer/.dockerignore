@@ -1,0 +1,8 @@
+dist
+docs
+docker
+golangtakserver
+golangtakserver.exe
+*.test
+*.out
+*.prof
