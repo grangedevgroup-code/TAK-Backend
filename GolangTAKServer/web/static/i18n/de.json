@@ -95,7 +95,7 @@
  "Approval": "Genehmigung",
  "Approve": "Genehmigen",
  "Approved": "Genehmigt",
- "Area": "Fläche",
+ "Area": "Gebiet",
  "Ask an administrator to turn it on.": "Bitten Sie einen Administrator, es zu aktivieren.",
  "Ask for a code from your phone or email after your password when you sign in to this dashboard. TAK apps keep using the password or certificate alone.": "Nach dem Passwort einen Code vom Telefon oder per E-Mail abfragen, wenn Sie sich an diesem Dashboard anmelden. TAK-Apps verwenden weiterhin nur Passwort oder Zertifikat.",
  "At enrollment": "Bei der Registrierung",
@@ -1176,5 +1176,12 @@
  "Install at (hour, 0 to 23, server time)": "Installieren um (Stunde, 0 bis 23, Serverzeit)",
  "Check now": "Jetzt prüfen",
  "Install update": "Aktualisierung installieren",
- "Installed. Restarting...": "Installiert. Neustart..."
+ "Installed. Restarting...": "Installiert. Neustart...",
+ "Message filters": "Nachrichtenfilter",
+ "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.": "Regeln für jede Nachricht von Geräten, Feeds und Serververbindungen, bevor sie geteilt wird. Um eine Serververbindung auf ein Kartengebiet zu begrenzen, bearbeiten Sie sie unter Serververbindungen.",
+ "Drop these message types": "Diese Nachrichtentypen verwerfen",
+ "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "CoT-Typen, durch Kommas getrennt. Mit * am Ende wird ein Präfix erfasst. Steuernachrichten und Löschungen werden immer weitergegeben.",
+ "Remove these detail elements": "Diese Detailelemente entfernen",
+ "Detail element names removed before sharing, for example takv to hide device versions.": "Namen von Detailelementen, die vor dem Teilen entfernt werden, zum Beispiel takv, um Geräteversionen zu verbergen.",
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Optional. Nur Kartenobjekte innerhalb dieses Rechtecks teilen und annehmen, zum Beispiel 34.0, -118.5, 34.3, -118.1. Chat, Alarme und Direktnachrichten werden immer weitergegeben."
 }

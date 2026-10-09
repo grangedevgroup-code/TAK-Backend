@@ -421,6 +421,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 	if strings.EqualFold(l.cfg.Direction, "in") {
 		c.filter = func(*Message) bool { return false }
 	}
+	s.applyLinkArea(c, l.cfg.Area)
 	s.hub.Add(c)
 	link := &fig2Link{c: c, allowed: allowed, inOnly: strings.EqualFold(l.cfg.Direction, "in"), rolOut: make(chan takproto.ROL, 256), done: make(chan struct{}), node: remoteNode}
 	s.fig2Out.Store(l, link)

@@ -235,6 +235,9 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 	if l != nil && strings.EqualFold(l.cfg.Direction, "in") {
 		c.filter = func(*Message) bool { return false }
 	}
+	if l != nil {
+		s.applyLinkArea(c, l.cfg.Area)
+	}
 	s.hub.Add(c)
 	fc := &fedConn{c: c, name: name, dir: dir, since: time.Now(), version: "v1"}
 	s.fed.add(fc)

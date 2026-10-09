@@ -805,6 +805,11 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
 		}
+		for _, p := range c.Peers {
+			if _, err := parseArea(p.Area); err != nil {
+				return fmt.Errorf("link %s: %w", p.Name, err)
+			}
+		}
 		c.Plugins = oldPlugins
 		if c.LDAP.BindPassword == "********" {
 			c.LDAP.BindPassword = oldBind

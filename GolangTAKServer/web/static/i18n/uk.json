@@ -96,7 +96,7 @@
  "Approval": "Схвалення",
  "Approve": "Схвалити",
  "Approved": "Схвалено",
- "Area": "Площа",
+ "Area": "Ділянка",
  "Ask an administrator to turn it on.": "Попросіть адміністратора увімкнути це.",
  "Ask for a code from your phone or email after your password when you sign in to this dashboard. TAK apps keep using the password or certificate alone.": "Запитувати код з телефона або пошти після пароля під час входу в цю панель. Застосунки TAK і далі використовують лише пароль або сертифікат.",
  "At enrollment": "Під час реєстрації",
@@ -1216,5 +1216,12 @@
  "Install at (hour, 0 to 23, server time)": "Встановлювати о (година, від 0 до 23, час сервера)",
  "Check now": "Перевірити зараз",
  "Install update": "Встановити оновлення",
- "Installed. Restarting...": "Встановлено. Перезапуск..."
+ "Installed. Restarting...": "Встановлено. Перезапуск...",
+ "Message filters": "Фільтри повідомлень",
+ "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.": "Правила для кожного повідомлення від пристроїв, стрічок і зв'язків з серверами перед поширенням. Щоб обмежити зв'язок ділянкою мапи, змініть його в розділі Зв'язки з серверами.",
+ "Drop these message types": "Відкидати ці типи повідомлень",
+ "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "Типи CoT через кому. Закінчіть *, щоб збігався префікс. Службові повідомлення та видалення проходять завжди.",
+ "Remove these detail elements": "Видаляти ці елементи деталей",
+ "Detail element names removed before sharing, for example takv to hide device versions.": "Назви елементів деталей, що видаляються перед поширенням, наприклад takv, щоб приховати версії пристроїв.",
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Необов'язково. Поширювати й приймати лише об'єкти мапи в цьому прямокутнику, наприклад 34.0, -118.5, 34.3, -118.1. Чат, тривоги та особисті повідомлення проходять завжди."
 }

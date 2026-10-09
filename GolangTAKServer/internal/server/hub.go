@@ -46,6 +46,7 @@ type Hub struct {
 	OnCoT       func(m *Message)
 	OnMissions  func(m *Message, missions []string)
 	Inject      func(m *Message)
+	Filter      func(m *Message) bool
 	OnOffline   func(dest cot.Dest, m *Message)
 	OnRemove    func(c *Client)
 }
@@ -388,6 +389,9 @@ func parseF(s string) float64 {
 }
 
 func (h *Hub) Publish(m *Message) {
+	if h.Filter != nil && !h.Filter(m) {
+		return
+	}
 	if h.Inject != nil {
 		h.Inject(m)
 	}

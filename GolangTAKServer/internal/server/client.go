@@ -115,6 +115,7 @@ type Client struct {
 	readBucket tokenBucket
 	sendBucket tokenBucket
 	rateDrops  atomic.Uint64
+	inArea     *geoFilter
 }
 
 type bbox struct{ minLat, minLon, maxLat, maxLon float64 }

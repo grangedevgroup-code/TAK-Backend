@@ -3034,7 +3034,8 @@
         field("Client certificate", input("pcert", p.certFile || ""), "Path on this server to a .p12 or PEM file."),
         field("Certificate password", input("pcertpw", p.certPassword || "", { type: "password", autocomplete: "new-password" })),
         field("Trusted CA", input("ptrust", p.trustFile || ""), "Path on this server to the other server's CA (.pem or .p12)."),
-        field("Options", h("div", null, checkbox("pins", p.insecure, "Do not verify the other server's certificate"), h("br"), checkbox("pnop", p.noPresence, "Do not announce this server as a contact")))
+        field("Options", h("div", null, checkbox("pins", p.insecure, "Do not verify the other server's certificate"), h("br"), checkbox("pnop", p.noPresence, "Do not announce this server as a contact"))),
+        field("Area", input("parea", p.area || "", { placeholder: "south, west, north, east" }), "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.")
       );
       if (isNew) applyKind();
       modal(isNew ? "Add server link" : "Edit " + p.name, f, [
@@ -3055,6 +3056,7 @@
               trustFile: val(f, "ptrust") || undefined,
               insecure: val(f, "pins") || undefined,
               noPresence: val(f, "pnop") || undefined,
+              area: val(f, "parea") || undefined,
               enabled: p.enabled !== false,
             });
             const peers = (cfg.peers || []).filter((x) => x.name !== next.name);
@@ -3277,6 +3279,7 @@
     { id: "access", title: "Access and groups", keys: "anonymous unsigned default group strict channels protobuf replay" },
     { id: "ports", title: "Ports", keys: "tcp ssl tls udp http https enrollment websocket" },
     { id: "mesh", title: "Mesh and alerts", keys: "multicast sa emergency repeater ttl" },
+    { id: "filters", title: "Message filters", keys: "filter drop block strip scrub remove detail type" },
     { id: "meshtastic", title: "Meshtastic", keys: "lora mqtt broker radio" },
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
@@ -3388,7 +3391,7 @@
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {};
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -3422,6 +3425,11 @@
         field("HTTP", n("p_http", p.http)),
         field("WebSocket", n("p_ws", p.websocket)),
         field("FreeTAKServer API", n("p_api", p.api)),
+      ],
+      filters: [
+        "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.",
+        field("Drop these message types", input("flt_drop", (flt.dropTypes || []).join(", "), { placeholder: "b-m-p-s-p-i, a-u-*" }), "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass."),
+        field("Remove these detail elements", input("flt_strip", (flt.stripDetails || []).join(", "), { placeholder: "takv, uid" }), "Detail element names removed before sharing, for example takv to hide device versions."),
       ],
       mesh: [
         "Multicast situational awareness for radios and devices on the same network, and the emergency repeater.",
@@ -3782,6 +3790,7 @@
         retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
+        filters: { dropTypes: splitList(val(form, "flt_drop")), stripDetails: splitList(val(form, "flt_strip")) },
         updates: { auto: val(form, "upd_auto"), hour: Math.min(23, num(form, "upd_hour")) },
         rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),

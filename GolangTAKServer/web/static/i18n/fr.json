@@ -93,7 +93,7 @@
  "Approval": "Approbation",
  "Approve": "Approuver",
  "Approved": "Approuvé",
- "Area": "Surface",
+ "Area": "Zone",
  "Ask an administrator to turn it on.": "Demandez à un administrateur de l'activer.",
  "Ask for a code from your phone or email after your password when you sign in to this dashboard. TAK apps keep using the password or certificate alone.": "Demander un code par téléphone ou e-mail après le mot de passe lors de la connexion à ce tableau de bord. Les applications TAK continuent d'utiliser uniquement le mot de passe ou le certificat.",
  "At enrollment": "À l'inscription",
@@ -1171,5 +1171,12 @@
  "Install at (hour, 0 to 23, server time)": "Installer à (heure, 0 à 23, heure du serveur)",
  "Check now": "Vérifier maintenant",
  "Install update": "Installer la mise à jour",
- "Installed. Restarting...": "Installée. Redémarrage..."
+ "Installed. Restarting...": "Installée. Redémarrage...",
+ "Message filters": "Filtres de messages",
+ "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.": "Règles appliquées à chaque message des appareils, flux et liens entre serveurs avant son partage. Pour limiter un lien à une zone de la carte, modifiez-le sous Liens serveur.",
+ "Drop these message types": "Ignorer ces types de message",
+ "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "Types CoT séparés par des virgules. Terminez par * pour un préfixe. Les messages de contrôle et les suppressions passent toujours.",
+ "Remove these detail elements": "Retirer ces éléments de détail",
+ "Detail element names removed before sharing, for example takv to hide device versions.": "Noms d'éléments de détail retirés avant le partage, par exemple takv pour masquer les versions des appareils.",
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Facultatif. Partager et accepter uniquement les éléments de carte dans ce rectangle, par exemple 34.0, -118.5, 34.3, -118.1. Le chat, les alertes et les messages directs passent toujours."
 }

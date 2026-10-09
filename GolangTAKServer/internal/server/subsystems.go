@@ -87,6 +87,7 @@ func (s *Server) initSubsystems() error {
 	}
 	s.hub.OnMissions = s.onMissionCoT
 	s.hub.Inject = s.applyInjectors
+	s.hub.Filter = s.messageFilter
 	s.hub.OnOffline = s.storeOffline
 	return nil
 }

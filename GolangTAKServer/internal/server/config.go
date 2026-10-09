@@ -163,6 +163,7 @@ type PeerConfig struct {
 	Insecure   bool     `json:"insecure,omitempty"`
 	Protocol   string   `json:"protocol,omitempty"`
 	NoPresence bool     `json:"noPresence,omitempty"`
+	Area       string   `json:"area,omitempty"`
 }
 
 type Config struct {
@@ -184,6 +185,7 @@ type Config struct {
 	RateLimits     RateLimitConfig   `json:"rateLimits"`
 	Metrics        MetricsConfig     `json:"metrics"`
 	Updates        UpdatesConfig     `json:"updates"`
+	Filters        MessageFilters    `json:"filters"`
 	Limits         LimitsConfig      `json:"limits"`
 	Repeater       RepeaterConfig    `json:"repeater"`
 	Federation     FederationConfig  `json:"federation"`

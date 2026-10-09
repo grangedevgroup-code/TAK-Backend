@@ -272,6 +272,7 @@ func (pm *PeerManager) newPeerClient(l *peerLink, remote string) *Client {
 	if dir == "in" {
 		c.filter = func(*Message) bool { return false }
 	}
+	s.applyLinkArea(c, l.cfg.Area)
 	return c
 }
 

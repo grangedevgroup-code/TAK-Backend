@@ -1195,5 +1195,12 @@
  "Install at (hour, 0 to 23, server time)": "Instalar às (hora, 0 a 23, horário do servidor)",
  "Check now": "Verificar agora",
  "Install update": "Instalar atualização",
- "Installed. Restarting...": "Instalada. Reiniciando..."
+ "Installed. Restarting...": "Instalada. Reiniciando...",
+ "Message filters": "Filtros de mensagens",
+ "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.": "Regras aplicadas a cada mensagem de dispositivos, fontes e links entre servidores antes de ser compartilhada. Para limitar um link a uma área do mapa, edite-o em Links de servidor.",
+ "Drop these message types": "Descartar estes tipos de mensagem",
+ "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "Tipos CoT separados por vírgulas. Termine com * para um prefixo. Mensagens de controle e exclusões sempre passam.",
+ "Remove these detail elements": "Remover estes elementos de detalhe",
+ "Detail element names removed before sharing, for example takv to hide device versions.": "Nomes de elementos de detalhe removidos antes de compartilhar, por exemplo takv para ocultar versões dos dispositivos.",
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Opcional. Só compartilhar e aceitar itens do mapa dentro deste retângulo, por exemplo 34.0, -118.5, 34.3, -118.1. Chat, alertas e mensagens diretas sempre passam."
 }
