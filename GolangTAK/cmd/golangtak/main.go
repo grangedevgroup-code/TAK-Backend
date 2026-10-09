@@ -74,6 +74,7 @@ func commands() []command {
 		{name: "cert", usage: "cert info | renew | revoke SERIAL | import-ca CERT.pem KEY.pem [KEY-PASSWORD]", summary: "Certificate authority and server certificate tools", run: cmdCert},
 		{name: "logs", usage: "logs [-f] [-n LINES]", summary: "Show the server log (-f follows new lines)", values: []string{"n"}, bools: []string{"f", "follow"}, run: cmdLogs},
 		{name: "selftest", usage: "selftest", summary: "Check that the running server accepts TAK connections", run: cmdSelfTest},
+		{name: "bench", usage: "bench [--host HOST] [--port PORT] [--clients N] [--every SECONDS] [--duration SECONDS] [--ramp SECONDS] [--tls --cert USER.p12 [--cert-password PW] [--trust CA.pem|TRUST.p12] [--insecure]]", summary: "Load test a TAK server with simulated clients and report throughput and delivery latency", values: []string{"host", "port", "clients", "every", "duration", "ramp", "cert", "cert-password", "trust", "trust-password"}, bools: []string{"tls", "insecure"}, run: cmdBench},
 		{name: "backup", usage: "backup [FILE] [--files]", summary: "Save settings, users, certificates and missions to a zip file", bools: []string{"files"}, run: cmdBackup},
 		{name: "version", usage: "version", summary: "Print the version", run: cmdVersion},
 		{name: "help", usage: "help [COMMAND]", summary: "Show help", run: cmdHelp},
@@ -105,6 +106,8 @@ func findCommand(name string) *command {
 		return findCommand("uninstall")
 	case "log":
 		return findCommand("logs")
+	case "benchmark", "loadtest", "load-test":
+		return findCommand("bench")
 	case "test", "self-test", "check":
 		return findCommand("selftest")
 	case "certs", "certificate", "ca":

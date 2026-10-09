@@ -309,6 +309,7 @@ Set any port to 0 to turn that service off.
 | `golangtak logs [-f]` | Server log |
 | `golangtak selftest` | Test every port of the running server |
 | `golangtak backup [FILE]` | Save settings, users, certificates and missions |
+| `golangtak bench [--clients N] [--every S] [--duration S]` | Load test this or any TAK server with simulated clients: throughput, delivery and latency |
 
 `golangtak help COMMAND` shows every option. Commands work whether the server is running or stopped. Add `--data DIR` to use another data directory.
 
@@ -319,6 +320,8 @@ sudo golangtak user add alice --groups Blue --callsign ALPHA-1
 sudo golangtak qr alice
 sudo golangtak peer add hq tls://tak.example.org:8089 --user golangtak --password secret --trust /root/hq-ca.pem
 sudo golangtak config set address tak.example.org
+golangtak bench --host tak.example.org --clients 500 --duration 60
+golangtak bench --tls --cert alice.p12 --trust truststore.p12 --clients 200
 ```
 
 ## Settings and data
