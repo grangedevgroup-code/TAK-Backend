@@ -1,0 +1,246 @@
+name: GolangTAKServer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "GolangTAKServer/**"
+      - ".github/workflows/golangtakserver*.yml"
+  pull_request:
+    paths:
+      - "GolangTAKServer/**"
+      - ".github/workflows/golangtakserver*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: GolangTAKServer
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: GolangTAKServer/go.mod
+          cache: false
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -count=1 ./...
+      - name: Test with the race detector
+        if: runner.os == 'Linux'
+        run: go test -race -count=1 ./...
+      - name: Cross-compile every release target
+        if: runner.os == 'Linux'
+        run: sh scripts/build.sh ci
+
+  install:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.2"
+          check-latest: true
+          cache: false
+
+      - name: Known vulnerabilities
+        if: runner.os == 'Linux'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      - name: Build
+        shell: bash
+        run: |
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X main.version=ci" -o "golangtakserver$ext" ./cmd/golangtakserver
+
+      - name: Install (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: GOLANGTAKSERVER_BINARY="$PWD/golangtakserver" sh scripts/install.sh
+
+      - name: Install (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:GOLANGTAKSERVER_BINARY = Join-Path $PWD 'golangtakserver.exe'
+          ./scripts/install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Use the installed server (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          set -e
+          sudo golangtakserver status
+          sudo golangtakserver selftest
+          sudo golangtakserver user add alice --groups Blue --callsign ALPHA-1
+          sudo golangtakserver user list
+          sudo golangtakserver qr alice > /dev/null
+          sudo golangtakserver user package alice --out-file /tmp/alice.zip
+          test -s /tmp/alice.zip
+          sudo golangtakserver config set ports.websocket 8091
+          sleep 3
+          sudo golangtakserver selftest
+          sudo golangtakserver backup /tmp/backup.zip
+          test -s /tmp/backup.zip
+
+      - name: Use the installed server (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $g = 'C:\Program Files\GolangTAKServer\golangtakserver.exe'
+          & $g status; if ($LASTEXITCODE) { exit 1 }
+          & $g selftest; if ($LASTEXITCODE) { exit 1 }
+          & $g user add alice --groups Blue --callsign ALPHA-1; if ($LASTEXITCODE) { exit 1 }
+          & $g user package alice --out-file "$env:RUNNER_TEMP\alice.zip"; if ($LASTEXITCODE) { exit 1 }
+          if (-not (Test-Path "$env:RUNNER_TEMP\alice.zip")) { exit 1 }
+          & $g config set ports.websocket 8091; if ($LASTEXITCODE) { exit 1 }
+          Start-Sleep -Seconds 3
+          & $g selftest; if ($LASTEXITCODE) { exit 1 }
+
+      - name: Recover after a crash (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          sudo pkill -9 -x golangtakserver
+          for _ in $(seq 1 30); do
+            sleep 2
+            if sudo golangtakserver selftest; then exit 0; fi
+          done
+          sudo golangtakserver logs -n 50 || true
+          exit 1
+
+      - name: Recover after a crash (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $g = 'C:\Program Files\GolangTAKServer\golangtakserver.exe'
+          Stop-Process -Name golangtakserver -Force
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 2
+            & $g selftest
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+          }
+          & $g logs -n 50
+          exit 1
+
+      - name: Restart the service
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            "/c/Program Files/GolangTAKServer/golangtakserver.exe" restart
+            "/c/Program Files/GolangTAKServer/golangtakserver.exe" selftest
+          else
+            sudo golangtakserver restart
+            sudo golangtakserver selftest
+          fi
+
+      - name: Uninstall
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            "/c/Program Files/GolangTAKServer/golangtakserver.exe" uninstall --purge
+            sleep 6
+            test ! -e "/c/Program Files/GolangTAKServer/golangtakserver.exe"
+            test ! -e "/c/ProgramData/GolangTAKServer"
+          else
+            sudo golangtakserver uninstall --purge
+            test ! -e /usr/local/bin/golangtakserver
+          fi
+
+  upgrade:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      OLD_SCRIPT: https://raw.githubusercontent.com/grangedevgroup-code/TAK-Backend/golangtak-v1.5.0/GolangTAK/scripts
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.2"
+          check-latest: true
+          cache: false
+
+      - name: Build
+        shell: bash
+        run: |
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X main.version=ci" -o "golangtakserver$ext" ./cmd/golangtakserver
+
+      - name: Install GolangTAK 1.5.0 (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          set -e
+          curl -fsSL "$OLD_SCRIPT/install.sh" | GOLANGTAK_VERSION=1.5.0 sh
+          sudo golangtak user add bob --groups Blue
+          sudo golangtak selftest
+
+      - name: Install GolangTAK 1.5.0 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -UseBasicParsing -Uri "$env:OLD_SCRIPT/install.ps1" -OutFile "$env:RUNNER_TEMP\old-install.ps1"
+          $env:GOLANGTAK_VERSION = '1.5.0'
+          & "$env:RUNNER_TEMP\old-install.ps1"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $g = 'C:\Program Files\GolangTAK\golangtak.exe'
+          & $g user add bob --groups Blue; if ($LASTEXITCODE) { exit 1 }
+          & $g selftest; if ($LASTEXITCODE) { exit 1 }
+
+      - name: Upgrade to GolangTAKServer (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          set -e
+          GOLANGTAKSERVER_BINARY="$PWD/golangtakserver" sh scripts/install.sh
+          sudo golangtakserver selftest
+          sudo golangtakserver user list | grep -q bob
+          test ! -e /usr/local/bin/golangtak
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            test ! -e /var/lib/golangtak
+            test -f /var/lib/golangtakserver/config.json
+            test ! -e /etc/systemd/system/golangtak.service
+            test ! -e /usr/bin/golangtak
+          else
+            test ! -e "/Library/Application Support/GolangTAK"
+            test -f "/Library/Application Support/GolangTAKServer/config.json"
+          fi
+          sudo golangtakserver uninstall --purge
+
+      - name: Upgrade to GolangTAKServer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:GOLANGTAKSERVER_BINARY = Join-Path $PWD 'golangtakserver.exe'
+          ./scripts/install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $g = 'C:\Program Files\GolangTAKServer\golangtakserver.exe'
+          & $g selftest; if ($LASTEXITCODE) { exit 1 }
+          $users = & $g user list | Out-String
+          if ($users -notmatch 'bob') { Write-Host $users; exit 1 }
+          if (Get-Service -Name GolangTAK -ErrorAction SilentlyContinue) { Write-Host 'old service still registered'; exit 1 }
+          if (Test-Path 'C:\ProgramData\GolangTAK') { Write-Host 'old data directory still exists'; exit 1 }
+          if (-not (Test-Path 'C:\ProgramData\GolangTAKServer\config.json')) { exit 1 }
+          Start-Sleep -Seconds 6
+          if (Test-Path 'C:\Program Files\GolangTAK\golangtak.exe') { Write-Host 'old program still installed'; exit 1 }
+          netsh advfirewall firewall show rule name=GolangTAK | Out-Null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'old firewall rule still present'; exit 1 }
+          $global:LASTEXITCODE = 0
+          & $g uninstall --purge

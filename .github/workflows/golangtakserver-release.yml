@@ -1,0 +1,53 @@
+name: GolangTAKServer release
+
+on:
+  push:
+    tags:
+      - "golangtakserver-v*"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: GolangTAKServer
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.2"
+          check-latest: true
+          cache: false
+      - name: Test
+        run: go test -count=1 ./...
+      - name: Build release binaries
+        run: sh scripts/build.sh "$GITHUB_REF_NAME"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#golangtakserver-v}"
+          cat > notes.md <<EOF
+          GolangTAKServer $version
+
+          Install or upgrade on Linux, Raspberry Pi, macOS and BSD:
+
+              curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/GolangTAKServer/scripts/install.sh | sh
+
+          Install or upgrade on Windows (PowerShell):
+
+              irm https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/GolangTAKServer/scripts/install.ps1 | iex
+
+          Or download the binary for your system below, check it against SHA256SUMS, and run "golangtakserver install".
+
+          GolangTAKServer is an independent open source project and is not affiliated with tak.gov or the TAK Product Center.
+          EOF
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "GolangTAKServer $version" --notes-file notes.md
+          fi
