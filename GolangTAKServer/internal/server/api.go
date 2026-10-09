@@ -72,7 +72,7 @@ func (s *Server) apiMe(w http.ResponseWriter, r *http.Request) {
 	id := identityOf(r)
 	cfg := s.Config()
 	out := map[string]any{"user": id.Name, "admin": id.Admin, "groups": s.dir.Names(id.Out.Union(id.In)), "via": id.Via,
-		"server": cfg.Name, "version": s.Version, "tileUrl": cfg.TileURL}
+		"server": cfg.Name, "version": s.Version, "tileUrl": cfg.TileURL, "classification": cfg.VBM.NetworkClassification}
 	if sess := sessionOf(r); sess != nil {
 		out["csrf"] = sess.CSRF
 	}

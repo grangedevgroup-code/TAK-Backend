@@ -850,7 +850,10 @@
       liveEl,
       findMobile
     );
-    const column = h("div", { class: "main", onmousedown: () => side.classList.contains("open") && setOpen(false) }, strip, alertEl, main);
+    const marking = (S.me.classification || "").trim();
+    const level = /TOP SECRET/i.test(marking) ? "ts" : /SECRET/i.test(marking) ? "s" : /CONFIDENTIAL/i.test(marking) ? "c" : /CUI|CONTROLLED/i.test(marking) ? "cui" : "u";
+    const markEl = marking ? h("div", { class: "marking " + level, role: "note" }, marking) : null;
+    const column = h("div", { class: "main", onmousedown: () => side.classList.contains("open") && setOpen(false) }, markEl, strip, alertEl, main);
     root.append(h("div", { class: "app" }, side, column));
     updateAlert();
     clearInterval(countTimer);
@@ -3391,7 +3394,7 @@
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {};
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {}, vbm = cfg.vbm || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -3430,6 +3433,12 @@
         "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.",
         field("Drop these message types", input("flt_drop", (flt.dropTypes || []).join(", "), { placeholder: "b-m-p-s-p-i, a-u-*" }), "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass."),
         field("Remove these detail elements", input("flt_strip", (flt.stripDetails || []).join(", "), { placeholder: "takv, uid" }), "Detail element names removed before sharing, for example takv to hide device versions."),
+        sub("Restricted sharing"),
+        field("Restricted sharing", checkbox("vbm_on", vbm.vbmEnabled, "Turn on the rules below (TAK VBM mode)"), "Devices still share through missions and server links."),
+        field("Positions", checkbox("vbm_sa", vbm.saDisabled, "Do not share device positions directly between devices")),
+        field("Chat", checkbox("vbm_chat", vbm.chatDisabled, "Do not share chat directly between devices")),
+        field("Classification banner", input("vbm_class", vbm.networkClassification || "", { placeholder: "for example UNCLASSIFIED" }), "Shown at the top of the dashboard and returned to TAK clients that ask for it. Empty shows no banner."),
+        field("Common operating picture missions", input("vbm_tool", vbm.copTool || "", { placeholder: "vbm" }), "Missions with this tool are listed as COP views."),
       ],
       mesh: [
         "Multicast situational awareness for radios and devices on the same network, and the emergency repeater.",
@@ -3791,6 +3800,7 @@
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
         filters: { dropTypes: splitList(val(form, "flt_drop")), stripDetails: splitList(val(form, "flt_strip")) },
+        vbm: { vbmEnabled: val(form, "vbm_on"), saDisabled: val(form, "vbm_sa"), chatDisabled: val(form, "vbm_chat"), networkClassification: val(form, "vbm_class"), copTool: val(form, "vbm_tool") },
         updates: { auto: val(form, "upd_auto"), hour: Math.min(23, num(form, "upd_hour")) },
         rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),

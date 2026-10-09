@@ -1183,5 +1183,16 @@
  "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "CoT-Typen, durch Kommas getrennt. Mit * am Ende wird ein Präfix erfasst. Steuernachrichten und Löschungen werden immer weitergegeben.",
  "Remove these detail elements": "Diese Detailelemente entfernen",
  "Detail element names removed before sharing, for example takv to hide device versions.": "Namen von Detailelementen, die vor dem Teilen entfernt werden, zum Beispiel takv, um Geräteversionen zu verbergen.",
- "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Optional. Nur Kartenobjekte innerhalb dieses Rechtecks teilen und annehmen, zum Beispiel 34.0, -118.5, 34.3, -118.1. Chat, Alarme und Direktnachrichten werden immer weitergegeben."
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Optional. Nur Kartenobjekte innerhalb dieses Rechtecks teilen und annehmen, zum Beispiel 34.0, -118.5, 34.3, -118.1. Chat, Alarme und Direktnachrichten werden immer weitergegeben.",
+ "Restricted sharing": "Eingeschränktes Teilen",
+ "Turn on the rules below (TAK VBM mode)": "Die Regeln unten einschalten (TAK-VBM-Modus)",
+ "Devices still share through missions and server links.": "Geräte teilen weiterhin über Missionen und Serververbindungen.",
+ "Positions": "Positionen",
+ "Do not share device positions directly between devices": "Gerätepositionen nicht direkt zwischen Geräten teilen",
+ "Do not share chat directly between devices": "Chat nicht direkt zwischen Geräten teilen",
+ "Classification banner": "Klassifizierungsbanner",
+ "for example UNCLASSIFIED": "zum Beispiel UNCLASSIFIED",
+ "Shown at the top of the dashboard and returned to TAK clients that ask for it. Empty shows no banner.": "Wird oben im Dashboard angezeigt und an TAK-Clients übermittelt, die danach fragen. Leer zeigt kein Banner.",
+ "Common operating picture missions": "Missionen für das gemeinsame Lagebild",
+ "Missions with this tool are listed as COP views.": "Missionen mit diesem Werkzeug werden als Lagebild-Ansichten aufgeführt."
 }

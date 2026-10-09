@@ -603,3 +603,9 @@ pre.codes { padding: 12px; border: 1px solid var(--border-strong); background: v
   width: auto;
   min-width: 160px;
 }
+
+.marking { padding: 3px 16px; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; background: #007a33; }
+.marking.cui { background: #502b85; }
+.marking.c { background: #0033a0; }
+.marking.s { background: #c8102e; }
+.marking.ts { background: #ff8c00; color: #000; }

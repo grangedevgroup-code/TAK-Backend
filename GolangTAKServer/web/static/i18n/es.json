@@ -1214,5 +1214,16 @@
  "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "Tipos CoT separados por comas. Termine con * para un prefijo. Los mensajes de control y los borrados siempre pasan.",
  "Remove these detail elements": "Quitar estos elementos de detalle",
  "Detail element names removed before sharing, for example takv to hide device versions.": "Nombres de elementos de detalle que se quitan antes de compartir, por ejemplo takv para ocultar las versiones de los dispositivos.",
- "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Opcional. Solo compartir y aceptar elementos del mapa dentro de este rectángulo, por ejemplo 34.0, -118.5, 34.3, -118.1. El chat, las alertas y los mensajes directos siempre pasan."
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Opcional. Solo compartir y aceptar elementos del mapa dentro de este rectángulo, por ejemplo 34.0, -118.5, 34.3, -118.1. El chat, las alertas y los mensajes directos siempre pasan.",
+ "Restricted sharing": "Uso compartido restringido",
+ "Turn on the rules below (TAK VBM mode)": "Activar las reglas de abajo (modo VBM de TAK)",
+ "Devices still share through missions and server links.": "Los dispositivos siguen compartiendo mediante misiones y enlaces entre servidores.",
+ "Positions": "Posiciones",
+ "Do not share device positions directly between devices": "No compartir posiciones directamente entre dispositivos",
+ "Do not share chat directly between devices": "No compartir el chat directamente entre dispositivos",
+ "Classification banner": "Banner de clasificación",
+ "for example UNCLASSIFIED": "por ejemplo UNCLASSIFIED",
+ "Shown at the top of the dashboard and returned to TAK clients that ask for it. Empty shows no banner.": "Se muestra en la parte superior del panel y se envía a los clientes TAK que lo piden. Vacío no muestra banner.",
+ "Common operating picture missions": "Misiones de imagen operativa común",
+ "Missions with this tool are listed as COP views.": "Las misiones con esta herramienta aparecen como vistas COP."
 }

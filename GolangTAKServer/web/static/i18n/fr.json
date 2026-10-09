@@ -1178,5 +1178,16 @@
  "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "Types CoT séparés par des virgules. Terminez par * pour un préfixe. Les messages de contrôle et les suppressions passent toujours.",
  "Remove these detail elements": "Retirer ces éléments de détail",
  "Detail element names removed before sharing, for example takv to hide device versions.": "Noms d'éléments de détail retirés avant le partage, par exemple takv pour masquer les versions des appareils.",
- "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Facultatif. Partager et accepter uniquement les éléments de carte dans ce rectangle, par exemple 34.0, -118.5, 34.3, -118.1. Le chat, les alertes et les messages directs passent toujours."
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Facultatif. Partager et accepter uniquement les éléments de carte dans ce rectangle, par exemple 34.0, -118.5, 34.3, -118.1. Le chat, les alertes et les messages directs passent toujours.",
+ "Restricted sharing": "Partage restreint",
+ "Turn on the rules below (TAK VBM mode)": "Activer les règles ci-dessous (mode VBM de TAK)",
+ "Devices still share through missions and server links.": "Les appareils partagent toujours via les missions et les liens entre serveurs.",
+ "Positions": "Positions",
+ "Do not share device positions directly between devices": "Ne pas partager les positions directement entre appareils",
+ "Do not share chat directly between devices": "Ne pas partager le chat directement entre appareils",
+ "Classification banner": "Bandeau de classification",
+ "for example UNCLASSIFIED": "par exemple UNCLASSIFIED",
+ "Shown at the top of the dashboard and returned to TAK clients that ask for it. Empty shows no banner.": "Affiché en haut du tableau de bord et renvoyé aux clients TAK qui le demandent. Vide n'affiche aucun bandeau.",
+ "Common operating picture missions": "Missions de situation opérationnelle commune",
+ "Missions with this tool are listed as COP views.": "Les missions avec cet outil sont listées comme vues COP."
 }

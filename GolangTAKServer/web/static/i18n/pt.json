@@ -1202,5 +1202,16 @@
  "CoT types, comma separated. End with * to match a prefix. Control messages and deletions always pass.": "Tipos CoT separados por vírgulas. Termine com * para um prefixo. Mensagens de controle e exclusões sempre passam.",
  "Remove these detail elements": "Remover estes elementos de detalhe",
  "Detail element names removed before sharing, for example takv to hide device versions.": "Nomes de elementos de detalhe removidos antes de compartilhar, por exemplo takv para ocultar versões dos dispositivos.",
- "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Opcional. Só compartilhar e aceitar itens do mapa dentro deste retângulo, por exemplo 34.0, -118.5, 34.3, -118.1. Chat, alertas e mensagens diretas sempre passam."
+ "Optional. Only share and accept map items inside this box, for example 34.0, -118.5, 34.3, -118.1. Chat, alerts and direct messages always pass.": "Opcional. Só compartilhar e aceitar itens do mapa dentro deste retângulo, por exemplo 34.0, -118.5, 34.3, -118.1. Chat, alertas e mensagens diretas sempre passam.",
+ "Restricted sharing": "Compartilhamento restrito",
+ "Turn on the rules below (TAK VBM mode)": "Ativar as regras abaixo (modo VBM do TAK)",
+ "Devices still share through missions and server links.": "Os dispositivos continuam compartilhando por missões e links entre servidores.",
+ "Positions": "Posições",
+ "Do not share device positions directly between devices": "Não compartilhar posições diretamente entre dispositivos",
+ "Do not share chat directly between devices": "Não compartilhar o chat diretamente entre dispositivos",
+ "Classification banner": "Faixa de classificação",
+ "for example UNCLASSIFIED": "por exemplo UNCLASSIFIED",
+ "Shown at the top of the dashboard and returned to TAK clients that ask for it. Empty shows no banner.": "Mostrada no topo do painel e enviada aos clientes TAK que pedirem. Vazio não mostra faixa.",
+ "Common operating picture missions": "Missões de imagem operacional comum",
+ "Missions with this tool are listed as COP views.": "Missões com esta ferramenta aparecem como visões COP."
 }

@@ -34,6 +34,9 @@ func (s *Server) initSubsystems() error {
 	if s.profiles, err = OpenProfiles(s.DataDir); err != nil {
 		return err
 	}
+	if s.props, err = openProps(s.DataDir); err != nil {
+		return err
+	}
 	if s.chats, err = OpenChats(s.DataDir); err != nil {
 		return err
 	}
@@ -151,6 +154,9 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.chats != nil {
 		s.chats.Close()
+		if s.props != nil {
+			s.props.Close()
+		}
 	}
 	if s.repeated != nil {
 		s.repeated.Close()

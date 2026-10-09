@@ -23,6 +23,7 @@ func (s *Server) takAdminRoutes(m, a func(string, http.HandlerFunc)) {
 	a("POST /Marti/api/subscriptions/incognito/{uid}", s.martiSubscriptionIncognito)
 	a("PUT /Marti/api/subscriptions/{uid}/filter", s.martiSubscriptionFilterPut)
 	a("DELETE /Marti/api/subscriptions/{a}/{b}", s.martiSubscriptionDelete)
+	s.takExtraRoutes(m, a)
 }
 
 func (s *Server) setStoreForward(w http.ResponseWriter, on bool) {
