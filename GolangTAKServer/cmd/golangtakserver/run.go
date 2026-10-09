@@ -215,9 +215,13 @@ func parseRules(list []string) []firewall.Rule {
 		if !ok {
 			continue
 		}
-		var port int
-		fmt.Sscan(p, &port)
-		out = append(out, firewall.Rule{Port: port, Proto: proto})
+		var port, end int
+		lo, hi, isRange := strings.Cut(p, "-")
+		fmt.Sscan(lo, &port)
+		if isRange {
+			fmt.Sscan(hi, &end)
+		}
+		out = append(out, firewall.Rule{Port: port, End: end, Proto: proto})
 	}
 	return out
 }

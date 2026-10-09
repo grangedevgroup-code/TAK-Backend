@@ -188,6 +188,14 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 		}
 		rules = append(rules, firewall.Rule{Port: port, Proto: "tcp"})
 	}
+	if cc := cfg.Calls; !cc.Disabled && cc.TURNPort >= 0 {
+		turnPort := cc.TURNPort
+		if turnPort == 0 {
+			turnPort = 3478
+		}
+		lo, hi := server.RelayRange(cc)
+		rules = append(rules, firewall.Rule{Port: turnPort, Proto: "udp"}, firewall.Rule{Port: lo, End: hi, Proto: "udp"})
+	}
 	if cfg.Voice.Enabled && cfg.Voice.Port > 0 {
 		rules = append(rules, firewall.Rule{Port: cfg.Voice.Port, Proto: "tcp"}, firewall.Rule{Port: cfg.Voice.Port, Proto: "udp"})
 	}

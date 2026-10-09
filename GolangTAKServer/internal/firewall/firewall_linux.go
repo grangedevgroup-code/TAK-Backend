@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -14,6 +13,8 @@ const (
 	comment       = "GolangTAKServer"
 	legacyComment = "GolangTAK"
 )
+
+func (r Rule) ufw() string { return r.Ports(":") + "/" + r.Proto }
 
 func ufwActive() bool {
 	if !have("ufw") {
@@ -57,11 +58,11 @@ func ruleSpec(r Rule, tagged bool) []string {
 	if tagged {
 		return taggedSpec(r, comment)
 	}
-	return []string{"-p", r.Proto, "-m", r.Proto, "--dport", strconv.Itoa(r.Port), "-j", "ACCEPT"}
+	return []string{"-p", r.Proto, "-m", r.Proto, "--dport", r.Ports(":"), "-j", "ACCEPT"}
 }
 
 func taggedSpec(r Rule, tag string) []string {
-	spec := []string{"-p", r.Proto, "-m", r.Proto, "--dport", strconv.Itoa(r.Port), "-m", "comment", "--comment", tag}
+	spec := []string{"-p", r.Proto, "-m", r.Proto, "--dport", r.Ports(":"), "-m", "comment", "--comment", tag}
 	return append(spec, "-j", "ACCEPT")
 }
 
@@ -117,7 +118,7 @@ func Open(rules []Rule) (string, error) {
 	case ufwActive():
 		var failed []string
 		for _, r := range rules {
-			if out, err := run("ufw", "allow", r.String(), "comment", comment); err != nil {
+			if out, err := run("ufw", "allow", r.ufw(), "comment", comment); err != nil {
 				failed = append(failed, r.String()+": "+out)
 			}
 		}
@@ -163,7 +164,7 @@ func Close(rules []Rule) {
 	rules = Normalize(rules)
 	if have("ufw") {
 		for _, r := range rules {
-			run("ufw", "delete", "allow", r.String())
+			run("ufw", "delete", "allow", r.ufw())
 		}
 	}
 	if firewalldActive() {

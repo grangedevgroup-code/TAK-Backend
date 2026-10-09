@@ -62,6 +62,7 @@ func (s *Server) initSubsystems() error {
 	s.feeds = &feedState{status: map[string]*FeedStatus{}}
 	s.restart = make(chan struct{}, 1)
 	s.upd.exit = make(chan struct{})
+	s.calls = newCallHub()
 	s.peers = newPeerManager(s)
 	s.fed = newFederation(s)
 	s.ensureExCheckTemplates()
@@ -118,6 +119,7 @@ func (s *Server) startSubsystems() error {
 		return err
 	}
 	s.startVoice()
+	s.startCalls()
 	s.startACME()
 	s.startFeeds()
 	s.startMeshtastic()

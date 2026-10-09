@@ -91,6 +91,7 @@ docker run -d --name golangtakserver --restart unless-stopped \
   -e GOLANGTAKSERVER_ADDRESS=203.0.113.10 \
   -p 8087:8087 -p 8087:8087/udp -p 8088:8088 -p 8089:8089 -p 8080:8080 -p 8443:8443 -p 8446:8446 -p 8090:8090 -p 19023:19023 \
   -p 8554:8554 -p 1935:1935 -p 8000-8001:8000-8001/udp -p 64738:64738 -p 64738:64738/udp \
+  -p 3478:3478/udp -p 49160-49200:49160-49200/udp \
   -v golangtakserver-data:/data ghcr.io/grangedevgroup-code/golangtakserver:latest
 docker logs golangtakserver
 ```
@@ -274,6 +275,10 @@ Drone apps, OBS and other encoders that only send RTMP use `rtmp://SERVER:1935/l
 
 **Drones and encoders that send MPEG-TS.** Add a pull source with `udp://0.0.0.0:5600` (or a multicast address such as `udp://239.1.1.1:5600`) and point the ground station or encoder at the server. The video is republished like any other stream. When the stream carries MISB 0601 KLV telemetry, the drone appears on every TAK map with its heading, camera field of view, the point the camera looks at and the ground footprint, linked to the video. RTSP sources and publishers that include a KLV track work the same way. Turn this off under **Settings**, **Video server**, **Drone telemetry**.
 
+## Calls
+
+The dashboard's **Calls** page makes encrypted voice and video calls, one to one or in groups of up to eight, between people signed in to the dashboard on computers and phones. Calls connect directly between devices when they can; otherwise the built-in relay (STUN and TURN on UDP 3478, media on UDP 49160-49200) carries them, so calls work across mobile networks and firewalls. Anyone can call people who share a group with them; administrators can call everyone. Use the HTTPS dashboard (port 8446), since browsers only allow the camera and microphone on secure pages. Ports, the relay address and turning calls off are under **Settings**, **Calls**.
+
 ## Server plugins
 
 A server plugin is any program you want running next to GolangTAKServer: a bot that answers in chat, a bridge to a dispatch or alerting system, a logger, a sensor feed. GolangTAKServer starts it with the server, restarts it if it stops (waiting a little longer each time, up to a minute), stops it on shutdown, and keeps its recent output for the dashboard.
@@ -360,6 +365,8 @@ scrape_configs:
 | 9000 | TCP | Federation version 1 (off by default) |
 | 9001 | TCP | Federation version 2, gRPC (off by default) |
 | 64738 | TCP and UDP | Voice server (Mumble) |
+| 3478 | UDP | Call relay (STUN and TURN) |
+| 49160-49200 | UDP | Call relay media |
 | 8554 | TCP | Video server, RTSP |
 | 1935 | TCP | Video server, RTMP ingest |
 | 8000, 8001 | UDP | Video server, RTP and RTCP |

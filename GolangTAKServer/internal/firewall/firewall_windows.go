@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -50,7 +49,7 @@ func ports(rules []Rule, proto string) []string {
 	var out []string
 	for _, r := range rules {
 		if r.Proto == proto {
-			out = append(out, strconv.Itoa(r.Port))
+			out = append(out, r.Ports("-"))
 		}
 	}
 	return out

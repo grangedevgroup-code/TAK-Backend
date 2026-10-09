@@ -79,6 +79,7 @@ type Server struct {
 	upd       updateState
 	props     *store.Collection[uidProps]
 	seq       sequences
+	calls     *callHub
 	live      *liveVideo
 	voice     *mumble.Server
 	injectors *Injectors

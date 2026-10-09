@@ -61,6 +61,7 @@ func newTestServer(t *testing.T, mutate func(*Config)) *Server {
 	cfg.Mesh.Enabled = false
 	cfg.Video.Enabled = false
 	cfg.Voice.Enabled = false
+	cfg.Calls.TURNPort = -1
 	cfg.Certificates.KeyBits = 2048
 	cfg.LogLevel = "debug"
 	if mutate != nil {

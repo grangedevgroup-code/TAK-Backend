@@ -620,11 +620,410 @@
     }
   }
 
+  const CALL = { ws: null, id: "", ice: [], online: [], room: "", peers: new Map(), local: null, video: true, ringing: null, overlay: null, delay: 1000, camOff: false, micOff: false, screen: null };
+
+  function callSend(msg) {
+    if (CALL.ws && CALL.ws.readyState === 1) CALL.ws.send(JSON.stringify(msg));
+  }
+
+  function connectCalls() {
+    if (CALL.ws || !S.me) return;
+    const proto = location.protocol === "https:" ? "wss://" : "ws://";
+    let ws;
+    try {
+      ws = new WebSocket(proto + location.host + "/api/calls/ws");
+    } catch (e) {
+      return;
+    }
+    CALL.ws = ws;
+    ws.onopen = () => (CALL.delay = 1000);
+    ws.onmessage = (ev) => {
+      let m;
+      try {
+        m = JSON.parse(ev.data);
+      } catch (e) {
+        return;
+      }
+      onCallMessage(m);
+    };
+    ws.onclose = () => {
+      CALL.ws = null;
+      if (!S.me) return;
+      setTimeout(connectCalls, CALL.delay);
+      CALL.delay = Math.min(CALL.delay * 2, 30000);
+    };
+  }
+
+  function stopCalls() {
+    endCall();
+    if (CALL.ws) {
+      const ws = CALL.ws;
+      CALL.ws = null;
+      ws.onclose = null;
+      ws.close();
+    }
+  }
+
+  function ringTone(on) {
+    if (CALL.tone) {
+      clearInterval(CALL.tone.timer);
+      try {
+        CALL.tone.ctx.close();
+      } catch (e) {}
+      CALL.tone = null;
+    }
+    if (!on) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const beep = () => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.frequency.value = 660;
+        g.gain.value = 0.08;
+        o.connect(g).connect(ctx.destination);
+        o.start();
+        o.stop(ctx.currentTime + 0.4);
+      };
+      beep();
+      CALL.tone = { ctx, timer: setInterval(beep, 1500) };
+    } catch (e) {}
+  }
+
+  function onCallMessage(m) {
+    switch (m.t) {
+      case "hello":
+        CALL.id = m.id;
+        CALL.ice = m.ice || [];
+        break;
+      case "presence":
+        CALL.online = m.users || [];
+        if (location.hash.startsWith("#/calls")) renderCallList();
+        break;
+      case "ring":
+        if (CALL.room) {
+          callSend({ t: "decline", room: m.room });
+          return;
+        }
+        incomingCall(m);
+        break;
+      case "peers":
+        for (const p of m.peers || []) startPeer(p.id, p.user, true);
+        break;
+      case "joined":
+        startPeer(m.peer, m.user, false);
+        break;
+      case "signal":
+        onSignal(m.from, m.user, m.data);
+        break;
+      case "left":
+        dropPeer(m.peer);
+        break;
+      case "declined":
+        toast(m.user + " declined the call");
+        break;
+      case "error":
+        toast(m.error);
+        if (!CALL.peers.size) endCall();
+        break;
+    }
+  }
+
+  function incomingCall(m) {
+    if (CALL.ringing) CALL.ringing.close();
+    ringTone(true);
+    const back = h("div", { class: "modal-back" });
+    const close = () => {
+      ringTone(false);
+      back.remove();
+      clearTimeout(timer);
+      CALL.ringing = null;
+    };
+    const timer = setTimeout(() => {
+      callSend({ t: "decline", room: m.room });
+      close();
+    }, 45000);
+    back.append(
+      h(
+        "div",
+        { class: "modal call-ring", role: "dialog", "aria-modal": "true" },
+        h("h2", null, (m.video ? "Video call from " : "Voice call from ") + m.from),
+        h("p", { class: "muted" }, "Answer to join with your " + (m.video ? "camera and microphone." : "microphone.")),
+        h(
+          "div",
+          { class: "buttons" },
+          btn("Decline", () => {
+            callSend({ t: "decline", room: m.room });
+            close();
+          }, "", "close"),
+          btn("Answer", () => {
+            close();
+            joinCall(m.room, !!m.video);
+          }, "primary", "phone")
+        )
+      )
+    );
+    document.body.append(back);
+    CALL.ringing = { close };
+  }
+
+  async function getMedia(video) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true, video: video ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false });
+    } catch (e) {
+      if (video) {
+        toast("Camera unavailable; joining with the microphone only.");
+        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      }
+      throw e;
+    }
+  }
+
+  async function startCall(users, video) {
+    if (!users.length) return;
+    if (!window.isSecureContext) {
+      toast("Calls need the HTTPS dashboard (port 8446) so the browser allows the camera and microphone.");
+      return;
+    }
+    const b = new Uint8Array(12);
+    crypto.getRandomValues(b);
+    const room = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    callSend({ t: "ring", room, to: users, video });
+    await joinCall(room, video);
+  }
+
+  async function joinCall(room, video) {
+    if (CALL.room) endCall();
+    if (!window.isSecureContext) {
+      toast("Calls need the HTTPS dashboard (port 8446) so the browser allows the camera and microphone.");
+      callSend({ t: "decline", room });
+      return;
+    }
+    try {
+      CALL.local = await getMedia(video);
+    } catch (e) {
+      toast("Microphone unavailable: " + e.message);
+      callSend({ t: "decline", room });
+      return;
+    }
+    CALL.room = room;
+    CALL.video = video;
+    CALL.micOff = false;
+    CALL.camOff = false;
+    showCallOverlay();
+    callSend({ t: "join", room });
+  }
+
+  function endCall() {
+    if (!CALL.room && !CALL.local) return;
+    callSend({ t: "leave" });
+    for (const id of [...CALL.peers.keys()]) dropPeer(id);
+    for (const s of [CALL.local, CALL.screen]) if (s) for (const t of s.getTracks()) t.stop();
+    CALL.local = null;
+    CALL.screen = null;
+    CALL.room = "";
+    if (CALL.overlay) CALL.overlay.remove();
+    CALL.overlay = null;
+  }
+
+  function startPeer(id, user, offer) {
+    if (CALL.peers.has(id) || !CALL.local) return;
+    const pc = new RTCPeerConnection({ iceServers: CALL.ice });
+    const tile = callTile(user, false);
+    const peer = { pc, user, tile, polite: CALL.id > id, making: false, ignore: false };
+    CALL.peers.set(id, peer);
+    for (const t of CALL.local.getTracks()) pc.addTrack(t, CALL.local);
+    if (CALL.screen) {
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+      if (sender) sender.replaceTrack(CALL.screen.getVideoTracks()[0]);
+    }
+    pc.ontrack = (ev) => {
+      tile.video.srcObject = ev.streams[0];
+    };
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) callSend({ t: "signal", to: id, data: { candidate: ev.candidate } });
+    };
+    pc.onconnectionstatechange = () => {
+      tile.el.classList.toggle("weak", pc.connectionState === "disconnected" || pc.connectionState === "failed");
+      if (pc.connectionState === "failed") pc.restartIce();
+    };
+    pc.onnegotiationneeded = async () => {
+      if (!offer && !peer.started) return;
+      try {
+        peer.making = true;
+        await pc.setLocalDescription();
+        callSend({ t: "signal", to: id, data: { description: pc.localDescription } });
+      } catch (e) {
+      } finally {
+        peer.making = false;
+      }
+    };
+    peer.started = offer;
+  }
+
+  async function onSignal(from, user, data) {
+    if (!CALL.peers.has(from)) startPeer(from, user, false);
+    const peer = CALL.peers.get(from);
+    if (!peer) return;
+    const pc = peer.pc;
+    peer.started = true;
+    try {
+      if (data.description) {
+        const collision = data.description.type === "offer" && (peer.making || pc.signalingState !== "stable");
+        peer.ignore = !peer.polite && collision;
+        if (peer.ignore) return;
+        await pc.setRemoteDescription(data.description);
+        if (data.description.type === "offer") {
+          await pc.setLocalDescription();
+          callSend({ t: "signal", to: from, data: { description: pc.localDescription } });
+        }
+      } else if (data.candidate) {
+        try {
+          await pc.addIceCandidate(data.candidate);
+        } catch (e) {
+          if (!peer.ignore) throw e;
+        }
+      }
+    } catch (e) {}
+  }
+
+  function dropPeer(id) {
+    const peer = CALL.peers.get(id);
+    if (!peer) return;
+    peer.pc.close();
+    peer.tile.el.remove();
+    CALL.peers.delete(id);
+    layoutTiles();
+  }
+
+  function callTile(name, local) {
+    const video = h("video", { autoplay: true, playsinline: true });
+    video.muted = local;
+    const el = h("div", { class: "call-tile" + (local ? " me" : "") }, video, h("span", { class: "who" }, name));
+    if (CALL.grid) CALL.grid.append(el);
+    layoutTiles();
+    return { el, video };
+  }
+
+  function layoutTiles() {
+    if (!CALL.grid) return;
+    const n = CALL.grid.children.length;
+    CALL.grid.style.gridTemplateColumns = "repeat(" + (n <= 1 ? 1 : n <= 4 ? 2 : 3) + ", minmax(0, 1fr))";
+  }
+
+  function showCallOverlay() {
+    if (CALL.overlay) CALL.overlay.remove();
+    CALL.grid = h("div", { class: "call-grid" });
+    const me = callTile("You", true);
+    me.video.srcObject = CALL.local;
+    const mic = btn("Mute", () => {
+      CALL.micOff = !CALL.micOff;
+      for (const t of CALL.local.getAudioTracks()) t.enabled = !CALL.micOff;
+      mic.classList.toggle("on", CALL.micOff);
+      mic.querySelector(".bl").textContent = CALL.micOff ? "Unmute" : "Mute";
+    }, "", "mic");
+    const cam = btn("Camera off", () => {
+      CALL.camOff = !CALL.camOff;
+      for (const t of CALL.local.getVideoTracks()) t.enabled = !CALL.camOff;
+      cam.classList.toggle("on", CALL.camOff);
+      cam.querySelector(".bl").textContent = CALL.camOff ? "Camera on" : "Camera off";
+    }, "", "video");
+    const share = btn("Share screen", async () => {
+      if (CALL.screen) return stopShare();
+      try {
+        CALL.screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      } catch (e) {
+        return;
+      }
+      const track = CALL.screen.getVideoTracks()[0];
+      track.onended = stopShare;
+      for (const p of CALL.peers.values()) {
+        const sender = p.pc.getSenders().find((s) => s.track && s.track.kind === "video");
+        if (sender) sender.replaceTrack(track);
+        else p.pc.addTrack(track, CALL.screen);
+      }
+      me.video.srcObject = CALL.screen;
+      share.classList.add("on");
+    }, "", "screen");
+    const stopShare = () => {
+      if (!CALL.screen) return;
+      for (const t of CALL.screen.getTracks()) t.stop();
+      CALL.screen = null;
+      const cameraTrack = CALL.local && CALL.local.getVideoTracks()[0];
+      for (const p of CALL.peers.values()) {
+        const sender = p.pc.getSenders().find((s) => s.track && s.track.kind === "video");
+        if (sender) sender.replaceTrack(cameraTrack || null);
+      }
+      me.video.srcObject = CALL.local;
+      share.classList.remove("on");
+    };
+    const add = btn("Add people", () => {
+      const pick = h("div", { class: "pick" });
+      const others = CALL.online.filter((u) => ![...CALL.peers.values()].some((p) => p.user === u));
+      if (!others.length) pick.append(h("p", { class: "muted" }, "No one else is online."));
+      for (const u of others) pick.append(h("label", { class: "check" }, h("input", { type: "checkbox", value: u }), " ", u));
+      modal("Add people", pick, [
+        { label: "Cancel" },
+        {
+          label: "Ring",
+          primary: true,
+          run: () => {
+            const to = [...pick.querySelectorAll("input:checked")].map((x) => x.value);
+            if (to.length) callSend({ t: "ring", room: CALL.room, to, video: CALL.video });
+          },
+        },
+      ]);
+    }, "", "plus");
+    const hang = btn("Hang up", endCall, "danger", "hangup");
+    if (!CALL.local.getVideoTracks().length) cam.disabled = true;
+    CALL.overlay = h("div", { class: "call-overlay", role: "dialog", "aria-label": "Call" }, CALL.grid, h("div", { class: "call-bar" }, mic, cam, share, add, hang));
+    document.body.append(CALL.overlay);
+    layoutTiles();
+  }
+
+  function renderCallList() {
+    const box = document.getElementById("call_list");
+    if (!box) return;
+    clear(box);
+    if (!CALL.online.length) {
+      box.append(h("p", { class: "muted" }, "No one you can call is signed in to the dashboard right now. People appear here while they have the dashboard open."));
+      return;
+    }
+    const rows = CALL.online.map((u) =>
+      h(
+        "div",
+        { class: "call-row" },
+        h("label", { class: "check" }, h("input", { type: "checkbox", value: u }), " ", h("b", null, u)),
+        h("span", { class: "spacer" }),
+        btn("Voice", () => startCall([u], false), "small", "phone"),
+        btn("Video", () => startCall([u], true), "small primary", "video")
+      )
+    );
+    box.append(...rows);
+  }
+
+  async function pageCalls(main) {
+    pageHead(
+      main,
+      "Calls",
+      "Encrypted voice and video calls with anyone signed in to this dashboard, on computers and phones. Calls go directly between devices, or through this server when networks block that.",
+      btn("Group call", () => {
+        const to = [...document.querySelectorAll("#call_list input:checked")].map((x) => x.value);
+        if (!to.length) return toast("Tick the people to call first.");
+        startCall(to, true);
+      }, "primary", "video")
+    );
+    if (!window.isSecureContext) main.append(h("p", { class: "bad" }, "Open the dashboard over HTTPS (port 8446) to make calls. Browsers only allow the camera and microphone on secure pages."));
+    main.append(panel("Online now", null, h("div", { id: "call_list", class: "call-list" })));
+    connectCalls();
+    renderCallList();
+  }
+
   const PAGES = [
     { group: "Operations" },
     { id: "overview", title: "Overview", icon: "overview", render: pageOverview, keys: "home status dashboard" },
     { id: "map", title: "Map", icon: "map", render: pageMap, keys: "markers positions tracks" },
     { id: "chat", title: "Chat", icon: "chat", render: pageChat, keys: "messages" },
+    { id: "calls", title: "Calls", icon: "phone", render: pageCalls, keys: "video call voice phone conference meeting webrtc" },
     { group: "Devices" },
     { id: "connect", title: "Connect a device", icon: "connect", render: pageConnect, keys: "qr code enroll package atak itak wintak" },
     { id: "clients", title: "Online now", icon: "online", render: pageClients, count: true, keys: "connected clients disconnect" },
@@ -943,6 +1342,7 @@
 
   function showLogin(message) {
     disconnectStream();
+    stopCalls();
     clearInterval(countTimer);
     S.me = null;
     S.csrf = "";
@@ -1086,6 +1486,7 @@
     S.csrf = S.me.csrf || S.csrf;
     layout();
     connectStream();
+    connectCalls();
     await route();
   }
 
@@ -3287,6 +3688,7 @@
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
     { id: "voice", title: "Voice", keys: "mumble mumla murmur radio push to talk ptt" },
+    { id: "calls", title: "Calls", keys: "video calls webrtc turn stun relay conference" },
     { id: "telegram", title: "Telegram", keys: "telegram bot chat group alerts messaging" },
     { id: "locate", title: "Locate", keys: "location sharing search rescue lost person link" },
     { id: "letsencrypt", title: "Let's Encrypt", keys: "acme certificate https browser trusted domain ssl tls" },
@@ -3394,7 +3796,7 @@
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {}, vbm = cfg.vbm || {};
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {}, vbm = cfg.vbm || {}, cl = cfg.calls || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -3602,6 +4004,13 @@
         field("Install at (hour, 0 to 23, server time)", n("upd_hour", up.hour)),
         h("div", { class: "full", id: "upd_status" }, "Checking..."),
       ],
+      calls: [
+        "Voice and video calls between people signed in to the dashboard. A built-in relay (STUN and TURN) connects calls through firewalls and mobile networks.",
+        field("Calls", checkbox("cl_on", !cl.disabled, "Allow calls from the dashboard")),
+        field("Relay port (UDP)", n("cl_port", cl.turnPort < 0 ? 0 : cl.turnPort || 3478), "0 turns the relay off; calls then only work when devices can reach each other directly."),
+        field("Relay media ports (UDP)", input("cl_range", cl.relayPorts || "49160-49200"), "One port per person using the relay. Open this range in cloud firewalls."),
+        field("Relay public address", input("cl_addr", cl.relayAddress || "", { placeholder: "same as the public address" }), "Only needed when the server is behind NAT and its public IP differs from the public address."),
+      ],
       monitoring: [
         "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.",
         field("Metrics", checkbox("met_on", met.enabled, "Serve metrics at /metrics"), "On the web ports, for example http://SERVER:8080/metrics."),
@@ -3800,6 +4209,7 @@
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
         filters: { dropTypes: splitList(val(form, "flt_drop")), stripDetails: splitList(val(form, "flt_strip")) },
+        calls: { disabled: !val(form, "cl_on"), turnPort: num(form, "cl_port") === 0 ? -1 : num(form, "cl_port") === 3478 ? 0 : num(form, "cl_port"), relayPorts: val(form, "cl_range") === "49160-49200" ? "" : val(form, "cl_range"), relayAddress: val(form, "cl_addr") },
         vbm: { vbmEnabled: val(form, "vbm_on"), saDisabled: val(form, "vbm_sa"), chatDisabled: val(form, "vbm_chat"), networkClassification: val(form, "vbm_class"), copTool: val(form, "vbm_tool") },
         updates: { auto: val(form, "upd_auto"), hour: Math.min(23, num(form, "upd_hour")) },
         rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },

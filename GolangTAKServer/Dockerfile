@@ -16,7 +16,7 @@ COPY --from=build /out/golangtakserver /usr/local/bin/golangtakserver
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV GOLANGTAKSERVER_DATA=/data
 VOLUME /data
-EXPOSE 8087/tcp 8087/udp 8088/tcp 8089/tcp 8080/tcp 8443/tcp 8446/tcp 8090/tcp 19023/tcp 8554/tcp 1935/tcp 8000/udp 8001/udp 64738/tcp 64738/udp
+EXPOSE 8087/tcp 8087/udp 8088/tcp 8089/tcp 8080/tcp 8443/tcp 8446/tcp 8090/tcp 19023/tcp 8554/tcp 1935/tcp 8000/udp 8001/udp 64738/tcp 64738/udp 3478/udp 49160-49200/udp
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD ["golangtakserver", "selftest"]
 ENTRYPOINT ["golangtakserver"]
 CMD ["run"]

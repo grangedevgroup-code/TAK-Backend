@@ -187,6 +187,7 @@ type Config struct {
 	Updates        UpdatesConfig     `json:"updates"`
 	Filters        MessageFilters    `json:"filters"`
 	VBM            VBMConfig         `json:"vbm"`
+	Calls          CallsConfig       `json:"calls"`
 	Limits         LimitsConfig      `json:"limits"`
 	Repeater       RepeaterConfig    `json:"repeater"`
 	Federation     FederationConfig  `json:"federation"`
