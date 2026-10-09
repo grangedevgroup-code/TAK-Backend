@@ -3273,6 +3273,68 @@
       h("h2", null, "Federation"),
       fedBox
     );
+    const clusterBox = h("div");
+    main.append(h("h2", null, "Cluster"), clusterBox);
+    const loadCluster = async () => {
+      const st = await api("GET", "/api/cluster");
+      const actions = h(
+        "div",
+        { class: "cluster-actions" },
+        btn(st.enabled ? "Add a node" : "Start a cluster", async () => {
+          const r = await api("POST", "/api/cluster/invite");
+          const code = h("textarea", { readOnly: true, rows: 6, style: "font-size:12px" });
+          code.value = r.code;
+          modal(
+            "Cluster code ready",
+            h(
+              "div",
+              null,
+              h("p", null, "On the new server, open Server links, choose ", h("b", null, "Join a cluster"), " and paste this. Or run ", h("span", { class: "mono" }, "golangtakserver cluster join CODE"), " there."),
+              code,
+              h("p", { class: "small muted" }, "The code contains this cluster's certificate authority, so send it privately. Use it on a fresh server: the new node takes the cluster's users, devices, missions and files.")
+            ),
+            [{ label: "Copy code", run: () => (copy(r.code), true) }, { label: "Done", primary: true }]
+          );
+          loadCluster().catch(fail);
+        }, "", "key"),
+        btn("Join a cluster", () => {
+          const f = h("form", { class: "grid" }, field("Cluster code", h("textarea", { id: "ccode", rows: 5, required: true, placeholder: "golangtakserver-cluster:...", style: "font-size:12px" }), "Created on a node of the cluster under Server links, Cluster."));
+          modal("Join a cluster", f, [
+            { label: "Cancel" },
+            {
+              label: "Join and restart",
+              primary: true,
+              run: async () => {
+                await api("POST", "/api/cluster/join", { code: f.querySelector("#ccode").value });
+                toast("Joined. Restarting with the cluster's certificate authority...");
+              },
+            },
+          ]);
+        }, "", "links"),
+        st.enabled
+          ? btn("Leave the cluster", () =>
+              confirmAction("Leave the cluster", "Stop sharing data and traffic with the other nodes? This server keeps its data and certificates.", "Leave", async () => {
+                await api("POST", "/api/cluster/leave");
+                loadCluster().catch(fail);
+              }), "danger")
+          : null
+      );
+      const intro = h("p", { class: "muted" }, st.enabled
+        ? "This server is a node of a cluster. Nodes share users, groups, certificates, missions, files and devices, and pass live traffic to each other, so devices can connect to any node."
+        : "Run several servers as one: devices connect to any node, and users, certificates, missions, files and live traffic are shared. Start a cluster here, then join other servers to it.");
+      const rows = table(
+        [
+          { title: "Node", render: (n) => h("div", null, h("b", null, n.name), h("div", { class: "small muted mono" }, n.url || "")) },
+          { title: "State", render: (n) => pill(n.state === "connected" ? (n.synced ? "ok" : "waiting") : "connecting", n.state === "connected" ? (n.synced ? "In sync" : "Syncing") : "Connecting") },
+          { title: "Devices", render: (n) => (n.state === "connected" ? String(n.devices) : "") },
+          { title: "Messages", render: (n) => (n.state === "connected" ? Number(n.received || 0).toLocaleString() + " in, " + Number(n.sent || 0).toLocaleString() + " out" : n.error || "") },
+        ],
+        st.nodes || [],
+        st.enabled ? "No other nodes are connected yet." : null
+      );
+      clear(clusterBox).append(intro, actions, st.enabled ? rows : "");
+    };
+    loadCluster().catch(fail);
     let cfg;
     const save = async (peers) => {
       const r = await api("PUT", "/api/settings", { peers: peers });

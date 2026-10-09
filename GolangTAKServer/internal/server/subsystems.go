@@ -66,7 +66,11 @@ func (s *Server) initSubsystems() error {
 	s.peers = newPeerManager(s)
 	s.fed = newFederation(s)
 	s.ensureExCheckTemplates()
+	if err := s.openCluster(); err != nil {
+		return err
+	}
 	s.hub.OnIdentify = func(c *Client) {
+		s.clusterPresence(c, true)
 		s.devices.Seen(c, "Connected")
 		s.deliverStored(c)
 		s.announceLocalContact(c)
@@ -74,6 +78,7 @@ func (s *Server) initSubsystems() error {
 		s.log.Info("device identified", "callsign", info.Callsign, "uid", info.UID, "platform", info.Platform, "version", info.Version, "user", c.User(), "remote", c.Remote)
 	}
 	s.hub.OnRemove = func(c *Client) {
+		s.clusterPresence(c, false)
 		if !c.Relay && c.UID() != "" {
 			s.devices.Seen(c, "Disconnected")
 		}
@@ -120,6 +125,7 @@ func (s *Server) startSubsystems() error {
 	}
 	s.startVoice()
 	s.startCalls()
+	s.startCluster()
 	s.startACME()
 	s.startFeeds()
 	s.startMeshtastic()
@@ -139,6 +145,9 @@ func (s *Server) startSubsystems() error {
 }
 
 func (s *Server) closeSubsystems() {
+	if s.cluster != nil {
+		s.cluster.versions.Close()
+	}
 	if s.devices != nil {
 		s.devices.Close()
 	}
@@ -204,6 +213,10 @@ func (s *Server) RestartRequested() <-chan struct{} { return s.restart }
 func (s *Server) apiRestart(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("restart requested", "by", identityOf(r).Name)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.requestRestart()
+}
+
+func (s *Server) requestRestart() {
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		select {

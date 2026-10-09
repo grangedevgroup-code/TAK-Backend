@@ -1745,6 +1745,7 @@ func (s *Server) sendToSubscribers(m Mission, e *cot.Event, exceptUID string) {
 }
 
 func (s *Server) deliverToSubscribers(m Mission, msg *Message, exceptUID string) {
+	s.clusterMissionDeliver(m, msg, exceptUID)
 	sent := map[*Client]bool{}
 	for _, sub := range m.Subs {
 		if sub.ClientUID == exceptUID {
@@ -1758,6 +1759,9 @@ func (s *Server) deliverToSubscribers(m Mission, msg *Message, exceptUID string)
 }
 
 func (s *Server) onMissionCoT(msg *Message, names []string) {
+	if fromCluster(msg) {
+		return
+	}
 	e := msg.Event
 	sender := ""
 	if msg.Source != nil {

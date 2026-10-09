@@ -64,7 +64,7 @@ func typeMatches(t string, patterns []string) bool {
 }
 
 func (s *Server) messageFilter(m *Message) bool {
-	if m == nil || m.Event == nil || m.Source == nil {
+	if m == nil || m.Event == nil || m.Source == nil || m.Source.Kind == KindCluster {
 		return true
 	}
 	e := m.Event

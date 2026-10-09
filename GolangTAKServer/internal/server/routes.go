@@ -16,6 +16,8 @@ func (s *Server) routes() *http.ServeMux {
 	pub := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, h) }
 
 	pub("GET /metrics", s.metricsHandler)
+	pub("GET /api/cluster/ws", s.apiClusterSocket)
+	pub("GET /api/cluster/blob/{hash}", s.apiClusterBlob)
 	pub("GET /Marti/api/version", s.martiVersion)
 	pub("GET /Marti/api/version/config", s.martiVersionConfig)
 	pub("GET /Marti/api/version/info", s.martiVersionInfo)
@@ -268,6 +270,10 @@ func (s *Server) routes() *http.ServeMux {
 	a("GET /api/settings", s.apiSettings)
 	a("PUT /api/settings", s.apiSettingsUpdate)
 	a("POST /api/restart", s.apiRestart)
+	a("GET /api/cluster", s.apiClusterStatus)
+	a("POST /api/cluster/invite", s.apiClusterInvite)
+	a("POST /api/cluster/join", s.apiClusterJoin)
+	a("POST /api/cluster/leave", s.apiClusterLeave)
 	a("GET /api/update", s.apiUpdateStatus)
 	a("POST /api/update/check", s.apiUpdateStatus)
 	a("POST /api/update/install", s.apiUpdateInstall)

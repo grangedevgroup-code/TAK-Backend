@@ -80,6 +80,7 @@ type Server struct {
 	props     *store.Collection[uidProps]
 	seq       sequences
 	calls     *callHub
+	cluster   *clusterState
 	live      *liveVideo
 	voice     *mumble.Server
 	injectors *Injectors

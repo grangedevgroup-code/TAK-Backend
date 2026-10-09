@@ -631,3 +631,4 @@ pre.codes { padding: 12px; border: 1px solid var(--border-strong); background: v
   .call-bar button .bl { display: none; }
   .call-bar button { width: 48px; height: 48px; padding: 0; justify-content: center; }
 }
+.cluster-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }

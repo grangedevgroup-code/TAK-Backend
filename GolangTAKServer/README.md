@@ -263,6 +263,18 @@ golangtakserver config set federation.enabled true ports.federation 9000 ports.f
 
 Give the other server this server's CA (`/api/ca.pem`) and add its CA under **Server links**, **Federation**. Version 2 also shares public missions, their files, logs, parent missions and expiration with TAK Server, both ways and including missions that existed before the link. Federated deletes are off unless you allow them (`federation.allowFederatedDelete`), and `federation.disableMissionFederation` turns mission sharing off.
 
+## Clusters
+
+Run several servers as one, for more devices or so a server can fail without taking everyone offline. Devices connect to any node with the same certificates and see everyone on every node. Users, groups, certificates, missions, files, devices, data packages and pending chats are shared, and live traffic passes between all nodes.
+
+```sh
+sudo golangtakserver cluster invite        # on the first server: prints a cluster code
+sudo golangtakserver cluster join CODE     # on each new server
+sudo golangtakserver cluster status
+```
+
+Or use **Server links**, **Cluster** in the dashboard. Join fresh servers: a new node takes the cluster's certificate authority and data. Nodes reach each other on the enrollment port (8446) over TLS. Put the nodes behind one DNS name with several addresses, or a TCP load balancer on 8089, so devices spread across them and move to another node if one stops. Settings such as ports and feeds stay per node.
+
 ## Video server
 
 Publish a stream with a user name and password from this server:

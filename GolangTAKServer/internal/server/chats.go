@@ -34,6 +34,12 @@ func OpenChats(dataDir string) (*Chats, error) {
 func (c *Chats) Close() { c.db.Close() }
 
 func (s *Server) storeOffline(d cot.Dest, m *Message) {
+	if fromCluster(m) {
+		return
+	}
+	if s.clusterHasDest(d) {
+		return
+	}
 	e := m.Event
 	if !e.IsChat() || e.Type != "b-t-f" {
 		return

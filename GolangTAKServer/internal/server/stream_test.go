@@ -52,7 +52,11 @@ func freePort(t *testing.T) int {
 
 func newTestServer(t *testing.T, mutate func(*Config)) *Server {
 	t.Helper()
-	dir := t.TempDir()
+	return newTestServerIn(t, t.TempDir(), mutate)
+}
+
+func newTestServerIn(t *testing.T, dir string, mutate func(*Config)) *Server {
+	t.Helper()
 	cfg := DefaultConfig()
 	cfg.Address = "127.0.0.1"
 	cfg.Bind = "127.0.0.1"

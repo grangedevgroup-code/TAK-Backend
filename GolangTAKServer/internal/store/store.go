@@ -33,6 +33,57 @@ type Collection[T any] struct {
 	writes  int
 	durable bool
 	Skipped int
+	hookMu  sync.RWMutex
+	hook    func(key string, raw []byte, deleted bool)
+}
+
+func (c *Collection[T]) SetOnChange(fn func(key string, raw []byte, deleted bool)) {
+	c.hookMu.Lock()
+	c.hook = fn
+	c.hookMu.Unlock()
+}
+
+func (c *Collection[T]) changed(key string, raw []byte, deleted bool) {
+	c.hookMu.RLock()
+	fn := c.hook
+	c.hookMu.RUnlock()
+	if fn != nil {
+		fn(key, raw, deleted)
+	}
+}
+
+func (c *Collection[T]) ApplyRaw(key string, raw []byte, deleted bool) error {
+	if key == "" {
+		return errors.New("store: empty key")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if deleted {
+		if _, ok := c.raw[key]; !ok {
+			return nil
+		}
+		delete(c.raw, key)
+		return c.appendLocked(record{K: key, D: true})
+	}
+	if !json.Valid(raw) {
+		return errors.New("store: invalid value")
+	}
+	if old, ok := c.raw[key]; ok && bytes.Equal(old, raw) {
+		return nil
+	}
+	b := append([]byte(nil), raw...)
+	c.raw[key] = b
+	return c.appendLocked(record{K: key, V: b})
+}
+
+func (c *Collection[T]) Snapshot() map[string][]byte {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make(map[string][]byte, len(c.raw))
+	for k, v := range c.raw {
+		out[k] = v
+	}
+	return out
 }
 
 func Open[T any](path string, durable bool) (*Collection[T], error) {
@@ -225,25 +276,37 @@ func (c *Collection[T]) Put(key string, v T) error {
 		return err
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if old, ok := c.raw[key]; ok && bytes.Equal(old, b) {
+		c.mu.Unlock()
 		return nil
 	}
 	c.raw[key] = b
-	return c.appendLocked(record{K: key, V: b})
+	err = c.appendLocked(record{K: key, V: b})
+	c.mu.Unlock()
+	c.changed(key, b, false)
+	return err
 }
 
 func (c *Collection[T]) Delete(key string) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if _, ok := c.raw[key]; !ok {
+		c.mu.Unlock()
 		return nil
 	}
 	delete(c.raw, key)
-	return c.appendLocked(record{K: key, D: true})
+	err := c.appendLocked(record{K: key, D: true})
+	c.mu.Unlock()
+	c.changed(key, nil, true)
+	return err
 }
 
 func (c *Collection[T]) Update(key string, fn func(v T, exists bool) (T, bool, error)) (T, error) {
+	var notify func()
+	defer func() {
+		if notify != nil {
+			notify()
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var cur T
@@ -262,6 +325,7 @@ func (c *Collection[T]) Update(key string, fn func(v T, exists bool) (T, bool, e
 	if !keep {
 		if exists {
 			delete(c.raw, key)
+			notify = func() { c.changed(key, nil, true) }
 			return next, c.appendLocked(record{K: key, D: true})
 		}
 		return next, nil
@@ -274,6 +338,7 @@ func (c *Collection[T]) Update(key string, fn func(v T, exists bool) (T, bool, e
 		return next, nil
 	}
 	c.raw[key] = nb
+	notify = func() { c.changed(key, nb, false) }
 	return next, c.appendLocked(record{K: key, V: nb})
 }
 
