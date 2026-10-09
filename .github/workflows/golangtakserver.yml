@@ -210,6 +210,7 @@ jobs:
         run: |
           set -e
           GOLANGTAKSERVER_BINARY="$PWD/golangtakserver" sh scripts/install.sh
+          set -x
           sudo golangtakserver selftest
           sudo golangtakserver user list | grep -q bob
           test ! -e /usr/local/bin/golangtak
