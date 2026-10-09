@@ -1300,5 +1300,8 @@
  "Signing command": "Comando de firma",
  "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM.": "Recibe la solicitud (PEM) por la entrada estándar y GOLANGTAKSERVER_CN, e imprime el certificado y su cadena en PEM.",
  "CA chain to trust": "Cadena de CA de confianza",
- "Optional. Fetched from certsrv or taken from the command output when empty.": "Opcional. Si está vacío se obtiene de certsrv o de la salida del comando."
+ "Optional. Fetched from certsrv or taken from the command output when empty.": "Opcional. Si está vacío se obtiene de certsrv o de la salida del comando.",
+ "Tool": "Herramienta",
+ "for example missions": "por ejemplo missions",
+ "Optional. Only sent when a TAK tool or plugin asks for its own profile by this name.": "Opcional. Solo se envía cuando una herramienta o plugin de TAK pide su propio perfil con este nombre."
 }

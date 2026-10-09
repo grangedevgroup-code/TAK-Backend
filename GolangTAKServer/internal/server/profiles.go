@@ -27,6 +27,7 @@ type ProfileItem struct {
 	Connection bool      `json:"connection"`
 	ClientUID  string    `json:"clientUid,omitempty"`
 	Group      string    `json:"group,omitempty"`
+	Tool       string    `json:"tool,omitempty"`
 	Updated    time.Time `json:"updated"`
 }
 
@@ -143,7 +144,7 @@ func (s *Server) profileEntries(enrollment bool, clientUID string, secago int64)
 		}
 	}
 	for _, it := range s.profiles.Items() {
-		if (enrollment && !it.Enrollment) || (!enrollment && !it.Connection) {
+		if it.Tool != "" || (enrollment && !it.Enrollment) || (!enrollment && !it.Connection) {
 			continue
 		}
 		if it.ClientUID != "" && it.ClientUID != clientUID {

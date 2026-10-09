@@ -96,3 +96,21 @@ func TestTAKExtraEndpoints(t *testing.T) {
 	other.send(chatXML("vbm-other", "OTHER", "SEARCHY", "search-me-1", "chat still works"))
 	c.expect(func(e *cot.Event) bool { return e.IsChat() }, "chat while only SA sharing is off")
 }
+
+func TestToolProfiles(t *testing.T) {
+	s := newTestServer(t, nil)
+	s.profiles.PutItem(ProfileItem{Kind: "pref", Key: "missionSyncAuto", Class: "Boolean", Value: "true", Tool: "missions"})
+	s.profiles.PutItem(ProfileItem{Kind: "pref", Key: "plainPref", Value: "x", Enrollment: true})
+	st, body := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/device/profile/tool/missions?clientUid=x"), nil, nil)
+	if st != 200 || !strings.HasPrefix(string(body), "PK") || !strings.Contains(string(body), "missionSyncAuto") && !strings.Contains(string(body), "preference.pref") {
+		t.Fatalf("tool profile: %d %q", st, body[:min(len(body), 80)])
+	}
+	if st, _ := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/device/profile/tool/other?clientUid=x"), nil, nil); st != http.StatusNoContent {
+		t.Fatalf("unknown tool: %d", st)
+	}
+	for _, e := range s.profileEntries(true, "", 0).prefs {
+		if e.Key == "missionSyncAuto" {
+			t.Fatal("tool preference leaked into the enrollment profile")
+		}
+	}
+}

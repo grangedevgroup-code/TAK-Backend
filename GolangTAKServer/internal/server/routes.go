@@ -113,6 +113,7 @@ func (s *Server) routes() *http.ServeMux {
 	u("GET /Marti/api/tls/makeClientKeyStore", s.martiMakeKeyStore)
 	m("GET /Marti/api/tls/profile/enrollment", s.martiEnrollmentProfile)
 	m("GET /Marti/api/device/profile/connection", s.martiConnectionProfile)
+	m("GET /Marti/api/device/profile/tool/{tool}", s.martiToolProfile)
 	m("GET /api/connection", s.martiConnectionProfile)
 
 	m("POST /Marti/sync/missionupload", s.martiMissionUpload)

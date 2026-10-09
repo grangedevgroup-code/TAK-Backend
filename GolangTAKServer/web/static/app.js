@@ -3785,7 +3785,8 @@
         field("Value", input("pval", "")),
         field("Type", select("pclass", [["String", "Text"], ["Boolean", "true / false"], ["Integer", "Whole number"], ["Float", "Number"], ["Long", "Long number"]], "String")),
         field("Group", input("pgroup", ""), "Optional. Only users in this group receive it."),
-        field("Applies", h("div", null, checkbox("penr", true, "At enrollment"), " ", checkbox("pcon", false, "At every connection")))
+        field("Applies", h("div", null, checkbox("penr", true, "At enrollment"), " ", checkbox("pcon", false, "At every connection"))),
+        field("Tool", input("ptool", "", { placeholder: "for example missions" }), "Optional. Only sent when a TAK tool or plugin asks for its own profile by this name.")
       );
       modal("Add profile setting", f, [
         { label: "Cancel" },
@@ -3793,7 +3794,7 @@
           label: "Add",
           primary: true,
           run: async () => {
-            await api("POST", "/api/profiles", { kind: "pref", key: val(f, "pkey"), value: val(f, "pval"), class: val(f, "pclass"), group: val(f, "pgroup"), enrollment: val(f, "penr"), connection: val(f, "pcon") });
+            await api("POST", "/api/profiles", { kind: "pref", key: val(f, "pkey"), value: val(f, "pval"), class: val(f, "pclass"), group: val(f, "pgroup"), enrollment: val(f, "penr"), connection: val(f, "pcon"), tool: val(f, "ptool") });
             loadProfiles().catch(fail);
           },
         },

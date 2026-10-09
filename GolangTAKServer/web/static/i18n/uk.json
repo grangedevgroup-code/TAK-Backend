@@ -1309,5 +1309,8 @@
  "Signing command": "Команда підпису",
  "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM.": "Отримує запит (PEM) зі стандартного входу та GOLANGTAKSERVER_CN і виводить сертифікат і його ланцюжок у PEM.",
  "CA chain to trust": "Довірений ланцюжок ЦС",
- "Optional. Fetched from certsrv or taken from the command output when empty.": "Необов'язково. Якщо порожньо, береться з certsrv або з виводу команди."
+ "Optional. Fetched from certsrv or taken from the command output when empty.": "Необов'язково. Якщо порожньо, береться з certsrv або з виводу команди.",
+ "Tool": "Інструмент",
+ "for example missions": "наприклад missions",
+ "Optional. Only sent when a TAK tool or plugin asks for its own profile by this name.": "Необов'язково. Надсилається лише коли інструмент або плагін TAK просить власний профіль під цією назвою."
 }

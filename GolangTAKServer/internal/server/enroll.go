@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/pki"
 )
 
@@ -161,5 +162,59 @@ func (s *Server) martiConnectionProfile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
+	w.Write(data)
+}
+
+func (s *Server) martiToolProfile(w http.ResponseWriter, r *http.Request) {
+	tool := strings.TrimSpace(r.PathValue("tool"))
+	q := r.URL.Query()
+	clientUID := q.Get("clientUid")
+	var cut time.Time
+	if n, err := parseInt64(q.Get("syncSecago")); err == nil && n > 0 {
+		cut = time.Now().Add(-time.Duration(n) * time.Second)
+	}
+	var groups []string
+	if c := s.hub.ByUID(clientUID); c != nil {
+		groups = s.dir.Names(c.OutMask())
+	} else if id := identityOf(r); id != nil {
+		groups = s.identityGroups(id)
+	}
+	var prefs []prefEntry
+	var files []zipEntry
+	for _, it := range s.profiles.Items() {
+		if !strings.EqualFold(it.Tool, tool) || (it.ClientUID != "" && it.ClientUID != clientUID) || (it.Group != "" && !containsFold(groups, it.Group)) || (!cut.IsZero() && it.Updated.Before(cut)) {
+			continue
+		}
+		if it.Kind == "file" {
+			if data, err := s.res.blobs.Read(it.Hash); err == nil {
+				files = append(files, zipEntry{safeFileName(it.Name), data})
+			}
+			continue
+		}
+		prefs = append(prefs, prefEntry{Key: it.Key, Class: javaClass(it.Class), Value: it.Value})
+	}
+	if len(prefs) == 0 && len(files) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	folder := "profile-" + safeFileName(tool)
+	var entries []zipEntry
+	if len(prefs) > 0 {
+		entries = append(entries, zipEntry{folder + "/preference.pref", []byte(prefsXML(map[string][]prefEntry{"com.atakmap.app_preferences": prefs}, []string{"com.atakmap.app_preferences"}))})
+	}
+	for _, f := range files {
+		entries = append(entries, zipEntry{folder + "/" + f.Name, f.Data})
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name)
+	}
+	data, err := buildZip(append([]zipEntry{{"MANIFEST/manifest.xml", []byte(manifestXML(cot.NewUID(), s.Config().Name+" "+tool+" profile", true, names))}}, entries...))
+	if err != nil {
+		writeText(w, http.StatusInternalServerError, "could not build the profile")
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="profile.zip"`)
 	w.Write(data)
 }
