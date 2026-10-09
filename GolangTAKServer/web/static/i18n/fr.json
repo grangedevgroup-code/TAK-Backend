@@ -1152,5 +1152,15 @@
  "Drone telemetry": "Télémétrie des drones",
  "Show drones from video telemetry on the map": "Afficher sur la carte les drones à partir de la télémétrie vidéo",
  "Reads MISB 0601 KLV in the video and shows the drone, where its camera points and the ground it sees.": "Lit le KLV MISB 0601 de la vidéo et affiche le drone, la direction de sa caméra et la zone qu'elle voit.",
- "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP ou RTSPS pour récupérer le flux d'une caméra, ou udp://0.0.0.0:5600 pour recevoir du MPEG-TS d'un drone ou d'un encodeur (les adresses multicast fonctionnent aussi). Le serveur le republie."
+ "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP ou RTSPS pour récupérer le flux d'une caméra, ou udp://0.0.0.0:5600 pour recevoir du MPEG-TS d'un drone ou d'un encodeur (les adresses multicast fonctionnent aussi). Le serveur le republie.",
+ "Monitoring": "Supervision",
+ "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.": "Exposer les métriques du serveur à Prometheus, Grafana Agent, Zabbix ou tout outil qui lit le format Prometheus.",
+ "Metrics": "Métriques",
+ "Serve metrics at /metrics": "Servir les métriques sur /metrics",
+ "On the web ports, for example http://SERVER:8080/metrics.": "Sur les ports web, par exemple http://SERVER:8080/metrics.",
+ "Access token": "Jeton d'accès",
+ "only administrators can read metrics": "seuls les administrateurs peuvent lire les métriques",
+ "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Les collecteurs l'envoient comme jeton bearer. Les administrateurs peuvent aussi se connecter avec leur nom d'utilisateur et leur mot de passe. ",
+ "Generate a token": "Générer un jeton",
+ "Copy the token now. After saving it is hidden.": "Copiez le jeton maintenant. Après l'enregistrement il est masqué."
 }

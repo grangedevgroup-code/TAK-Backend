@@ -1188,5 +1188,15 @@
  "Drone telemetry": "Telemetría de drones",
  "Show drones from video telemetry on the map": "Mostrar en el mapa los drones a partir de la telemetría del vídeo",
  "Reads MISB 0601 KLV in the video and shows the drone, where its camera points and the ground it sees.": "Lee el KLV MISB 0601 del vídeo y muestra el dron, hacia dónde apunta su cámara y el terreno que ve.",
- "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP o RTSPS para obtenerlo de una cámara, o udp://0.0.0.0:5600 para recibir MPEG-TS de un dron o codificador (también sirven direcciones multicast). El servidor lo vuelve a publicar."
+ "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP o RTSPS para obtenerlo de una cámara, o udp://0.0.0.0:5600 para recibir MPEG-TS de un dron o codificador (también sirven direcciones multicast). El servidor lo vuelve a publicar.",
+ "Monitoring": "Monitorización",
+ "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.": "Exponer las métricas del servidor a Prometheus, Grafana Agent, Zabbix o cualquier herramienta que lea el formato de Prometheus.",
+ "Metrics": "Métricas",
+ "Serve metrics at /metrics": "Servir métricas en /metrics",
+ "On the web ports, for example http://SERVER:8080/metrics.": "En los puertos web, por ejemplo http://SERVER:8080/metrics.",
+ "Access token": "Token de acceso",
+ "only administrators can read metrics": "solo los administradores pueden leer las métricas",
+ "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Los recolectores lo envían como token bearer. Los administradores también pueden iniciar sesión con su usuario y contraseña. ",
+ "Generate a token": "Generar un token",
+ "Copy the token now. After saving it is hidden.": "Copie el token ahora. Tras guardar quedará oculto."
 }

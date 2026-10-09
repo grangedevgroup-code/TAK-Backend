@@ -15,6 +15,7 @@ func (s *Server) routes() *http.ServeMux {
 	a := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.guard(accessAdmin, h)) }
 	pub := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, h) }
 
+	pub("GET /metrics", s.metricsHandler)
 	pub("GET /Marti/api/version", s.martiVersion)
 	pub("GET /Marti/api/version/config", s.martiVersionConfig)
 	pub("GET /Marti/api/version/info", s.martiVersionInfo)

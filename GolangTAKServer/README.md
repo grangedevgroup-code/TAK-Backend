@@ -329,6 +329,20 @@ Setting types are `text`, `number`, `bool`, `secret`, `select` (with `options`) 
 
 The dashboard (**Plugins and profiles**) shows each plugin's version, state, process and output, edits its settings, and can restart, enable or disable it. Plugins can only be installed, added or removed on the server itself, with the `golangtakserver plugin` command or in `config.json`, so a stolen dashboard password cannot be used to run programs on the server.
 
+## Monitoring
+
+Turn on **Settings**, **Monitoring** to serve Prometheus metrics at `/metrics` on the web ports: connected clients by type, messages in and out, rate-limited traffic, missions, files, users, video streams and viewers, memory, CPU and disk. Scrapers authenticate with the access token as a bearer token:
+
+```yaml
+scrape_configs:
+  - job_name: golangtakserver
+    scheme: http
+    static_configs:
+      - targets: ["SERVER:8080"]
+    authorization:
+      credentials: YOUR_TOKEN
+```
+
 ## Ports
 
 | Port | Protocol | Use |

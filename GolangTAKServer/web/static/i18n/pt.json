@@ -1176,5 +1176,15 @@
  "Drone telemetry": "Telemetria de drones",
  "Show drones from video telemetry on the map": "Mostrar no mapa os drones a partir da telemetria do vídeo",
  "Reads MISB 0601 KLV in the video and shows the drone, where its camera points and the ground it sees.": "Lê o KLV MISB 0601 do vídeo e mostra o drone, para onde a câmera aponta e a área que ela vê.",
- "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP ou RTSPS para obter de uma câmera, ou udp://0.0.0.0:5600 para receber MPEG-TS de um drone ou codificador (endereços multicast também funcionam). O servidor o republica."
+ "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP ou RTSPS para obter de uma câmera, ou udp://0.0.0.0:5600 para receber MPEG-TS de um drone ou codificador (endereços multicast também funcionam). O servidor o republica.",
+ "Monitoring": "Monitoramento",
+ "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.": "Expor as métricas do servidor ao Prometheus, Grafana Agent, Zabbix ou qualquer ferramenta que leia o formato do Prometheus.",
+ "Metrics": "Métricas",
+ "Serve metrics at /metrics": "Servir métricas em /metrics",
+ "On the web ports, for example http://SERVER:8080/metrics.": "Nas portas web, por exemplo http://SERVER:8080/metrics.",
+ "Access token": "Token de acesso",
+ "only administrators can read metrics": "somente administradores podem ler as métricas",
+ "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Os coletores o enviam como token bearer. Administradores também podem entrar com usuário e senha. ",
+ "Generate a token": "Gerar um token",
+ "Copy the token now. After saving it is hidden.": "Copie o token agora. Depois de salvar ele fica oculto."
 }

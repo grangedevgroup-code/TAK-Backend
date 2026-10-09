@@ -1157,5 +1157,15 @@
  "Drone telemetry": "Drohnentelemetrie",
  "Show drones from video telemetry on the map": "Drohnen aus der Videotelemetrie auf der Karte zeigen",
  "Reads MISB 0601 KLV in the video and shows the drone, where its camera points and the ground it sees.": "Liest MISB-0601-KLV im Video und zeigt die Drohne, wohin ihre Kamera zeigt und den Bereich, den sie sieht.",
- "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP oder RTSPS, um von einer Kamera abzurufen, oder udp://0.0.0.0:5600, um MPEG-TS von einer Drohne oder einem Encoder zu empfangen (Multicast-Adressen funktionieren auch). Der Server veröffentlicht es erneut."
+ "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it.": "RTSP oder RTSPS, um von einer Kamera abzurufen, oder udp://0.0.0.0:5600, um MPEG-TS von einer Drohne oder einem Encoder zu empfangen (Multicast-Adressen funktionieren auch). Der Server veröffentlicht es erneut.",
+ "Monitoring": "Überwachung",
+ "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.": "Servermetriken für Prometheus, Grafana Agent, Zabbix oder jedes Werkzeug bereitstellen, das das Prometheus-Format liest.",
+ "Metrics": "Metriken",
+ "Serve metrics at /metrics": "Metriken unter /metrics bereitstellen",
+ "On the web ports, for example http://SERVER:8080/metrics.": "Auf den Webports, zum Beispiel http://SERVER:8080/metrics.",
+ "Access token": "Zugriffstoken",
+ "only administrators can read metrics": "nur Administratoren können Metriken lesen",
+ "Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ": "Abfragewerkzeuge senden es als Bearer-Token. Administratoren können sich auch mit Benutzername und Passwort anmelden. ",
+ "Generate a token": "Token erzeugen",
+ "Copy the token now. After saving it is hidden.": "Kopieren Sie das Token jetzt. Nach dem Speichern wird es verborgen."
 }

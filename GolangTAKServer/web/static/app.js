@@ -3288,6 +3288,7 @@
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
     { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload rate limit throttle flood qos" },
+    { id: "monitoring", title: "Monitoring", keys: "metrics prometheus grafana monitoring alerting" },
     { id: "maintenance", title: "Maintenance", keys: "restart renew backup" },
     { id: "advanced", title: "Advanced (JSON)", keys: "config.json raw" },
   ];
@@ -3360,7 +3361,7 @@
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {};
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -3551,6 +3552,18 @@
         field("Client validity (days)", n("cdays", c.clientDays)),
         field("Server validity (days)", n("sdays", c.serverDays)),
       ],
+      monitoring: [
+        "Expose server metrics to Prometheus, Grafana Agent, Zabbix or any tool that reads the Prometheus format.",
+        field("Metrics", checkbox("met_on", met.enabled, "Serve metrics at /metrics"), "On the web ports, for example http://SERVER:8080/metrics."),
+        field("Access token", input("met_tok", met.token || "", { placeholder: "only administrators can read metrics" }), ["Scrapers send it as a bearer token. Administrators can also sign in with their user name and password. ", btn("Generate a token", () => {
+          const b = new Uint8Array(24);
+          crypto.getRandomValues(b);
+          const el = document.getElementById("met_tok");
+          el.value = btoa(String.fromCharCode(...b)).replace(/[+/=]/g, "");
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          toast("Copy the token now. After saving it is hidden.");
+        }, "small")]),
+      ],
       storage: [
         "How long data is kept, and limits that protect the server.",
         sub("Keep for (days, 0 keeps forever)"),
@@ -3735,6 +3748,7 @@
         repeater: { enabled: val(form, "rep"), intervalSec: num(form, "repint") },
         retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
+        metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
         rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
         ldap: ldapFromForm(),

@@ -182,6 +182,7 @@ type Config struct {
 	Certificates   CertConfig        `json:"certificates"`
 	Retention      RetentionConfig   `json:"retention"`
 	RateLimits     RateLimitConfig   `json:"rateLimits"`
+	Metrics        MetricsConfig     `json:"metrics"`
 	Limits         LimitsConfig      `json:"limits"`
 	Repeater       RepeaterConfig    `json:"repeater"`
 	Federation     FederationConfig  `json:"federation"`
