@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +25,14 @@ func webHelper() {
 	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
 		u, ok := plugin.UserOf(r)
 		fmt.Fprintf(w, "%s %s %v cookie=%q auth=%q", p.Setting("greeting", "?"), u.Name, ok, r.Header.Get("Cookie"), r.Header.Get("Authorization"))
+	})
+	mux.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		fmt.Fprintf(w, "%s %s %s", r.Method, r.URL.RawQuery, b)
+	})
+	mux.HandleFunc("/submit/result", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		fmt.Fprintf(w, "result %s", b)
 	})
 	mux.HandleFunc("/public/info", func(w http.ResponseWriter, r *http.Request) {
 		_, ok := plugin.UserOf(r)
@@ -82,6 +91,18 @@ func TestPluginWebPagesAndSettings(t *testing.T) {
 		_, body = doReq(t, http.DefaultClient, "GET", plainURL(s, "/plugins/web/hello"), nil, auth)
 		return strings.HasPrefix(string(body), "howdy ")
 	})
+	st, body = doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/api/plugins/web/submit?track=7"), strings.NewReader("payload"), auth)
+	if st != 200 || string(body) != "POST track=7 payload" {
+		t.Fatalf("submit: %d %s", st, body)
+	}
+	st, body = doReq(t, http.DefaultClient, "PUT", plainURL(s, "/Marti/api/plugins/web/submit/result"), strings.NewReader("x"), auth)
+	if st != 200 || string(body) != "result x" {
+		t.Fatalf("submit result: %d %s", st, body)
+	}
+	_, body = doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/plugins/info/all"), nil, auth)
+	if !strings.Contains(string(body), `"name":"web"`) || !strings.Contains(string(body), `"started":true`) {
+		t.Fatalf("plugin info: %s", body)
+	}
 	_, body = doReq(t, http.DefaultClient, "GET", plainURL(s, "/api/server-plugins"), nil, adminAuth)
 	var list []PluginStatus
 	json.Unmarshal(body, &list)
