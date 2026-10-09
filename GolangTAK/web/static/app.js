@@ -16,12 +16,85 @@
 
   const root = document.getElementById("app");
 
+  const LANGS = [["en", "English"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt", "Português"], ["uk", "Українська"]];
+  let DICT = null;
+  let PATTERNS = [];
+  let LANG = "en";
+
+  function fillPattern(k) {
+    for (const [re, out] of PATTERNS) {
+      const m = re.exec(k);
+      if (m) {
+        let i = 0;
+        return out.replace(/\{[nx]\}/g, () => m[++i]);
+      }
+    }
+    return "";
+  }
+
+  function T(s) {
+    if (!DICT || typeof s !== "string") return s;
+    const k = s.trim();
+    const v = k && (DICT[k] || fillPattern(k));
+    if (!v) return s;
+    if (k === s) return v;
+    const at = s.indexOf(k);
+    return s.slice(0, at) + v + s.slice(at + k.length);
+  }
+
+  function pickLang() {
+    let want = "";
+    try {
+      want = localStorage.getItem("golangtak-lang") || "";
+    } catch (e) {}
+    if (!want) {
+      for (const l of navigator.languages || [navigator.language || "en"]) {
+        const code = String(l).toLowerCase().split("-")[0];
+        if (LANGS.some((x) => x[0] === code)) {
+          want = code;
+          break;
+        }
+      }
+    }
+    return LANGS.some((x) => x[0] === want) ? want : "en";
+  }
+
+  async function loadLang() {
+    if (DICT || LANG !== "en") return;
+    LANG = pickLang();
+    document.documentElement.lang = LANG;
+    if (LANG === "en") return;
+    try {
+      const r = await fetch("/assets/i18n/" + LANG + ".json", { cache: "no-cache" });
+      if (r.ok) DICT = await r.json();
+      const esc = (x) => x.replace(/[.*+?^$()|[\]\\]/g, (c) => "\\" + c);
+      PATTERNS = Object.keys(DICT || {})
+        .filter((k) => /\{[nx]\}/.test(k))
+        .sort((a, b) => b.length - a.length)
+        .map((k) => [new RegExp("^" + k.split(/(\{[nx]\})/).map((p) => (p === "{n}" ? "(-?\\d[\\d.,]*)" : p === "{x}" ? "(.+?)" : esc(p))).join("") + "$"), DICT[k]]);
+    } catch (e) {}
+  }
+
+  function langSelect(id) {
+    const sel = select(id, LANGS, LANG);
+    sel.setAttribute("aria-label", "Language");
+    sel.addEventListener("change", () => {
+      try {
+        localStorage.setItem("golangtak-lang", sel.value);
+      } catch (e) {}
+      location.reload();
+    });
+    return sel;
+  }
+
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);
+    const literal = tag === "pre" || tag === "code" || tag === "textarea";
     let value;
     if (attrs) {
-      for (const [k, v] of Object.entries(attrs)) {
+      for (let [k, v] of Object.entries(attrs)) {
         if (v === undefined || v === null || v === false) continue;
+        if (k === "placeholder" || k === "title" || k === "aria-label") v = T(v);
         if (k === "class") el.className = v;
         else if (k === "value") value = v;
         else if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2), v);
@@ -31,7 +104,7 @@
     }
     for (const kid of kids.flat(Infinity)) {
       if (kid === undefined || kid === null || kid === false) continue;
-      el.append(kid instanceof Node ? kid : String(kid));
+      el.append(kid instanceof Node ? kid : typeof kid === "string" && !literal ? T(kid) : String(kid));
     }
     if (value !== undefined) el.value = value;
     return el;
@@ -884,18 +957,18 @@
     );
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      err.textContent = "";
+      err.textContent = T("");
       try {
         const r = await api("POST", "/api/login", { username: form.querySelector("#u").value.trim(), password: form.querySelector("#p").value });
         if (r.twoFactor) return showCodeStep(r);
         S.csrf = r.csrf;
         await boot();
       } catch (e) {
-        err.textContent = e.message === "invalid credentials" ? "Wrong user name or password." : e.message;
+        err.textContent = T(e.message === "invalid credentials" ? "Wrong user name or password." : e.message);
       }
     });
     const links = h("div", { class: "login-links" });
-    form.append(links, h("div", { class: "foot" }, "GolangTAK is open source and not affiliated with tak.gov or the TAK Product Center."));
+    form.append(links, h("div", { class: "foot" }, "GolangTAK is open source and not affiliated with tak.gov or the TAK Product Center.", h("div", { class: "login-lang" }, langSelect("loginlang"))));
     root.append(h("div", { class: "login-wrap" }, form));
     form.querySelector("#u").focus();
     api("GET", "/api/auth/options")
@@ -923,7 +996,7 @@
     );
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      err.textContent = "";
+      err.textContent = T("");
       try {
         const r = await api("POST", "/api/login/verify", { challenge: ch.challenge, code: form.querySelector("#code").value });
         S.csrf = r.csrf;
@@ -953,7 +1026,7 @@
     form.append(done, err, h("div", { class: "login-links" }, h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), (location.hash = ""), showLogin()) }, "Back to sign in")));
     const v = (id) => form.querySelector("#" + id).value;
     const submit = async () => {
-      err.textContent = done.textContent = "";
+      err.textContent = done.textContent = T("");
       try {
         let r;
         if (kind === "forgot") r = await api("POST", "/api/password/forgot", { login: v("login").trim() });
@@ -986,6 +1059,7 @@
 
   async function boot() {
     theme();
+    await loadLang();
     const link = /^#\/(reset|verify)\/([A-Za-z0-9_-]+)$/.exec(location.hash);
     if (link && !S.me) {
       history.replaceState(null, "", location.pathname);
@@ -1074,9 +1148,9 @@
     if (points.length > 1) {
       const secs = Math.round((points[points.length - 1].t - points[0].t) / 1000);
       const t0 = el("text", { class: "tick", x: L, y: H - 4 });
-      t0.textContent = secs < 120 ? secs + " s ago" : Math.round(secs / 60) + " min ago";
+      t0.textContent = T(secs < 120 ? secs + " s ago" : Math.round(secs / 60) + " min ago");
       const t1 = el("text", { class: "tick", x: W - R, y: H - 4, "text-anchor": "end" });
-      t1.textContent = "now";
+      t1.textContent = T("now");
       svg.append(t0, t1);
       const d = points.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.v).toFixed(1)).join(" ");
       svg.append(el("path", { class: "area", d: d + " L" + x(points.length - 1).toFixed(1) + " " + y(0) + " L" + x(0) + " " + y(0) + " Z" }));
@@ -1542,7 +1616,7 @@
     const addBtn = btn("Add marker", () => {
       addMode = !addMode;
       addBtn.classList.toggle("primary", addMode);
-      addBtn.lastChild.textContent = addMode ? "Click the map to place it" : "Add marker";
+      addBtn.lastChild.textContent = T(addMode ? "Click the map to place it" : "Add marker");
     }, "", "plus");
     const countEl = h("span", { class: "muted" });
     main.append(
@@ -1578,7 +1652,7 @@
     const tools = h("div", { class: "map-tools" }, btn("+", () => map.zoomAt(1)), btn("-", () => map.zoomAt(-1)));
     wrap.append(tools);
     map.onmove = (lat, lon) => {
-      coords.textContent = lat.toFixed(5) + ", " + lon.toFixed(5);
+      coords.textContent = T(lat.toFixed(5) + ", " + lon.toFixed(5));
     };
     const markers = () => {
       const out = [];
@@ -1595,7 +1669,7 @@
     const redraw = () => {
       const m = markers();
       map.setMarkers(m);
-      countEl.textContent = m.length + " on map";
+      countEl.textContent = T(m.length + " on map");
     };
     let fitted = false;
     const fitAll = (force) => {
@@ -1670,7 +1744,7 @@
       if (addMode) {
         addMode = false;
         addBtn.classList.remove("primary");
-        addBtn.lastChild.textContent = "Add marker";
+        addBtn.lastChild.textContent = T("Add marker");
         const f = h(
           "form",
           { class: "grid" },
@@ -2160,7 +2234,7 @@
             sb.remove(start, end - 20);
             return;
           }
-          status.textContent = "Live";
+          status.textContent = T("Live");
           video.play().catch(() => {});
         }
         pump();
@@ -2172,7 +2246,7 @@
         queue.push(value);
         pump();
       }
-      status.textContent = "The stream ended.";
+      status.textContent = T("The stream ended.");
     })().catch((e) => {
       if (e.name !== "AbortError") status.textContent = e.message;
     });
@@ -2504,8 +2578,8 @@
           el.parentNode.style.display = show;
           if (lab) lab.style.display = show;
         }
-        form.querySelector("label[for=dfaddr]").textContent = k.addr || "Address";
-        form.querySelector("label[for=dfpass]").textContent = k.pass || "Password";
+        form.querySelector("label[for=dfaddr]").textContent = T(k.addr || "Address");
+        form.querySelector("label[for=dfpass]").textContent = T(k.pass || "Password");
         form.querySelector("#dfport").placeholder = k.port ? String(k.port) : "";
         form.querySelector("#dfurl").placeholder = k.url || "";
         form.querySelector("#dfaddr").placeholder = { mcast: "239.2.3.1", sbs: "192.168.1.50", ais: "Empty to listen for UDP" }[val(form, "dfproto")] || "";
@@ -2934,7 +3008,7 @@
         if (!urlInput.value || urlInput.value === template) urlInput.value = k[2];
         template = k[2];
         urlInput.placeholder = k[2];
-        hint.textContent = k[3] + " Replace HOST with the other server's address.";
+        hint.textContent = T(k[3] + " Replace HOST with the other server's address.");
       };
       kindSel.addEventListener("change", applyKind);
       const f = h(
@@ -3485,7 +3559,7 @@
     const setDirty = (d) => {
       dirty = d;
       bar.classList.toggle("dirty", d);
-      state.textContent = d ? "Unsaved changes" : "No unsaved changes";
+      state.textContent = T(d ? "Unsaved changes" : "No unsaved changes");
       discard.disabled = !d;
     };
     form.addEventListener("input", () => setDirty(true));
@@ -3643,7 +3717,7 @@
     let paused = false;
     const pauseBtn = btn("Pause", () => {
       paused = !paused;
-      pauseBtn.textContent = paused ? "Resume" : "Pause";
+      pauseBtn.textContent = T(paused ? "Resume" : "Pause");
     });
     main.append(h("div", { class: "toolbar" }, filter, pauseBtn, btn("Clear", () => clear(view)), h("span", { class: "grow" })), view);
     const add = (line) => {
@@ -3826,7 +3900,7 @@
     const t = theme();
     const themeSel = select("theme", [["auto", "Follow the system"], ["light", "Light"], ["dark", "Dark"]], t);
     themeSel.addEventListener("change", () => setTheme(themeSel.value));
-    main.append(h("h2", null, "Display"), h("form", { class: "grid" }, field("Theme", themeSel)));
+    main.append(h("h2", null, "Display"), h("form", { class: "grid" }, field("Theme", themeSel), field("Language", langSelect("lang"))));
   }
 
   window.addEventListener("hashchange", route);

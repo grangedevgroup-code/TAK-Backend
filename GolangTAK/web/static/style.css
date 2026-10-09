@@ -595,3 +595,11 @@ details.more > .inner { padding: 16px; }
 .login .ok-msg { color: var(--ok); margin-top: 10px; }
 pre.codes { padding: 12px; border: 1px solid var(--border-strong); background: var(--canvas); line-height: 1.8; }
 .qr svg { width: 200px; height: 200px; background: #fff; padding: 8px; }
+
+.login-lang {
+  margin-top: 12px;
+}
+.login-lang select {
+  width: auto;
+  min-width: 160px;
+}

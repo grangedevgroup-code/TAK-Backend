@@ -150,6 +150,7 @@ Every link is bidirectional: traffic from devices on GolangTAK reaches the other
 - **Accounts**: two-step dashboard sign-in with an authenticator app or emailed codes (with recovery codes), password reset by email, optional self-registration with email confirmation, domain allow and block lists and administrator approval, local users with groups, or sign-in with LDAP and Active Directory accounts whose directory groups become TAK groups, with an administrator group and a callsign attribute.
 - **Certificates**: free browser-trusted certificates from Let's Encrypt for the dashboard and enrollment port, renewed automatically, built-in certificate authority, certificate enrollment (signClient v1 and v2, JSON and XML), one-time enrollment codes, revocation, server certificate that renews itself when the address changes, import of an existing CA.
 - **Data**: data packages and the Data Sync API, missions with subscriptions, roles, passwords, invitations and change notifications, ExCheck checklists, CI-TRAP reports, video feeds, KML export, track history.
+- **Languages**: the dashboard is in English, Spanish, French, German, Portuguese and Ukrainian. It follows the browser language, and each person can choose another on the sign-in page or under My account.
 - **Administration**: web dashboard (map with MIL-STD-2525 unit symbols by affiliation, dimension and function, heading lines, routes, drawings, range and bearing lines, areas in acres and hectares (for Fire Area Survey perimeters and other drawings), CasEvac 9-line reports and attached images, chat, clients, devices, users, groups, files, missions, video, server links, plugins, settings, logs, and a performance page with CPU, memory, disk, load and message rates over the last ten minutes), command line tools, API tokens, ATAK update server for plugins, device profiles pushed at enrollment or connection.
 - **Links**: outbound links over TCP, TLS, UDP and WebSocket, inbound and outbound TAK Server federation, version 1 and version 2.
 - **Meshtastic**: built-in MQTT broker for Meshtastic gateway nodes (or an upstream broker); mesh positions, names, battery and chat appear in TAK, and TAK positions and chat go out to the mesh, encrypted with the channel key.
@@ -336,6 +337,10 @@ Settings live in `config.json` in the data directory and can be changed in the d
 - Port 8087 (TCP), UDP input and the HTTP dashboard on 8080 are unencrypted. On untrusted networks install with `--no-anonymous`, give devices certificates, and use the dashboard on port 8446.
 - Groups separate traffic: users only receive from their receive groups, and history, files, missions and video follow the same rules.
 - On cloud servers also allow the ports in the provider's firewall or security group.
+
+## Translations
+
+Dashboard translations are JSON files in `web/static/i18n`, one per language, mapping the English text to the translation. Text with `{n}` (a number) or `{x}` (a name) matches sentences built around those values. To add a language, add its file and an entry in the `LANGS` list at the top of `web/static/app.js`; `go test ./web` checks every file.
 
 ## Building from source
 
