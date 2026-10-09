@@ -53,6 +53,7 @@ type MissionContent struct {
 	Hash       string    `json:"hash"`
 	CreatorUID string    `json:"creatorUid"`
 	Added      time.Time `json:"added"`
+	Keywords   []string  `json:"keywords,omitempty"`
 }
 
 type MissionItem struct {
@@ -65,6 +66,7 @@ type MissionItem struct {
 	Color       string    `json:"color"`
 	Lat         float64   `json:"lat"`
 	Lon         float64   `json:"lon"`
+	Keywords    []string  `json:"keywords,omitempty"`
 }
 
 type MissionSub struct {
@@ -135,6 +137,7 @@ type Mission struct {
 	Origin         string            `json:"federatedFrom,omitempty"`
 	Feeds          []MissionFeed     `json:"feeds,omitempty"`
 	MapLayers      []MapLayer        `json:"mapLayers,omitempty"`
+	Layers         []MissionLayerRec `json:"layers,omitempty"`
 	Properties     map[string]string `json:"properties,omitempty"`
 	NextSeq        int64             `json:"nextSeq"`
 }
@@ -278,7 +281,12 @@ func (s *Server) missionVisible(id *Identity, m Mission) bool {
 }
 
 func itemJSON(it MissionItem) map[string]any {
+	kw := it.Keywords
+	if kw == nil {
+		kw = []string{}
+	}
 	return map[string]any{
+		"keywords":   kw,
 		"data":       it.UID,
 		"timestamp":  isoTime(it.Added),
 		"creatorUid": it.CreatorUID,
@@ -300,7 +308,11 @@ func (s *Server) contentJSON(c MissionContent) map[string]any {
 	if res.UID == "" {
 		res = Resource{UID: c.UID, Hash: c.Hash}
 	}
-	return map[string]any{"data": resourceJSON(res), "timestamp": isoTime(c.Added), "creatorUid": c.CreatorUID}
+	out := map[string]any{"data": resourceJSON(res), "timestamp": isoTime(c.Added), "creatorUid": c.CreatorUID}
+	if len(c.Keywords) > 0 {
+		out["keywords"] = c.Keywords
+	}
+	return out
 }
 
 func (s *Server) changeJSON(m Mission, c MissionChange) map[string]any {
@@ -1621,30 +1633,7 @@ func (s *Server) missionArchive(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var entries []zipEntry
-	var names []string
-	for _, c := range m.Contents {
-		res, ok := s.res.Get(c.UID)
-		if !ok {
-			continue
-		}
-		data, err := s.res.blobs.Read(res.Hash)
-		if err != nil {
-			continue
-		}
-		name := res.Hash[:16] + "/" + safeFileName(res.Name)
-		entries = append(entries, zipEntry{name, data})
-		names = append(names, name)
-	}
-	for _, it := range m.Items {
-		if x, ok := s.missions.CoT(m.Name, it.UID); ok {
-			name := "cot/" + safeFileName(it.UID) + ".cot"
-			entries = append(entries, zipEntry{name, []byte(x)})
-			names = append(names, name)
-		}
-	}
-	manifest := manifestXML(m.GUID, m.Name, false, names)
-	data, err := buildZip(append([]zipEntry{{"MANIFEST/manifest.xml", []byte(manifest)}}, entries...))
+	data, err := s.missionArchiveBytes(m)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

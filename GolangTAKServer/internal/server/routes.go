@@ -356,6 +356,9 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 	case len(seg) == 1 && seg[0] == "invitations" && method == http.MethodGet:
 		s.missionInvitations(w, r)
 		return
+	case len(seg) == 3 && seg[0] == "all" && seg[1] == "subscriptions" && seg[2] == "guid":
+		s.missionAllSubscriptionsGUID(w, r)
+		return
 	case len(seg) == 2 && seg[0] == "all":
 		switch seg[1] {
 		case "invitations":
@@ -560,7 +563,27 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 		}
 		s.missionProperties(w, r, key)
 	case "layers":
-		writeJSON(w, http.StatusOK, s.envelope("MissionLayer", []any{}))
+		s.missionLayers(w, r, seg[1:])
+	case "copy":
+		if method == http.MethodPut || method == http.MethodPost {
+			s.missionCopy(w, r)
+		} else {
+			notFound()
+		}
+	case "send":
+		if method == http.MethodPost || method == http.MethodPut {
+			s.missionSend(w, r)
+		} else {
+			notFound()
+		}
+	case "token":
+		s.missionAccessToken(w, r)
+	case "content", "uid":
+		if len(seg) == 3 && seg[2] == "keywords" && (method == http.MethodPut || method == http.MethodDelete) {
+			s.missionItemKeywords(w, r, action, seg[1])
+			return
+		}
+		notFound()
 	default:
 		notFound()
 	}
