@@ -269,31 +269,35 @@ func (s *Server) martiSubscriptions(w http.ResponseWriter, r *http.Request) {
 		if c.Relay || !s.visibleTo(id, c.InMask()) {
 			continue
 		}
-		info := c.Info()
-		data = append(data, map[string]any{
-			"dn":                        "",
-			"callsign":                  info.Callsign,
-			"clientUid":                 info.UID,
-			"lastReportMillisecondsAgo": time.Since(c.LastSeen()).Milliseconds(),
-			"takClient":                 info.Platform != "",
-			"lastReportDiffMillis":      time.Since(c.LastSeen()).Milliseconds(),
-			"username":                  c.User(),
-			"protocol":                  c.Kind,
-			"xpath":                     "",
-			"subscriptionUid":           strconv.FormatUint(c.ID, 10),
-			"team":                      info.Team,
-			"role":                      info.Role,
-			"takv":                      strings.TrimSpace(info.Platform + " " + info.Version),
-			"groups":                    s.dir.Names(c.InMask()),
-			"incognito":                 false,
-			"handlerType":               c.Kind,
-			"ipAddress":                 remoteIP(c.Remote),
-		})
+		data = append(data, s.subscriptionInfo(c))
 	}
 	if data == nil {
 		data = []map[string]any{}
 	}
 	writeJSON(w, http.StatusOK, s.envelope("SubscriptionInfo", data))
+}
+
+func (s *Server) subscriptionInfo(c *Client) map[string]any {
+	info := c.Info()
+	return map[string]any{
+		"dn":                        "",
+		"callsign":                  info.Callsign,
+		"clientUid":                 info.UID,
+		"lastReportMillisecondsAgo": time.Since(c.LastSeen()).Milliseconds(),
+		"takClient":                 info.Platform != "",
+		"lastReportDiffMillis":      time.Since(c.LastSeen()).Milliseconds(),
+		"username":                  c.User(),
+		"protocol":                  c.Kind,
+		"xpath":                     "",
+		"subscriptionUid":           strconv.FormatUint(c.ID, 10),
+		"team":                      info.Team,
+		"role":                      info.Role,
+		"takv":                      strings.TrimSpace(info.Platform + " " + info.Version),
+		"groups":                    s.dir.Names(c.InMask()),
+		"incognito":                 c.incognito.Load(),
+		"handlerType":               c.Kind,
+		"ipAddress":                 remoteIP(c.Remote),
+	}
 }
 
 func (s *Server) martiCotXML(w http.ResponseWriter, r *http.Request) {

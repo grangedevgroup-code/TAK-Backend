@@ -18,7 +18,6 @@ import (
 )
 
 type clientState struct {
-	incognito bool
 }
 
 func (s *Server) streamTLSConfig(requireCert bool) *tls.Config {
@@ -392,10 +391,10 @@ func (s *Server) handleEvent(c *Client, st *clientState, e *cot.Event) error {
 		}
 		return nil
 	case "t-x-c-i-e":
-		st.incognito = true
+		c.incognito.Store(true)
 		return nil
 	case "t-x-c-i-d":
-		st.incognito = false
+		c.incognito.Store(false)
 		return nil
 	}
 	if consumedTypes[e.Type] {
@@ -407,7 +406,7 @@ func (s *Server) handleEvent(c *Client, st *clientState, e *cot.Event) error {
 	if e.FlowTag(s.FlowKey()) != "" {
 		return nil
 	}
-	if st.incognito && !e.IsControl() && len(e.Dests()) == 0 {
+	if c.incognito.Load() && !e.IsControl() && len(e.Dests()) == 0 {
 		return nil
 	}
 	m := NewMessage(e, c, c.InMask())
