@@ -2332,7 +2332,7 @@
         "form",
         { class: "grid" },
         field("Name", input("vsname", src.name || "", { required: true, placeholder: "gate-camera" })),
-        field("Camera URL", input("vsurl", src.url || "", { required: true, placeholder: "rtsp://user:password@192.168.1.20:554/stream1" }), "RTSP or RTSPS. The server pulls it and republishes it."),
+        field("Camera URL", input("vsurl", src.url || "", { required: true, placeholder: "rtsp://user:password@192.168.1.20:554/stream1" }), "RTSP or RTSPS to pull from a camera, or udp://0.0.0.0:5600 to receive MPEG-TS from a drone or encoder (multicast addresses work too). The server republishes it."),
         field("Path", input("vspath", src.path || "", { placeholder: "cameras/gate" }), "Where the stream is published on this server. Empty uses the name."),
         field("Groups", input("vsgroups", (src.groups || []).join(", ")), "Only these groups can watch. Empty means everyone."),
         field("Enabled", checkbox("vson", src.enabled !== false, "Pull this source")),
@@ -3287,7 +3287,7 @@
     { id: "email", title: "Email and accounts", keys: "smtp mail registration sign up password reset two factor 2fa domains" },
     { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
     { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
-    { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload" },
+    { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload rate limit throttle flood qos" },
     { id: "maintenance", title: "Maintenance", keys: "restart renew backup" },
     { id: "advanced", title: "Advanced (JSON)", keys: "config.json raw" },
   ];
@@ -3360,7 +3360,7 @@
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
-    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits;
+    const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
@@ -3447,6 +3447,7 @@
         field("Record these paths", input("vs_recp", (vs.recordPaths || []).join(", "), { placeholder: "live/uas, cameras" }), "Streams at or under these paths are always recorded. Comma separated."),
         field("Minutes per file", n("vs_recm", vs.recordMinutes), "Long recordings are split into files of this length."),
         field("Keep recordings for (days)", n("vs_recd", vs.recordDays), "0 keeps them forever."),
+        field("Drone telemetry", checkbox("vs_uas", !vs.hideUAS, "Show drones from video telemetry on the map"), "Reads MISB 0601 KLV in the video and shows the drone, where its camera points and the ground it sees."),
       ],
       telegram: [
         "Connect a Telegram group with TAK. Create a bot with @BotFather, add it to the group, and send /start there. The group's ID is shown by bots such as @getidsbot, and starts with -100 for groups.",
@@ -3564,6 +3565,13 @@
         field("Largest upload (MB)", n("lup", l.maxUploadMB)),
         field("Idle timeout (seconds)", n("lidle", l.idleTimeoutSec)),
         field("Items replayed", n("lrep", l.replayLimit)),
+        sub("Rate limits"),
+        field("Rate limits", checkbox("rl_on", rl.enabled, "Limit how fast each device sends and receives"), "Chat, alerts, deletions, direct messages and server links are never limited."),
+        field("Messages a device can send per second", input("rl_read", rl.readPerSec, { type: "number", min: 0, step: "any" }), "Extra position updates are dropped. 0 means no limit."),
+        field("Send burst", n("rl_rb", rl.readBurst)),
+        field("Messages delivered to a device per second", input("rl_del", rl.deliveryPerSec, { type: "number", min: 0, step: "any" }), "Protects slow links such as radios and satellite. 0 means no limit."),
+        field("Delivery burst", n("rl_db", rl.deliveryBurst)),
+        field("New connections per address per minute", n("rl_conn", rl.connectPerMinute), "Stops reconnect storms and connection floods. 0 means no limit."),
       ],
     };
     const form = h("form", { novalidate: true });
@@ -3727,6 +3735,7 @@
         repeater: { enabled: val(form, "rep"), intervalSec: num(form, "repint") },
         retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
+        rateLimits: { enabled: val(form, "rl_on"), readPerSec: num(form, "rl_read"), readBurst: num(form, "rl_rb"), deliveryPerSec: num(form, "rl_del"), deliveryBurst: num(form, "rl_db"), connectPerMinute: num(form, "rl_conn") },
         certificates: Object.assign({}, c, { organization: val(form, "corg"), unit: val(form, "cunit"), password: val(form, "cpw"), clientDays: num(form, "cdays"), serverDays: num(form, "sdays") }),
         ldap: ldapFromForm(),
         meshtastic: Object.assign({}, mt, {
@@ -3749,7 +3758,7 @@
         email: Object.assign({}, em, { enabled: val(form, "em_on"), host: val(form, "em_host"), port: num(form, "em_port"), security: val(form, "em_sec"), username: val(form, "em_user"), password: val(form, "em_pw"), from: val(form, "em_from"), publicUrl: val(form, "em_url"), allowRegistration: val(form, "em_reg"), approveRegistrations: val(form, "em_appr"), allowedDomains: splitList(val(form, "em_allow")), blockedDomains: splitList(val(form, "em_block")), registrationGroups: splitList(val(form, "em_groups")) }),
         locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
         voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),
-        videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max"), record: val(form, "vs_rec"), recordPaths: splitList(val(form, "vs_recp")), recordMinutes: num(form, "vs_recm"), recordDays: num(form, "vs_recd") }),
+        videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max"), record: val(form, "vs_rec"), recordPaths: splitList(val(form, "vs_recp")), recordMinutes: num(form, "vs_recm"), recordDays: num(form, "vs_recd"), hideUAS: !val(form, "vs_uas") }),
         feeds: {
           adsb: Object.assign({}, fa, { enabled: val(form, "fa_on"), lat: num(form, "fa_lat"), lon: num(form, "fa_lon"), radiusNm: num(form, "fa_rad"), intervalSec: num(form, "fa_int"), group: val(form, "fa_group"), url: val(form, "fa_url"), apiKey: val(form, "fa_key") }),
           ais: Object.assign({}, fs, { enabled: val(form, "fs_on"), username: val(form, "fs_user"), south: num(form, "fs_s"), west: num(form, "fs_w"), north: num(form, "fs_n"), east: num(form, "fs_e"), mmsi: val(form, "fs_mmsi"), intervalSec: num(form, "fs_int"), group: val(form, "fs_group") }),

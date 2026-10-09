@@ -75,6 +75,7 @@ type Server struct {
 	fig2      *fig2Server
 	fig2Out   sync.Map
 	dfeeds    *dataFeeds
+	uasSeen   sync.Map
 	live      *liveVideo
 	voice     *mumble.Server
 	injectors *Injectors
@@ -146,6 +147,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 		return nil, err
 	}
 	s.hub = NewHub(s, s.log, cfg.Limits.QueueLength, cfg.Limits.MaxClients, cfg.Limits.CacheLimit)
+	s.hub.SetRateLimits(cfg.RateLimits)
 	s.perf = &perfSampler{}
 	s.dir.OnChange = s.refreshUser
 	s.dir.External = s.ldapAuth
@@ -184,6 +186,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	}
 	s.cfg = next
 	s.cfgMu.Unlock()
+	s.hub.SetRateLimits(next.RateLimits)
 	s.level.Set(ParseLevel(next.LogLevel))
 	return next, nil
 }

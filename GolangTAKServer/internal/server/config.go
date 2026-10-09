@@ -181,6 +181,7 @@ type Config struct {
 	Mesh           MeshConfig        `json:"mesh"`
 	Certificates   CertConfig        `json:"certificates"`
 	Retention      RetentionConfig   `json:"retention"`
+	RateLimits     RateLimitConfig   `json:"rateLimits"`
 	Limits         LimitsConfig      `json:"limits"`
 	Repeater       RepeaterConfig    `json:"repeater"`
 	Federation     FederationConfig  `json:"federation"`
@@ -237,6 +238,7 @@ func DefaultConfig() Config {
 			ClientDays:   730,
 			ServerDays:   825,
 		},
+		RateLimits: defaultRateLimits(),
 		Retention: RetentionConfig{
 			HistoryDays: 30,
 			ChatDays:    7,
@@ -279,6 +281,9 @@ func DefaultConfig() Config {
 
 func (c *Config) fill() {
 	d := DefaultConfig()
+	if c.RateLimits == (RateLimitConfig{}) {
+		c.RateLimits = d.RateLimits
+	}
 	if c.Name == "" {
 		c.Name = d.Name
 	}

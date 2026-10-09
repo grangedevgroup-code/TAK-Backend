@@ -127,7 +127,7 @@ func (s *Server) apiStatus(w http.ResponseWriter, r *http.Request) {
 		"clients": s.hub.Count(), "clientsByKind": kinds, "users": s.dir.UserCount(), "devices": len(s.devices.All()),
 		"missions": len(s.missions.All()), "files": filesCount, "filesBytes": filesBytes, "videos": len(s.videos.All()),
 		"historyBytes": histBytes, "historyDays": histDays, "historyDropped": s.history.Dropped.Load(),
-		"events": s.hub.Events.Load(), "delivered": s.hub.Delivered.Load(), "bytesOut": s.hub.Bytes.Load(),
+		"events": s.hub.Events.Load(), "delivered": s.hub.Delivered.Load(), "bytesOut": s.hub.Bytes.Load(), "rateDropped": s.hub.RateDropped.Load(),
 		"cached": len(s.hub.Cached()), "emergencies": len(s.hub.Emergencies()), "pendingChats": len(s.PendingChats()),
 		"memoryBytes": ms.Alloc, "goroutines": runtime.NumGoroutine(), "dataDir": s.DataDir,
 		"ports": cfg.Ports, "allowAnonymous": cfg.AllowAnonymous, "protobuf": cfg.Protobuf, "mesh": cfg.Mesh,

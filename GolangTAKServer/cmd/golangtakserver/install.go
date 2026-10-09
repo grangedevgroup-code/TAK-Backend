@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/firewall"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/flock"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/media"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/server"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/service"
 )
@@ -167,6 +169,16 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 		rules = append(rules, firewall.Rule{Port: v.RTSPPort, Proto: "tcp"}, firewall.Rule{Port: v.RTSPSPort, Proto: "tcp"}, firewall.Rule{Port: v.RTMPPort, Proto: "tcp"})
 		if v.RTPPort > 0 {
 			rules = append(rules, firewall.Rule{Port: v.RTPPort, Proto: "udp"}, firewall.Rule{Port: v.RTPPort + 1, Proto: "udp"})
+		}
+		for _, src := range v.Sources {
+			if !src.Enabled || !media.IsTSURL(src.URL) {
+				continue
+			}
+			if u, err := url.Parse(src.URL); err == nil {
+				if port, err := strconv.Atoi(u.Port()); err == nil && port > 0 {
+					rules = append(rules, firewall.Rule{Port: port, Proto: "udp"})
+				}
+			}
 		}
 	}
 	if cfg.ACME.Enabled {

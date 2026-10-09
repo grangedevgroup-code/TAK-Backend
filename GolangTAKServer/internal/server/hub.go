@@ -19,31 +19,35 @@ type Subscriber struct {
 }
 
 type Hub struct {
-	srv        *Server
-	log        *slog.Logger
-	mu         sync.RWMutex
-	clients    map[uint64]*Client
-	byUID      map[string]*Client
-	byCallsign map[string]*Client
-	nextID     atomic.Uint64
-	cmu        sync.Mutex
-	cache      map[string]*Message
-	emu        sync.Mutex
-	emergency  map[string]*Message
-	smu        sync.RWMutex
-	subs       map[*Subscriber]struct{}
-	Events     atomic.Uint64
-	Delivered  atomic.Uint64
-	Bytes      atomic.Uint64
-	queueLen   int
-	maxClients int
-	cacheLimit int
-	OnIdentify func(c *Client)
-	OnCoT      func(m *Message)
-	OnMissions func(m *Message, missions []string)
-	Inject     func(m *Message)
-	OnOffline  func(dest cot.Dest, m *Message)
-	OnRemove   func(c *Client)
+	srv         *Server
+	log         *slog.Logger
+	mu          sync.RWMutex
+	clients     map[uint64]*Client
+	byUID       map[string]*Client
+	byCallsign  map[string]*Client
+	nextID      atomic.Uint64
+	cmu         sync.Mutex
+	cache       map[string]*Message
+	emu         sync.Mutex
+	emergency   map[string]*Message
+	smu         sync.RWMutex
+	subs        map[*Subscriber]struct{}
+	Events      atomic.Uint64
+	Delivered   atomic.Uint64
+	Bytes       atomic.Uint64
+	RateDropped atomic.Uint64
+	RateRefused atomic.Uint64
+	limits      atomic.Pointer[RateLimitConfig]
+	connects    connLimiter
+	queueLen    int
+	maxClients  int
+	cacheLimit  int
+	OnIdentify  func(c *Client)
+	OnCoT       func(m *Message)
+	OnMissions  func(m *Message, missions []string)
+	Inject      func(m *Message)
+	OnOffline   func(dest cot.Dest, m *Message)
+	OnRemove    func(c *Client)
 }
 
 func NewHub(srv *Server, log *slog.Logger, queueLen, maxClients, cacheLimit int) *Hub {
@@ -451,7 +455,7 @@ func (h *Hub) broadcast(m *Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, c := range h.clients {
-		if c == m.Source || !h.visible(c, m) {
+		if c == m.Source || !h.visible(c, m) || !h.allowDelivery(c, m) {
 			continue
 		}
 		if c.Send(m) {

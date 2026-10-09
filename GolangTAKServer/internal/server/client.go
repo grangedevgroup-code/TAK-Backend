@@ -87,31 +87,34 @@ type ClientInfo struct {
 }
 
 type Client struct {
-	ID        uint64
-	Kind      string
-	Remote    string
-	Name      string
-	Connected time.Time
-	Relay     bool
-	ident     atomic.Pointer[Identity]
-	mu        sync.Mutex
-	info      ClientInfo
-	lastSA    *Message
-	remote    map[string]string
-	out       chan *Message
-	closed    chan struct{}
-	closeOnce sync.Once
-	onClose   func()
-	proto     atomic.Bool
-	lastRx    atomic.Int64
-	rx        atomic.Uint64
-	tx        atomic.Uint64
-	drops     atomic.Uint64
-	authed    atomic.Bool
-	hub       *Hub
-	filter    func(*Message) bool
-	geo       atomic.Pointer[geoFilter]
-	metrics   map[string]string
+	ID         uint64
+	Kind       string
+	Remote     string
+	Name       string
+	Connected  time.Time
+	Relay      bool
+	ident      atomic.Pointer[Identity]
+	mu         sync.Mutex
+	info       ClientInfo
+	lastSA     *Message
+	remote     map[string]string
+	out        chan *Message
+	closed     chan struct{}
+	closeOnce  sync.Once
+	onClose    func()
+	proto      atomic.Bool
+	lastRx     atomic.Int64
+	rx         atomic.Uint64
+	tx         atomic.Uint64
+	drops      atomic.Uint64
+	authed     atomic.Bool
+	hub        *Hub
+	filter     func(*Message) bool
+	geo        atomic.Pointer[geoFilter]
+	metrics    map[string]string
+	readBucket tokenBucket
+	sendBucket tokenBucket
+	rateDrops  atomic.Uint64
 }
 
 type bbox struct{ minLat, minLon, maxLat, maxLon float64 }

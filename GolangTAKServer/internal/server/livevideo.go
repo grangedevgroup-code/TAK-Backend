@@ -29,6 +29,7 @@ type VideoServerConfig struct {
 	RecordPaths      []string      `json:"recordPaths"`
 	RecordMinutes    int           `json:"recordMinutes"`
 	RecordDays       int           `json:"recordDays"`
+	HideUAS          bool          `json:"hideUAS,omitempty"`
 }
 
 type VideoSource struct {
@@ -63,6 +64,7 @@ func (s *Server) startLiveVideo() error {
 	reg.MaxStreams = vc.MaxStreams
 	reg.OnPublish = s.onStreamPublish
 	reg.OnUnpublish = s.onStreamUnpublish
+	reg.OnMetadata = s.onStreamMetadata
 	srv := media.NewServer(reg, s.log)
 	srv.Auth = s.rtspAuth
 	srv.MaxConns = cfg.Limits.MaxClients
@@ -165,12 +167,12 @@ func (s *Server) streamVisible(id *Identity, st *media.Stream) bool {
 }
 
 func streamFeedUID(name string) string {
-	return "golangtakserver-live-" + strings.ReplaceAll(name, "/", "-")
+	return "golangtak-live-" + strings.ReplaceAll(name, "/", "-")
 }
 
 func (s *Server) onStreamPublish(st *media.Stream) {
 	var groups []string
-	if strings.HasPrefix(st.Source, "pull ") {
+	if strings.HasPrefix(st.Source, "pull ") || strings.HasPrefix(st.Source, "udp ") {
 		for _, src := range s.Config().Video.Sources {
 			if p, _ := media.CleanPath(firstNonEmpty(src.Path, src.Name)); p == st.Name {
 				groups = src.Groups
@@ -207,7 +209,12 @@ func (s *Server) startVideoSource(src VideoSource) {
 		delay := time.Second
 		for s.ctx.Err() == nil {
 			started := time.Now()
-			err := media.Pull(s.ctx, src.URL, &tls.Config{InsecureSkipVerify: src.Insecure}, s.live.reg, path, firstNonEmpty(src.Name, "source"))
+			var err error
+			if media.IsTSURL(src.URL) {
+				err = media.PullTS(s.ctx, src.URL, s.live.reg, path, firstNonEmpty(src.Name, "source"))
+			} else {
+				err = media.Pull(s.ctx, src.URL, &tls.Config{InsecureSkipVerify: src.Insecure}, s.live.reg, path, firstNonEmpty(src.Name, "source"))
+			}
 			if s.ctx.Err() != nil {
 				return
 			}

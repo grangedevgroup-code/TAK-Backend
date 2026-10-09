@@ -271,6 +271,8 @@ ffmpeg -re -i video.mp4 -c copy -f rtsp rtsp://USER:PASSWORD@SERVER:8554/live/ua
 
 Drone apps, OBS and other encoders that only send RTMP use `rtmp://SERVER:1935/live/uas1?user=USER&pass=PASSWORD`. The stream appears in every TAK client's video list as `rtsp://SERVER:8554/live/uas1`, on the dashboard under **Video**, and as HLS at `/api/video/live/live/uas1/index.m3u8`. Cameras that already serve RTSP can be added under **Video**, **Add pull source** and are relayed from the server. Ports, RTSPS and anonymous viewing or publishing are under **Settings**, **Video server**.
 
+**Drones and encoders that send MPEG-TS.** Add a pull source with `udp://0.0.0.0:5600` (or a multicast address such as `udp://239.1.1.1:5600`) and point the ground station or encoder at the server. The video is republished like any other stream. When the stream carries MISB 0601 KLV telemetry, the drone appears on every TAK map with its heading, camera field of view, the point the camera looks at and the ground footprint, linked to the video. RTSP sources and publishers that include a KLV track work the same way. Turn this off under **Settings**, **Video server**, **Drone telemetry**.
+
 ## Server plugins
 
 A server plugin is any program you want running next to GolangTAKServer: a bot that answers in chat, a bridge to a dispatch or alerting system, a logger, a sensor feed. GolangTAKServer starts it with the server, restarts it if it stops (waiting a little longer each time, up to a minute), stops it on shutdown, and keeps its recent output for the dashboard.
@@ -403,6 +405,7 @@ Settings live in `config.json` in the data directory and can be changed in the d
 - Port 8087 (TCP), UDP input and the HTTP dashboard on 8080 are unencrypted. On untrusted networks install with `--no-anonymous`, give devices certificates, and use the dashboard on port 8446.
 - Groups separate traffic: users only receive from their receive groups, and history, files, missions and video follow the same rules.
 - On cloud servers also allow the ports in the provider's firewall or security group.
+- Rate limits under **Settings**, **Storage and limits** cap how many messages each device can send and receive per second and how many new connections an address can open per minute. Chat, alerts, deletions, direct messages and server links are never limited.
 
 ## Translations
 

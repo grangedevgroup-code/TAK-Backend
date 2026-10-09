@@ -40,6 +40,7 @@ type Stream struct {
 	done    chan struct{}
 	meta    sync.Map
 	lastPkt atomic.Int64
+	klv     *klvTrack
 }
 
 func (s *Stream) Done() <-chan struct{} { return s.done }
@@ -48,6 +49,9 @@ func (s *Stream) Write(p Packet) {
 	s.PacketsIn.Add(1)
 	s.BytesIn.Add(int64(len(p.Data)))
 	s.lastPkt.Store(time.Now().UnixNano())
+	if s.klv != nil && p.Track == s.klv.track && !p.RTCP {
+		s.klv.push(s, p.Data)
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for sub := range s.subs {
@@ -125,6 +129,7 @@ type Registry struct {
 	MaxStreams  int
 	OnPublish   func(*Stream)
 	OnUnpublish func(*Stream)
+	OnMetadata  func(*Stream, []byte)
 
 	mu      sync.Mutex
 	streams map[string]*Stream
@@ -165,6 +170,14 @@ func (r *Registry) Publish(name string, desc *Description, publisher, source str
 		return nil, ErrTooMany
 	}
 	s := &Stream{Name: name, Desc: desc, Publisher: publisher, Source: source, Started: time.Now(), subs: map[*Subscriber]struct{}{}, done: make(chan struct{})}
+	if r.OnMetadata != nil && desc != nil {
+		for i, t := range desc.Tracks {
+			if strings.EqualFold(t.Codec, "smpte336m") {
+				s.klv = &klvTrack{track: i, emit: r.OnMetadata}
+				break
+			}
+		}
+	}
 	r.streams[name] = s
 	r.mu.Unlock()
 	if r.OnPublish != nil {
@@ -210,5 +223,29 @@ func (r *Registry) List() []*Stream {
 func (r *Registry) CloseAll() {
 	for _, s := range r.List() {
 		r.Unpublish(s)
+	}
+}
+
+type klvTrack struct {
+	track int
+	emit  func(*Stream, []byte)
+	mu    sync.Mutex
+	buf   []byte
+}
+
+func (k *klvTrack) push(s *Stream, pkt []byte) {
+	h, payload, err := ParseRTP(pkt)
+	if err != nil {
+		return
+	}
+	k.mu.Lock()
+	k.buf = append(k.buf, payload...)
+	var out []byte
+	if h.Marker || len(k.buf) > 1<<16 {
+		out, k.buf = k.buf, nil
+	}
+	k.mu.Unlock()
+	if len(out) > 0 {
+		k.emit(s, out)
 	}
 }

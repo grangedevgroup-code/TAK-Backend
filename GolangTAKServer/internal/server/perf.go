@@ -163,6 +163,6 @@ func (s *Server) apiPerformance(w http.ResponseWriter, r *http.Request) {
 			"go": runtime.Version(), "goroutines": runtime.NumGoroutine(), "heapInUse": ms.HeapInuse, "heapObjects": ms.HeapObjects,
 			"reserved": ms.Sys, "gcCycles": ms.NumGC, "gcPauseTotalMs": float64(ms.PauseTotalNs) / 1e6,
 		},
-		"traffic": map[string]any{"events": s.hub.Events.Load(), "delivered": s.hub.Delivered.Load(), "bytesOut": s.hub.Bytes.Load(), "clients": s.hub.Count()},
+		"traffic": map[string]any{"events": s.hub.Events.Load(), "delivered": s.hub.Delivered.Load(), "bytesOut": s.hub.Bytes.Load(), "clients": s.hub.Count(), "rateDropped": s.hub.RateDropped.Load(), "rateRefused": s.hub.RateRefused.Load()},
 	})
 }

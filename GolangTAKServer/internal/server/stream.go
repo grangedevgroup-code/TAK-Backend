@@ -105,6 +105,11 @@ func (s *Server) serveStream(conn net.Conn, kind string) {
 	cfg := s.Config()
 	remote := conn.RemoteAddr().String()
 	ip := remoteIP(remote)
+	if !s.hub.allowConnect(ip) {
+		s.log.Warn("connection refused: too many new connections from address", "remote", remote)
+		conn.Close()
+		return
+	}
 	if cfg.Limits.MaxPerIP > 0 && s.hub.CountFrom(ip) >= cfg.Limits.MaxPerIP {
 		s.log.Warn("connection refused: too many connections from address", "remote", remote)
 		conn.Close()
@@ -407,6 +412,9 @@ func (s *Server) handleEvent(c *Client, st *clientState, e *cot.Event) error {
 	}
 	m := NewMessage(e, c, c.InMask())
 	s.hub.Identify(c, m)
+	if !s.hub.allowRead(c, m) {
+		return nil
+	}
 	s.hub.Publish(m)
 	return nil
 }

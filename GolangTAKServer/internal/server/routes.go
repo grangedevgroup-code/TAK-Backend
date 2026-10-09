@@ -139,6 +139,7 @@ func (s *Server) routes() *http.ServeMux {
 
 	s.excheckRoutes(m)
 	s.citrapRoutes(m)
+	s.takAdminRoutes(m, a)
 
 	pub("GET /api/packages", s.packagesList)
 	pub("GET /api/packages/product.infz", s.packagesProductInfz)

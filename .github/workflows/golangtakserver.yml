@@ -216,12 +216,12 @@ jobs:
           test ! -e /usr/local/bin/golangtak
           if [ "$RUNNER_OS" = "Linux" ]; then
             test ! -e /var/lib/golangtak
-            test -f /var/lib/golangtakserver/config.json
+            sudo test -f /var/lib/golangtakserver/config.json
             test ! -e /etc/systemd/system/golangtak.service
             test ! -e /usr/bin/golangtak
           else
             test ! -e "/Library/Application Support/GolangTAK"
-            test -f "/Library/Application Support/GolangTAKServer/config.json"
+            sudo test -f "/Library/Application Support/GolangTAKServer/config.json"
           fi
           sudo golangtakserver uninstall --purge
 
