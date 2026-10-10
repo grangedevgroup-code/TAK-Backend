@@ -417,9 +417,7 @@ func (c *Collection[T]) Close() error {
 	if c.f == nil {
 		return nil
 	}
-	c.w.Flush()
-	c.f.Sync()
-	err := c.f.Close()
+	err := errors.Join(c.w.Flush(), c.f.Sync(), c.f.Close())
 	c.f = nil
 	return err
 }

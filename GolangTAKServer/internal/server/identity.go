@@ -525,32 +525,34 @@ func (d *Directory) DeleteUser(name string) (int, error) {
 		return 0, ErrNoUser
 	}
 	n := 0
+	var errs []error
 	for _, c := range u.Certs {
 		if !c.Revoked {
-			d.revoke(c.Serial, name)
+			errs = append(errs, d.revoke(c.Serial, name))
 			n++
 		}
 	}
 	for _, t := range d.tokens.All() {
 		if t.User == name {
-			d.tokens.Delete(t.ID)
+			errs = append(errs, d.tokens.Delete(t.ID))
 		}
 	}
 	d.forget(name)
 	d.EndSessions(name)
-	err := d.users.Delete(name)
+	errs = append(errs, d.users.Delete(name))
 	if d.OnChange != nil {
 		d.OnChange(name)
 	}
-	return n, err
+	return n, errors.Join(errs...)
 }
 
-func (d *Directory) revoke(serial, user string) {
+func (d *Directory) revoke(serial, user string) error {
 	serial = strings.ToLower(serial)
-	d.revoked.Put(serial, Revoked{Serial: serial, User: user, Time: time.Now().UTC()})
+	err := d.revoked.Put(serial, Revoked{Serial: serial, User: user, Time: time.Now().UTC()})
 	d.mu.Lock()
 	d.revSet[serial] = true
 	d.mu.Unlock()
+	return err
 }
 
 func (d *Directory) RevokeCert(serial string) error {
@@ -563,8 +565,9 @@ func (d *Directory) RevokeCert(serial string) error {
 			}
 		}
 	}
+	var err error
 	if owner != "" {
-		d.UpdateUser(owner, func(u *User) error {
+		_, err = d.UpdateUser(owner, func(u *User) error {
 			for i := range u.Certs {
 				if strings.EqualFold(u.Certs[i].Serial, serial) && !u.Certs[i].Revoked {
 					u.Certs[i].Revoked = true
@@ -574,23 +577,23 @@ func (d *Directory) RevokeCert(serial string) error {
 			return nil
 		})
 	}
-	d.revoke(serial, owner)
-	return nil
+	return errors.Join(err, d.revoke(serial, owner))
 }
 
-func (d *Directory) RevokeAll(user string) int {
+func (d *Directory) RevokeAll(user string) (int, error) {
 	n := 0
 	u, ok := d.users.Get(user)
 	if !ok {
-		return 0
+		return 0, nil
 	}
+	var errs []error
 	for _, c := range u.Certs {
 		if !c.Revoked {
-			d.revoke(c.Serial, user)
+			errs = append(errs, d.revoke(c.Serial, user))
 			n++
 		}
 	}
-	d.UpdateUser(user, func(u *User) error {
+	_, err := d.UpdateUser(user, func(u *User) error {
 		for i := range u.Certs {
 			if !u.Certs[i].Revoked {
 				u.Certs[i].Revoked = true
@@ -599,7 +602,7 @@ func (d *Directory) RevokeAll(user string) int {
 		}
 		return nil
 	})
-	return n
+	return n, errors.Join(append(errs, err)...)
 }
 
 func (d *Directory) IsRevoked(serial string) bool {

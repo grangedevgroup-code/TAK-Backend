@@ -1,6 +1,7 @@
 package server
 
 import (
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -108,7 +109,7 @@ func (s *Server) samplePerf() {
 }
 
 func clampPct(v float64) float64 {
-	if v < 0 || v != v {
+	if v < 0 || math.IsNaN(v) {
 		return 0
 	}
 	if v > 100 {

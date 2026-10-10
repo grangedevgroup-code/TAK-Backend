@@ -163,8 +163,8 @@ func TestEnrollmentAndCertificateLogin(t *testing.T) {
 	if len(u.Certs) < 3 {
 		t.Fatalf("issued certificates not recorded: %d", len(u.Certs))
 	}
-	if n := s.dir.RevokeAll("alice"); n == 0 {
-		t.Fatal("nothing revoked")
+	if n, err := s.dir.RevokeAll("alice"); err != nil || n == 0 {
+		t.Fatalf("revoked %d: %v", n, err)
 	}
 	if cl2, err := dialTLS(t, s, &tc); err == nil {
 		cl2.send(cot.Ping("again").String())

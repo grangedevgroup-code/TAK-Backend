@@ -153,3 +153,46 @@ func TestQoS1AndPing(t *testing.T) {
 		t.Fatalf("mqtt 5 should be refused with code 1: %+v %v", p, err)
 	}
 }
+
+func TestPublishHookPanicClosesOnlyThatConnection(t *testing.T) {
+	got := make(chan Message, 1)
+	b := &Broker{OnPublish: func(m Message) {
+		if m.Topic == "boom" {
+			panic("hook failed")
+		}
+		got <- m
+	}}
+	url := startBroker(t, b)
+	ctx := context.Background()
+	bad, err := Dial(ctx, url, ClientOptions{ClientID: "bad"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bad.Close()
+	if err := bad.Publish("boom", []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	good, err := Dial(ctx, url, ClientOptions{ClientID: "good"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer good.Close()
+	if err := good.Publish("fine", []byte("y")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case m := <-got:
+		if m.Topic != "fine" || m.Client != "good" {
+			t.Fatalf("hook got %+v", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the broker stopped serving after a publish hook panic")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for b.Clients() != 1 {
+		if time.Now().After(deadline) {
+			t.Fatalf("clients %d, want 1", b.Clients())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

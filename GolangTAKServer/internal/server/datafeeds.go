@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/takproto"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/xmltree"
 )
@@ -380,6 +381,7 @@ func (s *Server) startDataFeed(f DataFeedConfig) error {
 
 func (s *Server) serveFeedConn(f DataFeedConfig, c *Client, conn net.Conn, secure bool) {
 	defer conn.Close()
+	defer safe.Recover(s.log, "data feed connection", conn)
 	remote := conn.RemoteAddr().String()
 	if secure {
 		tc := conn.(*tls.Conn)

@@ -89,7 +89,7 @@ func Crypt(key []byte, packetID, from uint32, data []byte) ([]byte, error) {
 	binary.LittleEndian.PutUint64(nonce, uint64(packetID))
 	binary.LittleEndian.PutUint32(nonce[8:], from)
 	out := make([]byte, len(data))
-	cipher.NewCTR(block, nonce).XORKeyStream(out, data)
+	cipher.NewCTR(block, nonce).XORKeyStream(out, data) // #nosec G407 -- the Meshtastic nonce is the packet ID and sender
 	return out, nil
 }
 

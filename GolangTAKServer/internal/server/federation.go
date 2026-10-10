@@ -19,6 +19,7 @@ import (
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/pki"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/takproto"
 )
 
@@ -142,6 +143,7 @@ func (s *Server) startFederation() error {
 				continue
 			}
 			go func() {
+				defer safe.Recover(s.log, "federation connection", conn)
 				fresh := tcfg.Clone()
 				fresh.ClientCAs = s.federationTrust()
 				tc := tls.Server(conn, fresh)

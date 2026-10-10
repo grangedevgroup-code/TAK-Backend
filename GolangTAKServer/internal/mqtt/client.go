@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 type ClientOptions struct {
@@ -71,7 +73,7 @@ func Dial(ctx context.Context, rawURL string, o ClientOptions) (*Client, error) 
 		}
 		cfg := o.TLS
 		if cfg == nil {
-			cfg = &tls.Config{}
+			cfg = &tls.Config{MinVersion: tls.VersionTLS12}
 		}
 		cfg = cfg.Clone()
 		if cfg.ServerName == "" {
@@ -225,6 +227,7 @@ func (c *Client) pingLoop() {
 }
 
 func (c *Client) readLoop() {
+	defer safe.Recover(nil, "MQTT client", c.conn)
 	for {
 		c.conn.SetReadDeadline(time.Now().Add(c.keep * 2))
 		p, err := readPacket(c.r, c.maxBytes)

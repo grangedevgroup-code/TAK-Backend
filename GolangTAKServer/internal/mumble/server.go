@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 const (
@@ -268,6 +270,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer safe.Recover(s.Log, "voice connection", nc)
 			s.serveConn(nc)
 		}()
 	}

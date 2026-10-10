@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -197,4 +198,14 @@ func freeUDPPort(t *testing.T) int {
 	}
 	defer pc.Close()
 	return pc.LocalAddr().(*net.UDPAddr).Port
+}
+
+func TestFeedReaderPanicBecomesError(t *testing.T) {
+	err := readSafely(func(io.Reader) error { panic("bad frame") }, strings.NewReader(""))
+	if err == nil || !strings.Contains(err.Error(), "bad frame") {
+		t.Fatalf("got %v", err)
+	}
+	if err := readSafely(func(io.Reader) error { return nil }, strings.NewReader("")); err != nil {
+		t.Fatal(err)
+	}
 }

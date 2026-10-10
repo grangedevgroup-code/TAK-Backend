@@ -47,7 +47,7 @@ func Dial(ctx context.Context, raw string, tlsCfg *tls.Config) (*Client, error) 
 	if u.Scheme == "rtsps" {
 		cfg := tlsCfg
 		if cfg == nil {
-			cfg = &tls.Config{}
+			cfg = &tls.Config{MinVersion: tls.VersionTLS12}
 		}
 		cfg = cfg.Clone()
 		if cfg.ServerName == "" {
@@ -70,7 +70,7 @@ func (c *Client) Close() error { return c.nc.Close() }
 
 func (c *Client) cleanURL() string {
 	u := *c.u
-	u.User = nil
+	u.User = nil // nosemgrep -- u is a copy
 	return u.String()
 }
 

@@ -9,11 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 const (
@@ -25,10 +28,7 @@ const (
 type RTMPServer struct {
 	Registry *Registry
 	Auth     AuthFunc
-	Log      interface {
-		Info(msg string, args ...any)
-		Warn(msg string, args ...any)
-	}
+	Log      *slog.Logger
 
 	mu     sync.Mutex
 	lns    []net.Listener
@@ -65,6 +65,7 @@ func (s *RTMPServer) Serve(ln net.Listener) error {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer safe.Recover(s.Log, "RTMP connection", nc)
 			defer func() {
 				nc.Close()
 				s.mu.Lock()

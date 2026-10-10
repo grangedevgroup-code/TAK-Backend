@@ -122,7 +122,7 @@ func rewriteDataPaths(root, oldDir, newDir string) {
 		if err != nil || info.Size() > 64<<20 {
 			return nil
 		}
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) // #nosec G122 -- walks the server's own data directory during the rename migration
 		if err != nil || !bytes.Contains(b, oldEsc) {
 			return nil
 		}

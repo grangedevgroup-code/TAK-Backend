@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
+# nosemgrep: dockerfile.best-practice.avoid-platform-with-from -- the build stage runs natively and cross-compiles with GOOS and GOARCH
+FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -11,12 +12,13 @@ RUN GOARM="${TARGETVARIANT#v}" CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARC
     go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o /out/golangtakserver ./cmd/golangtakserver \
  && mkdir -p /out/data
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/golangtakserver /usr/local/bin/golangtakserver
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV GOLANGTAKSERVER_DATA=/data
 VOLUME /data
 EXPOSE 8087/tcp 8087/udp 8088/tcp 8089/tcp 8080/tcp 8443/tcp 8446/tcp 8090/tcp 19023/tcp 8554/tcp 1935/tcp 8000/udp 8001/udp 64738/tcp 64738/udp 3478/udp 49160-49200/udp
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD ["golangtakserver", "selftest"]
+USER 65532:65532
 ENTRYPOINT ["golangtakserver"]
 CMD ["run"]

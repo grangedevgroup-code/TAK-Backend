@@ -771,7 +771,7 @@ func (s *Server) ClusterInvite() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	body, _ := json.Marshal(clusterCode{URL: s.nodeURL(), Secret: cfg.Cluster.Secret, CA: string(s.pki.CA.CertPEM), CAKey: string(keyPEM), Name: cfg.Name})
+	body, _ := json.Marshal(clusterCode{URL: s.nodeURL(), Secret: cfg.Cluster.Secret, CA: string(s.pki.CA.CertPEM), CAKey: string(keyPEM), Name: cfg.Name}) // #nosec G117 -- the join code carries the cluster secret by design
 	return clusterCodePrefix + base64.RawURLEncoding.EncodeToString(body), nil
 }
 

@@ -64,7 +64,7 @@ func (s *Server) apiLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		s.dir.EndSession(c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil}) // #nosec G124 nosemgrep -- Secure whenever the request arrived over TLS; plain HTTP is a LAN option
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -257,11 +257,11 @@ func (s *Server) apiQR(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Query().Get("format") == "png" {
 		w.Header().Set("Content-Type", "image/png")
-		w.Write(c.PNG(8, 4))
+		w.Write(c.PNG(8, 4)) // #nosec G705 -- PNG image data
 		return
 	}
 	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Write([]byte(c.SVG(6, 4)))
+	w.Write([]byte(c.SVG(6, 4))) // #nosec G705 -- the SVG holds only path coordinates
 }
 
 func (s *Server) apiPackage(w http.ResponseWriter, r *http.Request) {

@@ -169,11 +169,11 @@
     tileSrc(z, x, y) {
       const subs = "abc";
       return this.tileUrl
-        .replaceAll("{z}", z)
-        .replaceAll("{x}", x)
-        .replaceAll("{y}", y)
-        .replaceAll("{-y}", Math.pow(2, z) - 1 - y)
-        .replaceAll("{s}", subs[(x + y) % subs.length]);
+        .replace(/\{z\}/g, z)
+        .replace(/\{x\}/g, x)
+        .replace(/\{y\}/g, y)
+        .replace(/\{-y\}/g, Math.pow(2, z) - 1 - y)
+        .replace(/\{s\}/g, subs[(x + y) % subs.length]);
     }
 
     tile(z, x, y) {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 var inputFeedDefaults = map[string]int{"sbs": 30003, "ais": 10110, "osmand": 5055}
@@ -83,9 +84,12 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 					}
 					continue
 				}
-				for _, line := range strings.Split(string(buf[:n]), "\n") {
-					s.aisLine(f, c, dec, line, from.String())
-				}
+				func() {
+					defer safe.Recover(s.log, "AIS feed packet", nil)
+					for _, line := range strings.Split(string(buf[:n]), "\n") {
+						s.aisLine(f, c, dec, line, from.String())
+					}
+				}()
 				if time.Since(last) > time.Minute {
 					last = time.Now()
 					dec.mu.Lock()
@@ -172,7 +176,7 @@ func (s *Server) feedDialLoop(f DataFeedConfig, c *Client, target string, read f
 				s.dfeeds.setError(f.UUID, "")
 				delay = time.Second
 				stop := context.AfterFunc(s.ctx, func() { conn.Close() })
-				err = read(&idleReader{conn: conn, idle: 2 * time.Minute})
+				err = readSafely(read, &idleReader{conn: conn, idle: 2 * time.Minute})
 				stop()
 				conn.Close()
 				if err == nil {
@@ -191,6 +195,15 @@ func (s *Server) feedDialLoop(f DataFeedConfig, c *Client, target string, read f
 			delay = min(delay*2, time.Minute)
 		}
 	}()
+}
+
+func readSafely(read func(io.Reader) error, r io.Reader) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("the feed reader failed: %v", p)
+		}
+	}()
+	return read(r)
 }
 
 type idleReader struct {

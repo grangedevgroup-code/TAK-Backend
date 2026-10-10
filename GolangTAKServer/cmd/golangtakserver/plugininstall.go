@@ -96,7 +96,7 @@ func extractPlugin(zipPath, dst string) error {
 			rc.Close()
 			return err
 		}
-		_, err = io.Copy(out, io.LimitReader(rc, int64(f.UncompressedSize64)+1))
+		_, err = io.Copy(out, io.LimitReader(rc, int64(f.UncompressedSize64)+1)) // nosemgrep -- a plugin archive the operator chose to install
 		rc.Close()
 		if cerr := out.Close(); err == nil {
 			err = cerr

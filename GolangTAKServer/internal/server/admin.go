@@ -229,24 +229,36 @@ func (s *Server) apiUserDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) apiUserRevoke(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	n := s.dir.RevokeAll(name)
+	n, err := s.dir.RevokeAll(name)
 	for _, c := range s.hub.Clients() {
 		if c.User() == name && c.Kind == KindTLS {
 			c.Close()
 		}
+	}
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, err)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": n})
 }
 
 func (s *Server) apiCertRevoke(w http.ResponseWriter, r *http.Request) {
 	serial := strings.ToLower(r.PathValue("serial"))
-	s.dir.RevokeCert(serial)
+	err := s.dir.RevokeCert(serial)
+	s.dropCertClients(serial)
+	if err != nil {
+		apiError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) dropCertClients(serial string) {
 	for _, c := range s.hub.Clients() {
-		if id := c.Identity(); id != nil && id.Cert != nil && pki.SerialHex(id.Cert) == serial {
+		if id := c.Identity(); id != nil && id.Cert != nil && strings.EqualFold(pki.SerialHex(id.Cert), serial) {
 			c.Close()
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) apiGroups(w http.ResponseWriter, r *http.Request) {
@@ -861,14 +873,14 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, err)
 		return
 	}
-	fb, _ := json.Marshal(before.DataFeeds)
+	fb, _ := json.Marshal(before.DataFeeds) // #nosec G117 -- compared, never sent
 	vb, _ := json.Marshal(before.Video)
 	ob, _ := json.Marshal(before.Voice)
 	ab, _ := json.Marshal(before.ACME)
 	an, _ := json.Marshal(next.ACME)
 	on, _ := json.Marshal(next.Voice)
 	vn, _ := json.Marshal(next.Video)
-	fn, _ := json.Marshal(next.DataFeeds)
+	fn, _ := json.Marshal(next.DataFeeds) // #nosec G117 -- compared, never sent
 	mb, _ := json.Marshal(before.Meshtastic)
 	tb, _ := json.Marshal(before.Telegram)
 	tn, _ := json.Marshal(next.Telegram)
@@ -1054,7 +1066,7 @@ func (s *Server) apiBackup(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(d.Name(), ".tmp") || strings.HasPrefix(d.Name(), ".upload") || rel == "control.token" || rel == "golangtakserver.lock" {
 			return nil
 		}
-		f, err := os.Open(path)
+		f, err := os.Open(path) // #nosec G122 -- walks the server's own data directory
 		if err != nil {
 			return nil
 		}

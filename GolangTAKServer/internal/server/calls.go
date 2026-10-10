@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/turn"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/websocket"
 )
@@ -321,6 +322,7 @@ func (s *Server) apiCallsSocket(w http.ResponseWriter, r *http.Request) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer safe.Recover(s.log, "call signalling", nil)
 		for {
 			_, data, err := conn.ReadMessage()
 			if err != nil {

@@ -52,7 +52,7 @@ func (m *TSMuxer) packets(pid int, payload []byte, pusi bool) []byte {
 			if pad > 1 {
 				pkt[5] = 0
 				for i := 6; i < 4+pad; i++ {
-					pkt[i] = 0xff
+					pkt[i] = 0xff // #nosec G602 -- pad <= 184, so i < 188
 				}
 			}
 			copy(pkt[4+pad:], payload)

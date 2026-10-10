@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 const (
@@ -160,17 +162,21 @@ func (s *Server) serve() {
 			}
 			return
 		}
-		b := buf[:n]
-		if n >= 4 && b[0]&0xc0 == 0x40 {
-			s.channelData(from, b)
-			continue
-		}
-		m, err := parse(b)
-		if err != nil {
-			continue
-		}
-		s.handle(from, m)
+		s.packet(from, buf[:n])
 	}
+}
+
+func (s *Server) packet(from *net.UDPAddr, b []byte) {
+	defer safe.Recover(s.cfg.Log, "TURN packet", nil)
+	if len(b) >= 4 && b[0]&0xc0 == 0x40 {
+		s.channelData(from, b)
+		return
+	}
+	m, err := parse(b)
+	if err != nil {
+		return
+	}
+	s.handle(from, m)
 }
 
 func (s *Server) send(to *net.UDPAddr, b []byte) { s.conn.WriteToUDP(b, to) }

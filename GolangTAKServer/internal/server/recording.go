@@ -173,7 +173,7 @@ func (s *Server) recordings() []recordingMeta {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".mp4.json") {
 			return nil
 		}
-		b, err := os.ReadFile(p)
+		b, err := os.ReadFile(p) // #nosec G122 -- walks the server's own recordings directory
 		if err != nil {
 			return nil
 		}

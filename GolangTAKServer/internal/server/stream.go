@@ -33,11 +33,9 @@ func (s *Server) streamTLSConfig(requireCert bool) *tls.Config {
 			GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 				return s.pki.ServerCert(), nil
 			},
-			VerifyPeerCertificate: func(_ [][]byte, chains [][]*x509.Certificate) error {
-				for _, chain := range chains {
-					if len(chain) > 0 && s.dir.IsRevoked(chain[0].SerialNumber.Text(16)) {
-						return errors.New("certificate has been revoked")
-					}
+			VerifyConnection: func(cs tls.ConnectionState) error {
+				if len(cs.PeerCertificates) > 0 && s.dir.IsRevoked(cs.PeerCertificates[0].SerialNumber.Text(16)) {
+					return errors.New("certificate has been revoked")
 				}
 				return nil
 			},

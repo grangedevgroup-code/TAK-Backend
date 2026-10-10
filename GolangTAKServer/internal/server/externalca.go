@@ -136,7 +136,7 @@ func (e *externalCA) sign(csrDER []byte, cn string) (*x509.Certificate, []*x509.
 }
 
 func (e *externalCA) client() *http.Client {
-	return &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: e.cfg.Insecure, MinVersion: tls.VersionTLS12}}}
+	return &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: e.cfg.Insecure, MinVersion: tls.VersionTLS12}}} // #nosec G402 -- opt-in setting for a CA with a self-signed certificate
 }
 
 func (e *externalCA) do(ctx context.Context, method, u string, body io.Reader, ctype string) ([]byte, error) {

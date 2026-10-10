@@ -48,7 +48,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeText(w http.ResponseWriter, status int, s string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(status)
-	w.Write([]byte(s))
+	w.Write([]byte(s)) // #nosec G705 -- text/plain with nosniff
 }
 
 func writeXML(w http.ResponseWriter, status int, s string) {

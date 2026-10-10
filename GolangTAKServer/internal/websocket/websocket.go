@@ -181,7 +181,7 @@ func Dial(ctx context.Context, rawURL string, opts *DialOptions) (*Conn, *http.R
 	d := &net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
 	var conn net.Conn
 	if secure {
-		cfg := &tls.Config{}
+		cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 		if opts.TLS != nil {
 			cfg = opts.TLS.Clone()
 		}

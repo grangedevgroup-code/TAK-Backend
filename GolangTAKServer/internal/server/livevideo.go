@@ -213,7 +213,7 @@ func (s *Server) startVideoSource(src VideoSource) {
 			if media.IsTSURL(src.URL) {
 				err = media.PullTS(s.ctx, src.URL, s.live.reg, path, firstNonEmpty(src.Name, "source"))
 			} else {
-				err = media.Pull(s.ctx, src.URL, &tls.Config{InsecureSkipVerify: src.Insecure}, s.live.reg, path, firstNonEmpty(src.Name, "source"))
+				err = media.Pull(s.ctx, src.URL, &tls.Config{InsecureSkipVerify: src.Insecure, MinVersion: tls.VersionTLS12}, s.live.reg, path, firstNonEmpty(src.Name, "source")) // #nosec G402 -- opt-in per video source
 			}
 			if s.ctx.Err() != nil {
 				return

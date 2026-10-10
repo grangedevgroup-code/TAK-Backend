@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -164,10 +165,12 @@ func (s *Server) martiCertAdmin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "certificate not found"})
 		return
 	}
+	var errs []error
 	for _, e := range targets {
-		s.dir.RevokeCert(e.Rec.Serial)
+		errs = append(errs, s.dir.RevokeCert(e.Rec.Serial))
+		s.dropCertClients(e.Rec.Serial)
 		if del {
-			s.dir.UpdateUser(e.User, func(u *User) error {
+			_, err := s.dir.UpdateUser(e.User, func(u *User) error {
 				for i := range u.Certs {
 					if u.Certs[i].Serial == e.Rec.Serial {
 						u.Certs = append(u.Certs[:i], u.Certs[i+1:]...)
@@ -176,8 +179,13 @@ func (s *Server) martiCertAdmin(w http.ResponseWriter, r *http.Request) {
 				}
 				return nil
 			})
+			errs = append(errs, err)
 		}
 		s.log.Info("certificate revoked through the TAK certificate API", "serial", e.Rec.Serial, "user", e.User, "deleted", del, "by", identityOf(r).Name)
+	}
+	if err := errors.Join(errs...); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }

@@ -466,7 +466,45 @@ go test ./...
 sh scripts/build.sh 1.0.0
 ```
 
-`scripts/build.sh` (or `scripts/build.ps1` on Windows) cross-compiles release binaries for every supported system into `dist/` with a `SHA256SUMS` file.
+`scripts/build.sh` (or `scripts/build.ps1` on Windows) cross-compiles release binaries for every supported system into `dist/` with a `SHA256SUMS` file. `go.mod` pins the go1.27.2 toolchain, which the `go` command downloads when the installed one is older.
+
+## Security checks
+
+`bash scripts/security-scan.sh` runs the checks below and exits non-zero on any finding. Everything runs locally: the vulnerability scanners download the public advisory databases and compare on the machine, and Opengrep reads its rules from a local checkout.
+
+| Check | Tool |
+|---|---|
+| Known vulnerabilities reachable from the code, standard library included | govulncheck v1.8.0 |
+| Known vulnerabilities in dependencies | OSV-Scanner v2.6.0, offline database |
+| Secrets in the history and in staged and unstaged changes | Gitleaks v8.30.1 |
+| Go security patterns, server and CLI scanned separately | gosec v2.29.0 |
+| Code patterns in Go, the shell scripts, the Dockerfile and the dashboard | Opengrep v1.30.1 with the `semgrep/semgrep-rules` rules |
+| Static analysis | staticcheck, go vet |
+
+```sh
+go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.6.0
+go install github.com/zricethezav/gitleaks/v8@v8.30.1
+go install honnef.co/go/tools/cmd/staticcheck@master
+d=$(mktemp -d) && cd "$d" && go mod init gosecbuild
+go get github.com/securego/gosec/v2/cmd/gosec@v2.29.0 golang.org/x/tools@v0.51.0
+go build -o "$(go env GOPATH)/bin/" github.com/securego/gosec/v2/cmd/gosec
+```
+
+gosec is built against golang.org/x/tools v0.51.0 because the version it ships with cannot read packages compiled by Go 1.27.2; the script fails when packages do not load. Opengrep is a release binary whose signature should be checked with cosign before first use. The rules are cloned to `~/tools/semgrep-rules` (or `SEMGREP_RULES`); they are licensed for internal use only and are not copied into this repository. CodeQL also runs on GitHub through the repository's default setup.
+
+Reviewed findings are marked where they occur with `#nosec` or `nosemgrep` and a reason. Rule classes that were reviewed as a whole are skipped in the script:
+
+- Ignored errors and integer conversions (G104, G115): the ignored errors are on close, deadline and cleanup paths, and lengths read by the protocol decoders are checked against the buffer before use.
+- MD5, SHA-1 and 3DES (G401, G405, G501, G502, G505 and Opengrep's use-of-md5, use-of-sha1, use-of-DES): the WebSocket handshake, STUN and TURN credentials, RTSP digest sign-in, authenticator codes, PKCS#12 files that TAK clients can open and certificate key identifiers require them.
+- `unsafe` (G103, use-of-unsafe-block): Windows API calls.
+- File and directory modes (G301, G302, incorrect-default-permission): everything is inside the data directory, which is created with mode 0700.
+- Paths and commands held in variables (G304, G204, dangerous-exec-command, dangerous-syscall-exec): fixed names under the data directory, validated plugin names and commands set by an administrator. gosec's taint rules for request data reaching a path, a command or a response (G703, G702, G705) stay on for the server, so no-direct-write-to-responsewriter is skipped too.
+- Loop variable pointers (exported_loop_pointer): since Go 1.22 each iteration has its own variable. hidden-goroutine is a style rule.
+- The CLI in `cmd/golangtakserver` also skips G404, G702, G703, G704 and G122: it runs as the operator, on paths, commands and URLs the operator gives it.
+- staticcheck's ST1005: some error messages start with a product name, such as Tailscale.
+
+Trivy is not used: its releases, images and GitHub Action were compromised in March 2026 (GHSA-69fq-xp46-6x23).
 
 ## License
 

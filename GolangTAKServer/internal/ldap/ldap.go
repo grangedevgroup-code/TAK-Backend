@@ -102,7 +102,7 @@ func dial(cfg Config) (*conn, error) {
 	}
 	host := u.Hostname()
 	port := u.Port()
-	tcfg := &tls.Config{ServerName: host, RootCAs: cfg.RootCAs, InsecureSkipVerify: cfg.Insecure, MinVersion: tls.VersionTLS12}
+	tcfg := &tls.Config{ServerName: host, RootCAs: cfg.RootCAs, InsecureSkipVerify: cfg.Insecure, MinVersion: tls.VersionTLS12} // #nosec G402 -- opt-in setting for directory servers with self-signed certificates
 	d := &net.Dialer{Timeout: timeout}
 	var nc net.Conn
 	switch strings.ToLower(u.Scheme) {

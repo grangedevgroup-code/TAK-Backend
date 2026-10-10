@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 type Message struct {
@@ -71,6 +73,7 @@ func (b *Broker) Serve(ln net.Listener) error {
 		b.wg.Add(1)
 		go func() {
 			defer b.wg.Done()
+			defer safe.Recover(b.Log, "MQTT connection", c)
 			b.handle(c)
 		}()
 	}

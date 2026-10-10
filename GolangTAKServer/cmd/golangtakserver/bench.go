@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand/v2"
+	"math/rand/v2" // nosemgrep -- load generator positions and jitter, not secrets
 	"net"
 	"os"
 	"slices"

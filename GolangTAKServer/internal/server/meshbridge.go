@@ -20,6 +20,7 @@ import (
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/meshtastic"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/mqtt"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 type meshNode struct {
@@ -150,6 +151,7 @@ func (s *Server) startMeshtastic() {
 			s.wg.Add(1)
 			go func() {
 				defer s.wg.Done()
+				defer safe.Recover(s.log, "Meshtastic bridge", nil)
 				b.broker.Serve(ln)
 			}()
 			s.stoppers = append(s.stoppers, b.broker.Close)
@@ -160,18 +162,21 @@ func (s *Server) startMeshtastic() {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer safe.Recover(s.log, "Meshtastic bridge", nil)
 			b.upstreamLoop()
 		}()
 	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		defer safe.Recover(s.log, "Meshtastic bridge", nil)
 		b.maintain()
 	}()
 	if cfg.Downlink {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer safe.Recover(s.log, "Meshtastic bridge", nil)
 			b.downlinkLoop()
 		}()
 	}

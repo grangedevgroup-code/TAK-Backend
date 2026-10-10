@@ -302,7 +302,7 @@ func (p *Plugin) Serve(ctx context.Context, h http.Handler) error {
 		return fmt.Errorf("unexpected plugin web address %q", p.HTTPAddr)
 	}
 	hs := &http.Server{Addr: p.HTTPAddr, Handler: h, ReadHeaderTimeout: 15 * time.Second}
-	go func() {
+	go func() { // #nosec G118 -- shutdown needs a fresh context once ctx is done
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

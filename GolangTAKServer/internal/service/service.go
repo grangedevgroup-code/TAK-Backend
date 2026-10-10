@@ -29,7 +29,7 @@ type Config struct {
 func run(timeout time.Duration, name string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput() // #nosec G702 -- fixed system tools, arguments built by the server
 	return strings.TrimSpace(string(out)), err
 }
 

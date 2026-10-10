@@ -128,7 +128,7 @@ func (s *Server) martiMakeKeyStore(w http.ResponseWriter, r *http.Request) {
 	s.dir.RecordCert(cn, newCertRecord(cert, r.URL.Query().Get("clientUid"), "keystore"))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+safeFileName(cn)+`.p12"`)
-	w.Write(data)
+	w.Write(data) // #nosec G705 -- PKCS#12 download
 }
 
 func (s *Server) martiEnrollmentProfile(w http.ResponseWriter, r *http.Request) {

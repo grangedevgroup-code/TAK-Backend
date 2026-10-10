@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/safe"
 )
 
 var (
@@ -162,6 +164,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer safe.Recover(s.Log, "RTSP connection", c.nc)
 			c.serve()
 		}()
 	}

@@ -80,7 +80,7 @@
       PATTERNS = Object.keys(DICT || {})
         .filter((k) => /\{[nx]\}/.test(k))
         .sort((a, b) => b.length - a.length)
-        .map((k) => [new RegExp("^" + k.split(/(\{[nx]\})/).map((p) => (p === "{n}" ? "(-?\\d[\\d.,]*)" : p === "{x}" ? "(.+?)" : esc(p))).join("") + "$"), DICT[k]]);
+        .map((k) => [new RegExp("^" + k.split(/(\{[nx]\})/).map((p) => (p === "{n}" ? "(-?\\d[\\d.,]*)" : p === "{x}" ? "(.+?)" : esc(p))).join("") + "$"), DICT[k]]); // nosemgrep -- keys come from the bundled translation files and are escaped
     } catch (e) {}
   }
 
@@ -584,7 +584,7 @@
 
   function connectStream() {
     if (S.ws || !S.me) return;
-    const proto = location.protocol === "https:" ? "wss://" : "ws://";
+    const proto = location.protocol === "https:" ? "wss://" : "ws://"; // nosemgrep -- follows the scheme the page was loaded with
     let ws;
     try {
       ws = new WebSocket(proto + location.host + "/api/stream");
@@ -628,7 +628,7 @@
 
   function connectCalls() {
     if (CALL.ws || !S.me) return;
-    const proto = location.protocol === "https:" ? "wss://" : "ws://";
+    const proto = location.protocol === "https:" ? "wss://" : "ws://"; // nosemgrep -- follows the scheme the page was loaded with
     let ws;
     try {
       ws = new WebSocket(proto + location.host + "/api/calls/ws");
@@ -1975,7 +1975,7 @@
           ["Truststore", h("span", null, h("a", { href: "/api/truststore.p12" }, "truststore.p12"), " password ", h("span", { class: "mono" }, info.truststorePassword))],
           ["CA certificate", h("a", { href: "/api/ca.pem" }, "golangtakserver-ca.pem")],
           ["CA fingerprint", h("span", { class: "mono break small" }, info.caFingerprint)],
-          info.ports.websocket ? ["WebSocket", h("span", { class: "mono" }, "ws://" + (host.includes(":") ? "[" + host + "]" : host) + ":" + info.ports.websocket + "/  (one CoT XML event per message)")] : null,
+          info.ports.websocket ? ["WebSocket", h("span", { class: "mono" }, "ws://" + (host.includes(":") ? "[" + host + "]" : host) + ":" + info.ports.websocket + "/  (one CoT XML event per message)")] : null, // nosemgrep -- shows the address of the plain WebSocket port
           ["Update server URL", h("span", { class: "mono" }, "https://" + (host.includes(":") ? "[" + host + "]" : host) + ":" + info.ports.https + "/api/packages")],
         ])
       );
@@ -3267,7 +3267,7 @@
               ["TAK Server", "Federation: turn it on below and exchange CA certificates, or add a link to its SSL port with a client certificate it issued."],
               ["OpenTAKServer", "Add a link to its SSL port 8089 with a certificate from OpenTAKServer, or to its TCP port 8088 on a trusted network."],
               ["FreeTAKServer", "Add a link to its TCP port 8087, or its SSL port 8089 with a certificate."],
-              ["zyrntopo-tak-server and browser software", "Add a WebSocket link (ws:// or wss://)."],
+              ["zyrntopo-tak-server and browser software", "Add a WebSocket link (ws:// or wss://)."], // nosemgrep -- help text naming the schemes
             ]
           )
         )
@@ -3535,14 +3535,14 @@
       ["takfed1", "TAK Server federation v1", "fed://HOST:9000", "TAK Server federation version 1. This server presents its own certificate; exchange CA certificates with the other side."],
       ["ots", "OpenTAKServer", "tls://HOST:8089", "Use a certificate from OpenTAKServer, or tcp://HOST:8088 for its unencrypted port on a trusted network."],
       ["fts", "FreeTAKServer", "tcp://HOST:8087", "FreeTAKServer accepts CoT on TCP 8087, or SSL on 8089 with a certificate."],
-      ["ws", "zyrntopo-tak-server or WebSocket software", "wss://HOST/", "One CoT XML event per WebSocket message. Use ws:// for unencrypted connections."],
-      ["other", "Other CoT software", "tcp://HOST:PORT", "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation v1), fed2:// (federation v2)."],
+      ["ws", "zyrntopo-tak-server or WebSocket software", "wss://HOST/", "One CoT XML event per WebSocket message. Use ws:// for unencrypted connections."], // nosemgrep -- help text naming the schemes
+      ["other", "Other CoT software", "tcp://HOST:PORT", "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation v1), fed2:// (federation v2)."], // nosemgrep -- help text naming the schemes
     ];
     const editPeer = (p) => {
       const isNew = !p;
       p = p || { enabled: true, direction: "both", groups: [] };
       const urlInput = input("purl", p.url, { required: true, placeholder: "tls://tak.example.org:8089" });
-      const urlField = field("URL", urlInput, "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation v1), fed2:// (federation v2).");
+      const urlField = field("URL", urlInput, "tcp://, tls:// (or ssl://), ws://, wss://, udp://, fed:// (federation v1), fed2:// (federation v2)."); // nosemgrep -- help text naming the schemes
       const hint = urlField[1].querySelector(".hint");
       let template = "";
       const kindSel = select("pkind", kinds.map((k) => [k[0], k[1]]), "golangtakserver");
@@ -4186,7 +4186,7 @@
       ],
     };
     const form = h("form", { novalidate: true });
-    const sectionEls = {};
+    const sectionEls = new Map();
     for (const s of SETTINGS_SECTIONS) {
       let el;
       if (content[s.id]) {
@@ -4248,7 +4248,7 @@
           )
         );
       }
-      sectionEls[s.id] = el;
+      sectionEls.set(s.id, el);
     }
     const state = h("span", { class: "state" }, "No unsaved changes");
     const saveBtn = h("button", { type: "submit", class: "primary" }, "Save settings");
@@ -4275,8 +4275,8 @@
 
     const nav = h("nav", { class: "subnav", "aria-label": "Settings sections" });
     const show = (id) => {
-      if (!sectionEls[id]) id = "general";
-      for (const [k, el] of Object.entries(sectionEls)) el.hidden = k !== id;
+      if (!sectionEls.has(id)) id = "general";
+      for (const [k, el] of sectionEls) el.hidden = k !== id;
       bar.hidden = !content[id];
       for (const a of nav.querySelectorAll("a")) {
         a.classList.toggle("active", a.dataset.sec === id);
@@ -4290,7 +4290,7 @@
         h("a", { href: "#/settings/" + s.id, "data-sec": s.id, onclick: (ev) => (ev.preventDefault(), show(s.id), window.scrollTo(0, 0)) }, s.title)
       );
     }
-    main.append(h("div", { class: "settings" }, nav, h("div", null, form, sectionEls.maintenance, sectionEls.advanced)));
+    main.append(h("div", { class: "settings" }, nav, h("div", null, form, sectionEls.get("maintenance"), sectionEls.get("advanced"))));
     show(params[0] || "general");
 
     const ldapFromForm = () =>
@@ -4455,7 +4455,7 @@
     const lines = await api("GET", "/api/logs?n=1000");
     (lines || []).forEach(add);
     view.scrollTop = view.scrollHeight;
-    const proto = location.protocol === "https:" ? "wss://" : "ws://";
+    const proto = location.protocol === "https:" ? "wss://" : "ws://"; // nosemgrep -- follows the scheme the page was loaded with
     let ws = null, closed = false, buffer = [];
     const open = () => {
       ws = new WebSocket(proto + location.host + "/api/logs/stream");
@@ -4590,8 +4590,7 @@
             btn("Use an authenticator app", async () => {
               try {
                 const st = await api("POST", "/api/account/2fa/totp");
-                const qr = h("div", { class: "qr" });
-                qr.innerHTML = st.qr;
+                const qr = h("div", { class: "qr" }, h("img", { src: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(st.qr), alt: "QR code", width: 240, height: 240 }));
                 const cf = h("form", { class: "grid" }, h("div", { class: "full" }, qr), h("p", { class: "full small" }, "Scan this in Google Authenticator, Microsoft Authenticator or a similar app, or enter the key ", h("span", { class: "mono" }, st.secret.replace(/(.{4})/g, "$1 ").trim()), "."), field("Code from the app", input("tcode", "", { inputmode: "numeric", autocomplete: "one-time-code", required: true })));
                 modal("Set up an authenticator app", cf, [{ label: "Cancel" }, { label: "Turn on", primary: true, run: async () => { const r = await api("POST", "/api/account/2fa/enable", { method: "totp", code: cf.querySelector("#tcode").value }); loadSec().catch(fail); setTimeout(() => showCodes(r.recoveryCodes), 50); } }]);
               } catch (e) {

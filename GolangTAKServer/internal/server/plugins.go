@@ -663,15 +663,21 @@ func (s *Server) apiServerPluginDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	s.reloadPlugins()
 	user := pluginUser(name)
+	var errs []error
 	for _, t := range s.dir.Tokens() {
 		if t.User == user {
-			s.dir.DeleteToken(t.ID)
+			errs = append(errs, s.dir.DeleteToken(t.ID))
 		}
 	}
 	if _, ok := s.dir.User(user); ok {
-		s.dir.DeleteUser(user)
+		_, err := s.dir.DeleteUser(user)
+		errs = append(errs, err)
 	}
 	os.Remove(filepath.Join(s.pluginDir(name), ".token"))
+	if err := errors.Join(errs...); err != nil {
+		apiError(w, http.StatusInternalServerError, fmt.Errorf("the plugin was removed but its account could not be fully deleted: %w", err))
+		return
+	}
 	s.log.Info("server plugin removed", "plugin", name)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
