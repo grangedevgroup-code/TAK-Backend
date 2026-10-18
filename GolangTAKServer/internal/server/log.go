@@ -182,7 +182,7 @@ func (h *lineHandler) handleJSON(r slog.Record) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	_, err = h.w.Write(append(b, 10))
+	_, err = h.w.Write(append(b, '\n'))
 	return err
 }
 
