@@ -1132,6 +1132,7 @@ func (s *Server) citrapRoutes(m func(string, http.HandlerFunc)) {
 	m("GET /Marti/api/citrap", s.citrapList)
 	m("POST /Marti/api/citrap", s.citrapPost)
 	m("POST /Marti/api/citrap/attachment", s.citrapAttachment)
+	m("POST /Marti/api/citrap/{id}/attachment", s.citrapAttachment)
 	m("GET /Marti/api/citrap/{id}", s.citrapGet)
 	m("PUT /Marti/api/citrap/{id}", s.citrapPost)
 	m("DELETE /Marti/api/citrap/{id}", s.citrapDelete)
