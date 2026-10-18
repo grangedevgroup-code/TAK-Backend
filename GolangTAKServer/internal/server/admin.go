@@ -744,6 +744,9 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 		if p.CertPass != "" {
 			p.CertPass = "********"
 		}
+		if p.Token != "" {
+			p.Token = "********"
+		}
 		peers[i] = p
 	}
 	cfg.Peers = peers
@@ -764,6 +767,9 @@ func (s *Server) apiSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if cfg.Certificates.External.Password != "" {
 		cfg.Certificates.External.Password = "********"
+	}
+	if cfg.OAuth.ClientSecret != "" {
+		cfg.OAuth.ClientSecret = "********"
 	}
 	dfs := make([]DataFeedConfig, len(cfg.DataFeeds))
 	for i, f := range cfg.DataFeeds {
@@ -817,6 +823,7 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		oldFeeds := c.DataFeeds
 		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
 		oldBind, oldKey, oldMail, oldTG, oldMetrics, oldCA := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password, c.Telegram.Token, c.Metrics.Token, c.Certificates.External.Password
+		oldOAuth := c.OAuth.ClientSecret
 		if err := jsonUnmarshalStrict(body, c); err != nil {
 			return err
 		}
@@ -844,6 +851,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		if c.Telegram.Token == "********" {
 			c.Telegram.Token = oldTG
 		}
+		if c.OAuth.ClientSecret == "********" {
+			c.OAuth.ClientSecret = oldOAuth
+		}
 		for i := range c.DataFeeds {
 			if c.DataFeeds[i].Password != "********" {
 				continue
@@ -863,6 +873,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 					}
 					if c.Peers[i].CertPass == "********" {
 						c.Peers[i].CertPass = o.CertPass
+					}
+					if c.Peers[i].Token == "********" {
+						c.Peers[i].Token = o.Token
 					}
 				}
 			}
