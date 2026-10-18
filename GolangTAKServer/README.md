@@ -273,6 +273,15 @@ golangtakserver config set federation.enabled true ports.federation 9000 ports.f
 
 Give the other server this server's CA (`/api/ca.pem`) and add its CA under **Server links**, **Federation**. Version 2 also shares public missions, their files, logs, parent missions and expiration with TAK Server, both ways and including missions that existed before the link. Federated deletes are off unless you allow them (`federation.allowFederatedDelete`), and `federation.disableMissionFederation` turns mission sharing off.
 
+More federation settings under **Server links**, **Federation**:
+
+- **Federation certificate authorities**: per CA, the groups its federates' traffic goes to and comes from, the maximum hops, and token sign-in with how long tokens last.
+- **Token sign-in**: federates on networks that break mutual TLS (for example TLS inspection) get a token for their certificate and connect with it instead, on port 9002 by default, like TAK Server.
+- **Data packages to version 1 servers**: data packages sent to federates are pushed to their HTTPS port the way TAK Server does it; version 1 servers send theirs to port 8444.
+- **File filter**: files with the listed extensions (`pref` by default) are not shared.
+- **Reconnect catch-up**: federates that reconnect receive the missions' recent changes, or everything that changed while they were away.
+- **Data feeds**: sharing data feeds with federates can be turned off.
+
 ## Federation hub
 
 Turn on **Server links**, **Federation hub** to broker traffic between partner servers. Each partner links or federates with this server once, and rules decide whose traffic reaches whom, optionally limited to certain CoT types (for example only positions from partner A to partner B, everything from partner B to all). **Broker only** keeps federated traffic off this server's own devices. TAK Servers federate with the hub the usual way (federation v2 on port 9001, or v1 on 9000).
