@@ -165,6 +165,11 @@ func (s *Server) startSubsystems() error {
 	s.startFeeds()
 	s.startMeshtastic()
 	s.startTelegram()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.runCloudWatch(s.ctx)
+	}()
 	s.histStop = make(chan struct{})
 	s.wg.Add(1)
 	go func() {

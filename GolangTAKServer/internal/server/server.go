@@ -47,6 +47,7 @@ type Server struct {
 	revocMu     sync.Mutex
 	revocSig    string
 	apiRoutes   atomic.Pointer[[]routeDoc]
+	cw          atomic.Pointer[cloudWatch]
 	hub         *Hub
 	ctx         context.Context
 	cancel      context.CancelFunc

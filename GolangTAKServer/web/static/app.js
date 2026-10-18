@@ -3935,6 +3935,20 @@
     return box;
   }
 
+  async function loadCWStatus() {
+    const box = document.getElementById("cw_status");
+    if (!box) return;
+    try {
+      const st = await api("GET", "/api/metrics/cloudwatch");
+      if (!st.enabled) return clear(box);
+      clear(box).append(
+        st.lastError ? h("p", { class: "small bad" }, "Last attempt failed: ", st.lastError) : st.lastPush ? h("p", { class: "small muted" }, "Last sent ", fmtTime(st.lastPush), ", ", st.metricsSent + " values sent", st.region ? h("span", null, ", ", st.region) : null) : h("p", { class: "small muted" }, "Waiting for the first send.")
+      );
+    } catch (e) {
+      clear(box);
+    }
+  }
+
   async function loadRevStatus() {
     const box = document.getElementById("rev_status");
     if (!box) return;
@@ -4331,6 +4345,7 @@
     setTimeout(loadLEStatus, 200);
     setTimeout(loadTGStatus, 200);
     setTimeout(loadRevStatus, 300);
+    setTimeout(loadCWStatus, 300);
     setTimeout(() => loadUpdStatus(false), 200);
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
@@ -4655,6 +4670,17 @@
           el.dispatchEvent(new Event("input", { bubbles: true }));
           toast("Copy the token now. After saving it is hidden.");
         }, "small")]),
+        sub("Amazon CloudWatch"),
+        field("CloudWatch", checkbox("cw_on", (met.cloudwatch || {}).enabled, "Send metrics to Amazon CloudWatch"), "Credentials come from the keys below, the AWS environment variables, the shared credentials file, or the instance or task role."),
+        field("Namespace", input("cw_ns", (met.cloudwatch || {}).namespace || "", { placeholder: "takserver" })),
+        field("Server name dimension", input("cw_name", (met.cloudwatch || {}).name || ""), "Optional. Added to every metric as the Name dimension, to tell servers apart."),
+        field("Region", input("cw_region", (met.cloudwatch || {}).region || "", { placeholder: "from the environment or instance" })),
+        field("Every (seconds)", n("cw_step", (met.cloudwatch || {}).stepSeconds || ""), "Empty means 60."),
+        field("Metrics per request", n("cw_batch", (met.cloudwatch || {}).batchSize || ""), "Empty means 20."),
+        field("Endpoint", input("cw_ep", (met.cloudwatch || {}).endpoint || "", { placeholder: "https://monitoring.REGION.amazonaws.com/" }), "Only for GovCloud endpoints, VPC endpoints or compatible services."),
+        field("Access key ID", input("cw_key", (met.cloudwatch || {}).accessKeyId || "", { autocomplete: "off" })),
+        field("Secret access key", input("cw_secret", (met.cloudwatch || {}).secretAccessKey || "", { type: "password", autocomplete: "new-password" })),
+        h("div", { class: "full", id: "cw_status" }),
       ],
       storage: [
         "How long data is kept, and limits that protect the server.",
@@ -4921,7 +4947,11 @@
           dosRules: parseRules(val(form, "qos_dosr"), "clientThresholdCount", "messageLimitPerInterval"),
         }),
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
-        metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
+        metrics: {
+          enabled: val(form, "met_on"),
+          token: val(form, "met_tok"),
+          cloudwatch: { enabled: val(form, "cw_on"), namespace: val(form, "cw_ns"), name: val(form, "cw_name"), region: val(form, "cw_region"), stepSeconds: num(form, "cw_step"), batchSize: num(form, "cw_batch"), endpoint: val(form, "cw_ep"), accessKeyId: val(form, "cw_key"), secretAccessKey: form.querySelector("#cw_secret").value },
+        },
         filters: { dropTypes: splitList(val(form, "flt_drop")), stripDetails: splitList(val(form, "flt_strip")), ignoreStaleMessages: val(form, "flt_stale"), validateXml: val(form, "flt_valid") },
         calls: { disabled: !val(form, "cl_on"), turnPort: num(form, "cl_port") === 0 ? -1 : num(form, "cl_port") === 3478 ? 0 : num(form, "cl_port"), relayPorts: val(form, "cl_range") === "49160-49200" ? "" : val(form, "cl_range"), relayAddress: val(form, "cl_addr") },
         vbm: { vbmEnabled: val(form, "vbm_on"), saDisabled: val(form, "vbm_sa"), chatDisabled: val(form, "vbm_chat"), networkClassification: val(form, "vbm_class"), copTool: val(form, "vbm_tool") },

@@ -328,6 +328,7 @@ func (s *Server) routes() *http.ServeMux {
 	a("POST /api/users/{name}/revoke", s.apiUserRevoke)
 	a("POST /api/certs/{serial}/revoke", s.apiCertRevoke)
 	a("GET /api/certs/revocation", s.apiRevocationStatus)
+	a("GET /api/metrics/cloudwatch", s.apiCloudWatchStatus)
 	s.fedHubRoutes(a)
 	a("POST /api/certs/server/renew", s.apiRenewServerCert)
 	u("GET /api/groups", s.apiGroups)

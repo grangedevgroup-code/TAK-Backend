@@ -11,13 +11,22 @@ import (
 )
 
 type MetricsConfig struct {
-	Enabled bool   `json:"enabled"`
-	Token   string `json:"token,omitempty"`
+	Enabled    bool             `json:"enabled"`
+	Token      string           `json:"token,omitempty"`
+	CloudWatch CloudWatchConfig `json:"cloudwatch"`
+}
+
+type metricSample struct {
+	name   string
+	kind   string
+	value  float64
+	labels []string
 }
 
 type promWriter struct {
-	b    strings.Builder
-	seen map[string]bool
+	b       strings.Builder
+	seen    map[string]bool
+	samples []metricSample
 }
 
 func promEscape(v string) string {
@@ -25,6 +34,7 @@ func promEscape(v string) string {
 }
 
 func (p *promWriter) metric(name, kind, help string, value float64, labels ...string) {
+	p.samples = append(p.samples, metricSample{name: name, kind: kind, value: value, labels: labels})
 	if !p.seen[name] {
 		p.seen[name] = true
 		fmt.Fprintf(&p.b, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, kind)
@@ -70,6 +80,10 @@ func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) metricsText() string {
+	return s.collectMetrics().b.String()
+}
+
+func (s *Server) collectMetrics() *promWriter {
 	p := &promWriter{seen: map[string]bool{}}
 	const pre = "golangtakserver_"
 	p.metric(pre+"info", "gauge", "Version information.", 1, "version", s.Version, "go", runtime.Version())
@@ -141,5 +155,5 @@ func (s *Server) metricsText() string {
 		p.metric(pre+"data_disk_total_bytes", "gauge", "Size of the disk holding the data directory.", float64(st.DiskTotal))
 		p.metric(pre+"data_disk_free_bytes", "gauge", "Free space on the disk holding the data directory.", float64(st.DiskFree))
 	}
-	return p.b.String()
+	return p
 }
