@@ -27,7 +27,20 @@ type Listener struct {
 func serverConfig(cfg *tls.Config) *tls.Config {
 	c := cfg.Clone()
 	c.NextProtos = []string{ALPN}
-	c.MinVersion = tls.VersionTLS13
+	c.MinVersion, c.MaxVersion = tls.VersionTLS13, 0
+	if gc := c.GetConfigForClient; gc != nil {
+		c.GetConfigForClient = func(h *tls.ClientHelloInfo) (*tls.Config, error) {
+			nc, err := gc(h)
+			if nc == nil || err != nil {
+				return nc, err
+			}
+			nc = nc.Clone()
+			nc.NextProtos = []string{ALPN}
+			nc.MinVersion, nc.MaxVersion = tls.VersionTLS13, 0
+			nc.GetConfigForClient = nil
+			return nc, nil
+		}
+	}
 	return c
 }
 
