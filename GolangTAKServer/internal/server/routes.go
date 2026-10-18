@@ -72,6 +72,10 @@ func (s *Server) routes() *http.ServeMux {
 	})
 	mux.HandleFunc("/Marti/api/plugins/{name}/submit", s.martiPluginSubmit)
 	mux.HandleFunc("PUT /Marti/api/plugins/{name}/submit/result", s.martiPluginSubmit)
+	for _, m := range []string{"GET", "POST", "PUT", "DELETE"} {
+		recordRoute(&docs, m+" /Marti/api/plugins/{name}/submit", accessUser, s.martiPluginSubmit)
+	}
+	recordRoute(&docs, "PUT /Marti/api/plugins/{name}/submit/result", accessUser, s.martiPluginSubmit)
 	m("GET /Marti/api/maplayers/all", s.martiMapLayersAll)
 	m("GET /Marti/api/maplayers/{uid}", s.martiMapLayerGet)
 	m("POST /Marti/api/maplayers", s.martiMapLayerSave)
@@ -234,6 +238,7 @@ func (s *Server) routes() *http.ServeMux {
 
 	pub("POST /api/login", s.apiLogin)
 	pub("POST /oauth/token", s.oauthToken)
+	pub("GET /login", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusFound) })
 	pub("GET /login/auth", s.loginAuth)
 	pub("GET /login/redirect", s.loginRedirect)
 	pub("GET /login/refresh", s.loginRefresh)
