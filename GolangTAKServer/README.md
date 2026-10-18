@@ -483,6 +483,7 @@ Settings live in `config.json` in the data directory and can be changed in the d
 - Rate limits under **Settings**, **Storage and limits** cap how many messages each device can send and receive per second and how many new connections an address can open per minute. Chat, alerts, deletions, direct messages and server links are never limited.
 - Certificates from other certificate authorities (federation partners, a company CA) can be checked against revocation lists and OCSP under **Settings**, **Certificates**, **Certificate revocation**. Certificates this server issued are checked against its own revocation list.
 - **Settings**, **Web and security** sets the minimum TLS version (1.3 turns TLS 1.2 off) and the TLS 1.2 cipher suites for streaming, the dashboard and the API, and can turn on HSTS and audit logging.
+- FIPS 140-3: set the environment variable `GODEBUG=fips140=on` for the server (in the service's environment when it runs as a service) to use Go's validated cryptographic module for TLS, QUIC, certificates and tokens; TLS then offers only approved cipher suites. The startup log and `/api/status` show `fips`. Protocols that require SHA-1 for purposes other than signatures (WebSocket handshakes, authenticator app codes, the call relay and the PKCS#12 files older ATAK versions read) keep working, as FIPS 140-3 allows.
 
 ## Translations
 
