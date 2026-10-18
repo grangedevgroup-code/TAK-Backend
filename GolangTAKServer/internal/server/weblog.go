@@ -12,18 +12,20 @@ import (
 )
 
 type WebConfig struct {
-	JSONLogs         bool     `json:"jsonLogs,omitempty"`
-	AccessLog        bool     `json:"accessLog,omitempty"`
-	AuditLog         bool     `json:"auditLog,omitempty"`
-	CORSOrigins      []string `json:"corsOrigins,omitempty"`
-	CORSCredentials  bool     `json:"corsCredentials,omitempty"`
-	HSTS             bool     `json:"hsts,omitempty"`
-	TLSMinVersion    string   `json:"tlsMinVersion,omitempty"`
-	TLSCiphers       []string `json:"tlsCiphers,omitempty"`
-	MaxHTTPHeaderKB  int      `json:"maxHttpHeaderKb,omitempty"`
-	CustomHeaders    []string `json:"customHeaders,omitempty"`
-	SessionMinutes   int      `json:"sessionMinutes,omitempty"`
-	DisableDashboard bool     `json:"disableDashboard,omitempty"`
+	JSONLogs         bool                `json:"jsonLogs,omitempty"`
+	AccessLog        bool                `json:"accessLog,omitempty"`
+	AuditLog         bool                `json:"auditLog,omitempty"`
+	CORSOrigins      []string            `json:"corsOrigins,omitempty"`
+	CORSCredentials  bool                `json:"corsCredentials,omitempty"`
+	HSTS             bool                `json:"hsts,omitempty"`
+	TLSMinVersion    string              `json:"tlsMinVersion,omitempty"`
+	TLSCiphers       []string            `json:"tlsCiphers,omitempty"`
+	MaxHTTPHeaderKB  int                 `json:"maxHttpHeaderKb,omitempty"`
+	CustomHeaders    []string            `json:"customHeaders,omitempty"`
+	SessionMinutes   int                 `json:"sessionMinutes,omitempty"`
+	DisableDashboard bool                `json:"disableDashboard,omitempty"`
+	ContentDir       string              `json:"contentDir,omitempty"`
+	ContentAccess    []ContentAccessRule `json:"contentAccess,omitempty"`
 }
 
 type webLogs struct {

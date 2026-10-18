@@ -393,6 +393,7 @@ func (s *Server) routes() *http.ServeMux {
 	assets := http.FileServerFS(web.Assets())
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", noCache(assets)))
 	mux.HandleFunc("GET /{$}", s.dashboardIndex)
+	mux.HandleFunc("/", s.webContent)
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	u("GET /v3/api-docs", s.apiOpenAPIJSON)
 	u("GET /v3/api-docs.yaml", s.apiOpenAPIYAML)

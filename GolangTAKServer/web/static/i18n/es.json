@@ -1570,5 +1570,9 @@
  "Registration code": "Código de registro",
  "only if you were given one": "solo si le dieron uno",
  "Registration whitelist": "Lista blanca de registro",
- "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Como la lista blanca de TAK Server: un dominio de correo por línea (* para cualquiera). token= solo permite usar la línea a quien tenga ese código de registro, group= y groups= fijan los grupos de la nueva cuenta, y private da al dominio un grupo propio. Con líneas aquí, solo los dominios listados pueden registrarse."
+ "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Como la lista blanca de TAK Server: un dominio de correo por línea (* para cualquiera). token= solo permite usar la línea a quien tenga ese código de registro, group= y groups= fijan los grupos de la nueva cuenta, y private da al dominio un grupo propio. Con líneas aquí, solo los dominios listados pueden registrarse.",
+ "Web content folder": "Carpeta de contenido web",
+ "Files in this folder are served from the web root, for example WebTAK or your own pages. A relative path is inside the data folder.": "Los archivos de esta carpeta se sirven desde la raíz web, por ejemplo WebTAK o sus propias páginas. Una ruta relativa está dentro de la carpeta de datos.",
+ "Protected folders": "Carpetas protegidas",
+ "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Una carpeta por línea. Solo las personas que han iniciado sesión pueden abrirla, y solo los miembros de los grupos tras los dos puntos cuando los hay."
 }

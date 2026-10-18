@@ -4468,6 +4468,8 @@
         field("Access log", checkbox("wb_access", wb.accessLog, "Log every web request")),
         field("Audit log", checkbox("wb_audit", wb.auditLog, "Log every change made through the API")),
         field("Dashboard", checkbox("wb_nodash", wb.disableDashboard, "Turn the dashboard off; the API and TAK services keep running"), "Turn it back on in the config file or with the command line."),
+        field("Web content folder", input("wb_cdir", wb.contentDir || "", { placeholder: "webcontent" }), "Files in this folder are served from the web root, for example WebTAK or your own pages. A relative path is inside the data folder."),
+        field("Protected folders", h("textarea", { id: "wb_cacc", rows: 3, style: "font-size:12px", placeholder: "/secure: Red, Blue\n/members" }, (wb.contentAccess || []).map((a) => a.folder + ((a.groups || []).length ? ": " + a.groups.join(", ") : "")).join("\n")), "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any."),
       ],
       qos: [
         "Slow down position reports when many devices are connected, like the quality of service rules of TAK Server. Each rule is clients=value, and the rule with the highest client count at or below the number of connected devices applies.",
@@ -4965,6 +4967,15 @@
           accessLog: val(form, "wb_access"),
           auditLog: val(form, "wb_audit"),
           disableDashboard: val(form, "wb_nodash"),
+          contentDir: val(form, "wb_cdir"),
+          contentAccess: val(form, "wb_cacc")
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .map((l) => {
+              const i = l.indexOf(":");
+              return i < 0 ? { folder: l } : { folder: l.slice(0, i).trim(), groups: splitList(l.slice(i + 1)) };
+            }),
         }),
         qos: Object.assign({}, qos, {
           deliveryEnabled: val(form, "qos_del"),

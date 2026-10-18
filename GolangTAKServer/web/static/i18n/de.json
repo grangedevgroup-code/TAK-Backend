@@ -1541,5 +1541,9 @@
  "Registration code": "Registrierungscode",
  "only if you were given one": "nur falls Sie einen erhalten haben",
  "Registration whitelist": "Registrierungs-Whitelist",
- "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Wie die Whitelist von TAK Server: eine E-Mail-Domain pro Zeile (* für alle). token= lässt nur Personen mit diesem Registrierungscode die Zeile verwenden, group= und groups= legen die Gruppen des neuen Kontos fest, und private gibt der Domain eine eigene Gruppe. Sind hier Zeilen eingetragen, können sich nur aufgeführte Domains registrieren."
+ "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Wie die Whitelist von TAK Server: eine E-Mail-Domain pro Zeile (* für alle). token= lässt nur Personen mit diesem Registrierungscode die Zeile verwenden, group= und groups= legen die Gruppen des neuen Kontos fest, und private gibt der Domain eine eigene Gruppe. Sind hier Zeilen eingetragen, können sich nur aufgeführte Domains registrieren.",
+ "Web content folder": "Ordner für Webinhalte",
+ "Files in this folder are served from the web root, for example WebTAK or your own pages. A relative path is inside the data folder.": "Dateien in diesem Ordner werden über die Web-Wurzel ausgeliefert, zum Beispiel WebTAK oder eigene Seiten. Ein relativer Pfad liegt im Datenordner.",
+ "Protected folders": "Geschützte Ordner",
+ "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Ein Ordner pro Zeile. Nur angemeldete Personen können ihn öffnen, und nur Mitglieder der Gruppen nach dem Doppelpunkt, falls welche angegeben sind."
 }

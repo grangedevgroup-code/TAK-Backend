@@ -1579,5 +1579,9 @@
  "Registration code": "Код реєстрації",
  "only if you were given one": "лише якщо вам його надали",
  "Registration whitelist": "Білий список реєстрації",
- "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Як білий список TAK Server: один поштовий домен на рядок (* для будь-якого). token= дозволяє використовувати рядок лише тим, хто має цей код реєстрації, group= і groups= задають групи нового облікового запису, а private дає домену власну групу. Якщо тут є рядки, зареєструватися можуть лише перелічені домени."
+ "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Як білий список TAK Server: один поштовий домен на рядок (* для будь-якого). token= дозволяє використовувати рядок лише тим, хто має цей код реєстрації, group= і groups= задають групи нового облікового запису, а private дає домену власну групу. Якщо тут є рядки, зареєструватися можуть лише перелічені домени.",
+ "Web content folder": "Папка вебвмісту",
+ "Files in this folder are served from the web root, for example WebTAK or your own pages. A relative path is inside the data folder.": "Файли з цієї папки віддаються з кореня вебсервера, наприклад WebTAK або ваші сторінки. Відносний шлях — усередині папки даних.",
+ "Protected folders": "Захищені папки",
+ "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Одна папка на рядок. Відкрити її можуть лише ті, хто увійшов, і лише учасники груп після двокрапки, якщо їх указано."
 }
