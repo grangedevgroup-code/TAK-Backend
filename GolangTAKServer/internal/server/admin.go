@@ -819,8 +819,8 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	before := s.Config()
 	next, err := s.UpdateConfig(func(c *Config) error {
-		old := c.Peers
-		oldFeeds := c.DataFeeds
+		old := append([]PeerConfig(nil), c.Peers...)
+		oldFeeds := append([]DataFeedConfig(nil), c.DataFeeds...)
 		oldPlugins := append([]PluginConfig(nil), c.Plugins...)
 		oldBind, oldKey, oldMail, oldTG, oldMetrics, oldCA := c.LDAP.BindPassword, c.Feeds.ADSB.APIKey, c.Email.Password, c.Telegram.Token, c.Metrics.Token, c.Certificates.External.Password
 		oldOAuth := c.OAuth.ClientSecret

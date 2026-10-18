@@ -30,3 +30,16 @@ func TestSettingsHideOAuthSecretAndPeerTokens(t *testing.T) {
 		t.Fatalf("peer token after masked update: %+v", cfg.Peers)
 	}
 }
+
+func TestSettingsKeepPeerPasswordWhenMasked(t *testing.T) {
+	s := newTestServer(t, func(c *Config) {
+		c.Peers = []PeerConfig{{Name: "link", URL: "tak://other.example:8089", Username: "u", Password: "peer-password", CertPass: "cert-password"}}
+	})
+	admin := adminHeaders(t, s)
+	if st, b := doReq(t, http.DefaultClient, "PUT", plainURL(s, "/api/settings"), strings.NewReader(`{"peers":[{"name":"link","url":"tak://other.example:8089","username":"u","password":"********","certPassword":"********"}]}`), admin); st != http.StatusOK {
+		t.Fatalf("update %d %s", st, b)
+	}
+	if p := s.Config().Peers[0]; p.Password != "peer-password" || p.CertPass != "cert-password" {
+		t.Fatalf("peer secrets after masked update: %+v", p)
+	}
+}
