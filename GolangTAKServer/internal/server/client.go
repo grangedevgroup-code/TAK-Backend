@@ -118,6 +118,7 @@ type Client struct {
 	inArea     *geoFilter
 	incognito  atomic.Bool
 	input      *InputConfig
+	qos        qosClientState
 	istats     *inputStats
 }
 

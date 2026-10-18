@@ -40,6 +40,8 @@ type Hub struct {
 	limits      atomic.Pointer[RateLimitConfig]
 	vbm         atomic.Pointer[VBMConfig]
 	fedHub      atomic.Pointer[FederationHubConfig]
+	qos         atomic.Pointer[QoSConfig]
+	nonRelay    atomic.Int64
 	connects    connLimiter
 	queueLen    int
 	maxClients  int
@@ -97,6 +99,7 @@ func (h *Hub) Add(c *Client) bool {
 		return false
 	}
 	h.clients[c.ID] = c
+	h.nonRelay.Store(int64(h.countLocked()))
 	return true
 }
 
@@ -165,6 +168,7 @@ func (h *Hub) Remove(c *Client) {
 		return
 	}
 	delete(h.clients, c.ID)
+	h.nonRelay.Store(int64(h.countLocked()))
 	var gone []*Message
 	c.mu.Lock()
 	uid, cs, last := c.info.UID, c.info.Callsign, c.lastSA

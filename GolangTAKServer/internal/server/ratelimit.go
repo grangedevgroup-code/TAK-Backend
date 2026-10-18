@@ -110,6 +110,11 @@ func (h *Hub) rateLimits() *RateLimitConfig {
 }
 
 func (h *Hub) allowRead(c *Client, m *Message) bool {
+	if !h.qosAllowRead(c, m) {
+		h.RateDropped.Add(1)
+		c.rateDrops.Add(1)
+		return false
+	}
 	l := h.rateLimits()
 	if l == nil || c.Kind == KindPeer || rateExempt(m) {
 		return true
@@ -123,6 +128,10 @@ func (h *Hub) allowRead(c *Client, m *Message) bool {
 }
 
 func (h *Hub) allowDelivery(c *Client, m *Message) bool {
+	if !h.qosAllowDelivery(c, m) {
+		h.RateDropped.Add(1)
+		return false
+	}
 	l := h.rateLimits()
 	if l == nil || c.Kind == KindPeer || rateExempt(m) {
 		return true

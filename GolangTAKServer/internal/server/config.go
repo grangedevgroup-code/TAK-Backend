@@ -224,6 +224,7 @@ type Config struct {
 	Locate         LocateConfig        `json:"locate"`
 	Email          EmailConfig         `json:"email"`
 	OAuth          OAuthConfig         `json:"oauth"`
+	QoS            QoSConfig           `json:"qos"`
 	ACME           ACMEConfig          `json:"letsEncrypt"`
 	TileURL        string              `json:"tileUrl"`
 	LogLevel       string              `json:"logLevel"`
