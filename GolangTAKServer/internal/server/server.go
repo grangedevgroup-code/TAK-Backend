@@ -64,6 +64,9 @@ type Server struct {
 	predFeeds   *store.Collection[PredicateFeed]
 	inputMu     sync.Mutex
 	inputRuns   map[string]*inputRun
+	archive     *missionArchive
+	chatPurgeMu sync.Mutex
+	chatPurged  map[string]bool
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
@@ -342,7 +345,13 @@ func (s *Server) maintenance() {
 			return
 		case <-repeat.C:
 			s.runJob("emergencies")
-		case <-minute.C:
+		case now := <-minute.C:
+			if r := s.Config().Retention; scheduleDue(r.Schedule, now) {
+				s.runJob("cleanup")
+			}
+			if scheduleDue(s.Config().Retention.Archive.Schedule, now) {
+				s.runJob("missionarchive")
+			}
 			s.hub.Prune()
 			s.runJob("sync")
 			s.runJob("repeated")
@@ -362,7 +371,9 @@ func (s *Server) maintenance() {
 				}
 				return err
 			})
-			s.runJob("cleanup")
+			if s.Config().Retention.Schedule == "" {
+				s.runJob("cleanup")
+			}
 			s.runJob("updates")
 		}
 	}

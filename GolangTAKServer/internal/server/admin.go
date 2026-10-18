@@ -939,6 +939,12 @@ func validateConfig(c *Config) error {
 			return err
 		}
 	}
+	if err := validSchedule(c.Retention.Schedule); err != nil {
+		return fmt.Errorf("retention schedule: %w", err)
+	}
+	if err := validSchedule(c.Retention.Archive.Schedule); err != nil {
+		return fmt.Errorf("mission archive schedule: %w", err)
+	}
 	names := map[string]bool{}
 	for _, in := range c.Inputs {
 		if err := validateInput(in); err != nil {

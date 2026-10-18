@@ -55,10 +55,23 @@ type CertConfig struct {
 }
 
 type RetentionConfig struct {
-	HistoryDays int `json:"historyDays"`
-	ChatDays    int `json:"chatDays"`
-	FileDays    int `json:"fileDays"`
-	MissionDays int `json:"missionDays"`
+	HistoryDays    int                  `json:"historyDays"`
+	ChatDays       int                  `json:"chatDays"`
+	FileDays       int                  `json:"fileDays"`
+	MissionDays    int                  `json:"missionDays"`
+	GeoChatDays    int                  `json:"geochatDays,omitempty"`
+	PackageDays    int                  `json:"packageDays,omitempty"`
+	ExemptKeywords []string             `json:"exemptKeywords,omitempty"`
+	Schedule       string               `json:"schedule,omitempty"`
+	Archive        MissionArchiveConfig `json:"missionArchive"`
+}
+
+type MissionArchiveConfig struct {
+	Schedule                 string  `json:"schedule,omitempty"`
+	AfterNoActivityDays      float64 `json:"afterNoActivityDays,omitempty"`
+	RemoveAfterDays          float64 `json:"removeAfterDays,omitempty"`
+	ByNoContentActivity      bool    `json:"byNoContentActivity,omitempty"`
+	ByNoSubscriptionActivity bool    `json:"byNoSubscriptionActivity,omitempty"`
 }
 
 type LimitsConfig struct {

@@ -584,14 +584,25 @@ func (s *Server) martiFilesMetadata(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) expireResources() {
 	now := time.Now().Unix()
-	fileDays := s.Config().Retention.FileDays
+	ret := s.Config().Retention
+	var archived map[string]bool
 	for _, res := range s.res.All() {
 		if res.Expiration > 0 && res.Expiration < now {
 			s.res.Delete(res.UID)
 			s.log.Info("expired file removed", "name", res.Name)
 			continue
 		}
-		if fileDays > 0 && !res.Enrollment && !res.Connection && time.Since(res.Submitted) > time.Duration(fileDays)*24*time.Hour && !s.missionUsesHash(res.Hash) {
+		days := ret.FileDays
+		if res.Package && ret.PackageDays > 0 {
+			days = ret.PackageDays
+		}
+		if days > 0 && !res.Enrollment && !res.Connection && time.Since(res.Submitted) > time.Duration(days)*24*time.Hour && !s.missionUsesHash(res.Hash) && !resourceExempt(res, ret.ExemptKeywords) {
+			if archived == nil {
+				archived = s.archivedHashes()
+			}
+			if archived[res.Hash] {
+				continue
+			}
 			s.res.Delete(res.UID)
 			s.log.Info("old file removed by retention policy", "name", res.Name)
 		}

@@ -119,6 +119,7 @@ func (s *Server) jobViews() []JobView {
 
 func (s *Server) registerJobs() {
 	s.registerJob("cleanup", "Delete old data", "every hour", func() error { s.housekeeping(); return nil })
+	s.registerJob("missionarchive", "Archive inactive missions", "on the mission archive schedule", s.runMissionArchive)
 	s.registerJob("certificate", "Renew the server certificate", "every hour", func() error { return s.pki.EnsureServer(s.Config()) })
 	s.registerJob("emergencies", "Repeat active emergencies", "every repeater interval", func() error {
 		if s.Config().Repeater.Enabled {

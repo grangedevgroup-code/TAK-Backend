@@ -46,6 +46,9 @@ func (s *Server) initSubsystems() error {
 	if s.predFeeds, err = openPredicateFeeds(s.DataDir); err != nil {
 		return err
 	}
+	if s.archive, err = openMissionArchive(s.DataDir); err != nil {
+		return err
+	}
 	if s.props, err = openProps(s.DataDir); err != nil {
 		return err
 	}
@@ -186,6 +189,9 @@ func (s *Server) closeSubsystems() {
 	if s.predFeeds != nil {
 		s.predFeeds.Close()
 	}
+	if s.archive != nil {
+		s.archive.db.Close()
+	}
 	if s.profiles != nil {
 		s.profiles.Close()
 	}
@@ -229,6 +235,12 @@ func (s *Server) housekeeping() {
 	s.expireRecordings()
 	if n := s.history.Cleanup(cfg.Retention.HistoryDays); n > 0 {
 		s.log.Info("old history removed", "days", n)
+	}
+	if n := s.purgeGeoChat(cfg.Retention.GeoChatDays); n > 0 {
+		s.log.Info("old chat messages removed from history", "messages", n)
+	}
+	if cfg.Retention.Archive.Schedule == "" {
+		s.runMissionArchive()
 	}
 	s.devices.Prune(180 * 24 * time.Hour)
 	s.devices.Flush()
