@@ -159,6 +159,7 @@ type LDAPConfig struct {
 	ColorAttribute    string `json:"colorAttribute,omitempty"`
 	RoleAttribute     string `json:"roleAttribute,omitempty"`
 	GroupNameRegex    string `json:"groupNameRegex,omitempty"`
+	BulkImport        bool   `json:"bulkImport,omitempty"`
 }
 
 type MeshtasticChannel struct {
