@@ -434,3 +434,86 @@ func (s *Server) missionAllSubscriptionsGUID(w http.ResponseWriter, r *http.Requ
 	}
 	writeJSON(w, http.StatusOK, s.envelope("MissionSubscription", data))
 }
+
+func (s *Server) missionSetSubscriptionRoles(w http.ResponseWriter, r *http.Request, body []byte) {
+	m, ok := s.loadMission(w, r)
+	if !ok || !s.requirePermission(w, r, m, "MISSION_SET_ROLE") {
+		return
+	}
+	var subs []struct {
+		ClientUID string          `json:"clientUid"`
+		Username  string          `json:"username"`
+		Role      json.RawMessage `json:"role"`
+	}
+	if err := json.Unmarshal(body, &subs); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a JSON list of mission subscriptions"})
+		return
+	}
+	type change struct{ uid, role string }
+	var changes []change
+	for _, sub := range subs {
+		var role string
+		var obj struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(sub.Role, &obj) == nil && obj.Type != "" {
+			role = obj.Type
+		} else {
+			json.Unmarshal(sub.Role, &role)
+		}
+		role = normalizeRole(role)
+		if role == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid role for " + firstNonEmpty(sub.ClientUID, sub.Username)})
+			return
+		}
+		changes = append(changes, change{firstNonEmpty(sub.ClientUID, sub.Username), role})
+	}
+	m, err := s.missions.Update(m.Name, func(x *Mission) error {
+		for i, sub := range subs {
+			for j := range x.Subs {
+				if (sub.ClientUID != "" && x.Subs[j].ClientUID == sub.ClientUID) || (sub.ClientUID == "" && sub.Username != "" && strings.EqualFold(x.Subs[j].Username, sub.Username)) {
+					x.Subs[j].Role = changes[i].role
+					changes[i].uid = x.Subs[j].ClientUID
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	for _, c := range changes {
+		e := s.missionEvent(m, "t-x-m-r", "INVITE", firstNonEmpty(r.URL.Query().Get("creatorUid"), s.callerUID(r)))
+		addRoleXML(e.Detail.Child("mission"), c.role)
+		s.sendToUID(c.uid, e)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) missionExternalDataChanged(w http.ResponseWriter, r *http.Request) {
+	m, ok := s.loadMission(w, r)
+	if !ok || !s.requirePermission(w, r, m, "MISSION_WRITE") {
+		return
+	}
+	id := r.PathValue("id")
+	if !slices.ContainsFunc(m.ExternalData, func(d map[string]any) bool { return fmt.Sprint(d["id"]) == id }) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "external data not found"})
+		return
+	}
+	q := r.URL.Query()
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	notes := firstNonEmpty(q.Get("notes"), strings.TrimSpace(string(body)))
+	creator := firstNonEmpty(q.Get("creatorUid"), s.callerUID(r))
+	m, _ = s.missions.Update(m.Name, func(x *Mission) error {
+		x.addChange(MissionChange{Type: "CHANGE", CreatorUID: creator, ContentUID: id})
+		return nil
+	})
+	e := s.missionEvent(m, "t-x-m-c-e", "CHANGE", creator)
+	ext := e.Detail.Child("mission").AddNew("externalData", "uid", id)
+	if notes != "" {
+		ext.SetAttr("notes", notes)
+	}
+	s.sendToSubscribers(m, e, "")
+	w.WriteHeader(http.StatusOK)
+}
