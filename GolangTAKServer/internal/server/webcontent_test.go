@@ -80,3 +80,36 @@ func TestWebContentAndAccessRules(t *testing.T) {
 		t.Fatalf("dashboard still served %d", st)
 	}
 }
+
+func TestLocalPathRejectsOffSiteTargets(t *testing.T) {
+	for in, want := range map[string]string{"/missions?x=1": "/missions?x=1", "": "/", "//evil.example": "/", `/\evil.example`: "/", "https://evil.example": "/", "/a\r\nSet-Cookie: x": "/", "evil": "/"} {
+		if got := localPath(in); got != want {
+			t.Errorf("localPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestWebContentFolderRedirectStaysLocal(t *testing.T) {
+	s := newTestServer(t, nil)
+	os.MkdirAll(filepath.Join(s.DataDir, "webcontent", "evil.example"), 0o755)
+	os.WriteFile(filepath.Join(s.DataDir, "webcontent", "evil.example", "index.html"), []byte("x"), 0o644)
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := c.Get(plainURL(s, "/evil.example"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusMovedPermanently || resp.Header.Get("Location") != "evil.example/" {
+		t.Fatalf("folder redirect %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	req, _ := http.NewRequest("GET", plainURL(s, "/x"), nil)
+	req.URL.Opaque = "/%5Cevil.example"
+	resp, err = c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("backslash path %d %q", resp.StatusCode, resp.Header.Get("Location"))
+	}
+}
