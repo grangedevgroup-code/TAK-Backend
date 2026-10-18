@@ -312,7 +312,22 @@ func (s *Server) martiOK(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (s *Server) martiGroupsBulkUpdate(w http.ResponseWriter, r *http.Request) {
+	var users []string
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&users); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a JSON list of user names"})
+		return
+	}
+	for _, u := range users {
+		s.refreshUser(u)
+	}
+	writeJSON(w, http.StatusOK, s.envelope("java.lang.Boolean", true))
+}
+
 func (s *Server) martiGroupsUpdate(w http.ResponseWriter, r *http.Request) {
+	if u := r.PathValue("user"); u != "" {
+		s.refreshUser(u)
+	}
 	writeJSON(w, http.StatusOK, s.envelope("java.lang.Boolean", true))
 }
 
