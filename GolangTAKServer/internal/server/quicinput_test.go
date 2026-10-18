@@ -87,7 +87,6 @@ func TestQUICInputDeliversWithCertIdentity(t *testing.T) {
 		r2.expectNone(uidIs("NOCERT"), "quic client without certificate", 700*time.Millisecond)
 		nc.Close()
 	}
-	_ = b1c
 }
 
 func TestQUICInputValidation(t *testing.T) {
