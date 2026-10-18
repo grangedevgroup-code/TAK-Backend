@@ -553,8 +553,16 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 	case "children":
 		s.missionChildren(w, r)
 	case "externaldata":
-		if len(seg) == 2 {
+		if len(seg) >= 2 {
 			r.SetPathValue("id", seg[1])
+		}
+		if len(seg) == 3 && seg[2] == "change" && method == http.MethodPost {
+			s.missionExternalDataChanged(w, r)
+			return
+		}
+		if len(seg) > 2 {
+			notFound()
+			return
 		}
 		s.missionExternalData(w, r)
 	case "feed", "feeds":
