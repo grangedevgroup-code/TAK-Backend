@@ -97,6 +97,69 @@ func TestCRLRevokesAndReloads(t *testing.T) {
 	}
 }
 
+func (ca *testCA) crlV1(t *testing.T, serials ...int64) []byte {
+	t.Helper()
+	type entry struct {
+		SerialNumber   *big.Int
+		RevocationDate time.Time
+	}
+	type tbs struct {
+		Signature  pkix.AlgorithmIdentifier
+		Issuer     asn1.RawValue
+		ThisUpdate time.Time
+		NextUpdate time.Time
+		Revoked    []entry
+	}
+	alg := pkix.AlgorithmIdentifier{Algorithm: asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}}
+	var revoked []entry
+	for _, s := range serials {
+		revoked = append(revoked, entry{big.NewInt(s), time.Now().Add(-time.Minute).UTC().Truncate(time.Second)})
+	}
+	body, err := asn1.Marshal(tbs{Signature: alg, Issuer: asn1.RawValue{FullBytes: ca.cert.RawSubject}, ThisUpdate: time.Now().Add(-time.Minute).UTC().Truncate(time.Second), NextUpdate: time.Now().Add(time.Hour).UTC().Truncate(time.Second), Revoked: revoked})
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(body)
+	sig, err := ca.key.Sign(rand.Reader, digest[:], crypto.SHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := asn1.Marshal(certificateList{TBS: asn1.RawValue{FullBytes: body}, SignatureAlgorithm: alg, Signature: asn1.BitString{Bytes: sig, BitLength: 8 * len(sig)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
+}
+
+func TestVersion1CRLFromTAKScripts(t *testing.T) {
+	ca := newCA(t, "TAK CA")
+	good, bad := ca.issue(t, "good", 50, ""), ca.issue(t, "bad", 51, "")
+	der := ca.crlV1(t, 51)
+	if _, err := x509.ParseRevocationList(der); err == nil {
+		t.Log("stdlib now accepts v1 CRLs")
+	}
+	l, err := ParseCRL(der)
+	if err != nil || l.Version != 1 || l.Revoked() != 1 || l.CheckSignatureFrom(ca.cert) != nil {
+		t.Fatalf("v1 crl %+v %v", l, err)
+	}
+	path := filepath.Join(t.TempDir(), "ca.crl")
+	os.WriteFile(path, der, 0o600)
+	c := New()
+	if errs := c.Configure(Config{CRLFiles: []string{path}, Strict: true}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if err := c.Check(context.Background(), [][]*x509.Certificate{{good, ca.cert}}); err != nil {
+		t.Fatalf("good: %v", err)
+	}
+	if err := c.Check(context.Background(), [][]*x509.Certificate{{bad, ca.cert}}); !errors.Is(err, ErrRevoked) {
+		t.Fatalf("bad: %v", err)
+	}
+	other := newCA(t, "TAK CA")
+	if err := l.CheckSignatureFrom(other.cert); err == nil {
+		t.Fatal("crl signature accepted from a different key with the same name")
+	}
+}
+
 func TestCRLFromOtherIssuerIgnoredUnlessStrict(t *testing.T) {
 	ca, other := newCA(t, "CA"), newCA(t, "Other")
 	leaf := ca.issue(t, "leaf", 11, "")
