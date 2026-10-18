@@ -61,6 +61,9 @@ func (s *Server) parseOAuthToken(t string) (oauthClaims, error) {
 	if (c.Aud != oauthAudience && c.Aud != legacyOAuthAudience) || c.Sub == "" || now >= c.Exp || now < c.Nbf {
 		return c, errors.New("token expired or not valid here")
 	}
+	if s.oidc.isRevoked(c.Jti) {
+		return c, errors.New("token revoked")
+	}
 	return c, nil
 }
 
@@ -105,6 +108,8 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) writeOAuth(w http.ResponseWriter, user string) {
 	tok, c := s.signOAuthToken(user, oauthTTL)
-	refresh, _ := s.signOAuthToken(user, 7*24*time.Hour)
+	refresh, rc := s.signOAuthToken(user, 7*24*time.Hour)
+	s.oidc.record(c, "TAK Server", false)
+	s.oidc.record(rc, "TAK Server", true)
 	writeJSON(w, http.StatusOK, map[string]any{"access_token": tok, "token_type": "bearer", "refresh_token": refresh, "expires_in": int(oauthTTL / time.Second), "scope": "read write", "jti": c.Jti})
 }

@@ -401,7 +401,11 @@ func (s *Server) useRecoveryCode(user, code string) bool {
 func (s *Server) apiAuthOptions(w http.ResponseWriter, r *http.Request) {
 	ec := s.Config().Email
 	on := ec.Enabled && ec.Host != ""
-	writeJSON(w, http.StatusOK, map[string]bool{"registration": on && ec.AllowRegistration, "passwordReset": on})
+	out := map[string]any{"registration": on && ec.AllowRegistration, "passwordReset": on}
+	if oc := s.Config().OAuth; oc.usable() && oc.ClientID != "" && oc.LoginButton {
+		out["sso"] = firstNonEmpty(oc.Name, "Identity provider")
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) apiAccount(w http.ResponseWriter, r *http.Request) {

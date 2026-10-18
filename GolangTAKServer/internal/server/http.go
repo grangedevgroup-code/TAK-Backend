@@ -147,6 +147,10 @@ func (s *Server) resolveIdentity(r *http.Request) (*Identity, *Session, error) {
 				id, err := s.dir.Identity(c.Sub, "oauth")
 				return id, nil, err
 			}
+			if looksLikeJWT(cred) && s.Config().OAuth.usable() {
+				id, err := s.oidcIdentity(cred)
+				return id, nil, err
+			}
 			id, err := s.dir.CheckToken(ip, cred)
 			return id, nil, err
 		case "basic":

@@ -58,6 +58,7 @@ type Server struct {
 	profiles    *Profiles
 	devProfiles *deviceProfileStore
 	clientLogs  *clientLogStore
+	oidc        *oidcState
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex

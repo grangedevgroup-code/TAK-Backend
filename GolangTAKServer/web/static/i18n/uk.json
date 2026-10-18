@@ -893,6 +893,7 @@
  "Show ships from AISHub": "Показувати судна з AISHub",
  "Shown in TAK clients and connection packages.": "Показується в клієнтах TAK і пакетах підключення.",
  "Sign in": "Увійти",
+ "Sign in with {x}": "Увійти через {x}",
  "Sign in to GolangTAKServer": "Увійти в GolangTAKServer",
  "Sign out": "Вийти",
  "Signed in. Groups:": "Вхід виконано. Групи:",

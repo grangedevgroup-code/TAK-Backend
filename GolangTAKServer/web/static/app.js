@@ -1385,6 +1385,7 @@
     form.querySelector("#u").focus();
     api("GET", "/api/auth/options")
       .then((o) => {
+        if (o.sso) links.append(h("a", { href: "/login/auth?next=" + encodeURIComponent("/" + location.hash) }, "Sign in with " + o.sso));
         if (o.passwordReset) links.append(h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), authScreen("forgot")) }, "Forgot password?"));
         if (o.registration) links.append(h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), authScreen("register")) }, "Create an account"));
       })

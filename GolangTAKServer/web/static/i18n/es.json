@@ -886,6 +886,7 @@
  "Show ships from AISHub": "Mostrar buques de AISHub",
  "Shown in TAK clients and connection packages.": "Se muestra en los clientes TAK y en los paquetes de conexión.",
  "Sign in": "Iniciar sesión",
+ "Sign in with {x}": "Iniciar sesión con {x}",
  "Sign in to GolangTAKServer": "Iniciar sesión en GolangTAKServer",
  "Sign out": "Cerrar sesión",
  "Signed in. Groups:": "Sesión iniciada. Grupos:",

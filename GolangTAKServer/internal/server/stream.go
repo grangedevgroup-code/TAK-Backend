@@ -302,7 +302,14 @@ func (s *Server) handleAuth(c *Client, n *xmltree.Node) error {
 			return nil
 		}
 	}
-	id, err := s.dir.CheckPassword(remoteIP(c.Remote), user, pass)
+	var id *Identity
+	var err error
+	if looksLikeJWT(pass) {
+		id, err = s.tokenIdentity(pass)
+	}
+	if id == nil {
+		id, err = s.dir.CheckPassword(remoteIP(c.Remote), user, pass)
+	}
 	if err != nil {
 		s.log.Warn("stream sign-in failed", "remote", c.Remote, "user", user, "err", err)
 		time.Sleep(time.Second)
