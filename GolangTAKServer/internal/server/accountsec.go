@@ -38,6 +38,10 @@ type EmailConfig struct {
 	AllowedDomains       []string `json:"allowedDomains"`
 	BlockedDomains       []string `json:"blockedDomains"`
 	RegistrationGroups   []string `json:"registrationGroups"`
+	LogAlertsEnabled     bool     `json:"logAlertsEnabled,omitempty"`
+	LogAlertsTo          []string `json:"logAlertsTo,omitempty"`
+	LogAlertsSubject     string   `json:"logAlertsSubject,omitempty"`
+	LogAlertsExtensions  []string `json:"logAlertsExtensions,omitempty"`
 }
 
 type authToken struct {
