@@ -128,6 +128,7 @@ func (s *Server) startFederation() error {
 		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return s.pki.ServerCert(), nil
 		},
+		VerifyConnection: func(cs tls.ConnectionState) error { return s.revocationErr(cs.VerifiedChains) },
 	}
 	tcfg.ClientCAs = s.federationTrust()
 	s.wg.Add(1)
@@ -183,7 +184,8 @@ func errString(err error) string {
 func (s *Server) connectFederation(ctx context.Context, l *peerLink, u *url.URL) error {
 	host := u.Hostname()
 	port := firstNonEmpty(u.Port(), "9000")
-	cfg := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host, RootCAs: s.federationTrust()}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host, RootCAs: s.federationTrust(),
+		VerifyConnection: func(cs tls.ConnectionState) error { return s.revocationErr(cs.VerifiedChains) }}
 	if l.cfg.CertFile != "" {
 		cert, _, err := loadCertFile(l.cfg.CertFile, firstNonEmpty(l.cfg.CertPass, s.Config().Certificates.Password))
 		if err != nil {

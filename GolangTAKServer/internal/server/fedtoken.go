@@ -113,6 +113,7 @@ func (s *Server) startFederationToken() error {
 		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return s.pki.ServerCert(), nil
 		},
+		VerifyConnection: func(cs tls.ConnectionState) error { return s.revocationErr(cs.VerifiedChains) },
 	}
 	base.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 		c := base.Clone()

@@ -311,6 +311,7 @@ func (s *Server) routes() *http.ServeMux {
 	a("DELETE /api/users/{name}", s.apiUserDelete)
 	a("POST /api/users/{name}/revoke", s.apiUserRevoke)
 	a("POST /api/certs/{serial}/revoke", s.apiCertRevoke)
+	a("GET /api/certs/revocation", s.apiRevocationStatus)
 	a("POST /api/certs/server/renew", s.apiRenewServerCert)
 	u("GET /api/groups", s.apiGroups)
 	a("POST /api/groups", s.apiGroupCreate)

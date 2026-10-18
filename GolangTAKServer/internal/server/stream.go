@@ -38,7 +38,7 @@ func (s *Server) streamTLSConfig(requireCert bool) *tls.Config {
 				if len(cs.PeerCertificates) > 0 && s.dir.IsRevoked(cs.PeerCertificates[0].SerialNumber.Text(16)) {
 					return errors.New("certificate has been revoked")
 				}
-				return nil
+				return s.revocationErr(cs.VerifiedChains)
 			},
 		})
 	}

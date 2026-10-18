@@ -70,6 +70,7 @@ func (s *Server) startFederationV2() error {
 		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return s.pki.ServerCert(), nil
 		},
+		VerifyConnection: func(cs tls.ConnectionState) error { return s.revocationErr(cs.VerifiedChains) },
 	}
 	base.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 		c := base.Clone()
@@ -407,7 +408,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 	var peerState atomic.Pointer[tls.ConnectionState]
 	tcfg.VerifyConnection = func(cs tls.ConnectionState) error {
 		peerState.Store(&cs)
-		return nil
+		return s.revocationErr(cs.VerifiedChains)
 	}
 	tr := &http.Transport{
 		TLSClientConfig:     tcfg,

@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -15,8 +16,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"crypto/x509"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/pki"
 )
@@ -48,6 +47,7 @@ func TestFederationCRLRejectsRevokedFederate(t *testing.T) {
 	}
 	s := newTestServer(t, func(c *Config) {
 		c.Federation.Enabled = true
+		c.Ports.Federation = freePort(t)
 		c.Federation.TrustPEM = []string{string(other.CertPEM)}
 	})
 	issue := func(cn string) (tls.Certificate, *x509.Certificate) {

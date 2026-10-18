@@ -19,6 +19,7 @@ import (
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/flock"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/mumble"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/revocation"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/store"
 )
 
@@ -40,6 +41,9 @@ type Server struct {
 	log         *slog.Logger
 	dir         *Directory
 	pki         *PKI
+	revoc       *revocation.Checker
+	revocMu     sync.Mutex
+	revocSig    string
 	hub         *Hub
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -174,6 +178,7 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 		return nil, err
 	}
 	s.pki.SetExternal(cfg.Certificates.External)
+	s.initRevocation()
 	s.hub = NewHub(s, s.log, cfg.Limits.QueueLength, cfg.Limits.MaxClients, cfg.Limits.CacheLimit)
 	s.hub.SetRateLimits(cfg.RateLimits)
 	s.hub.SetQoS(cfg.QoS)
@@ -215,6 +220,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	next.QoS.DeliveryRules = append([]QoSRule(nil), s.cfg.QoS.DeliveryRules...)
 	next.QoS.ReadRules = append([]QoSRule(nil), s.cfg.QoS.ReadRules...)
 	next.QoS.DOSRules = append([]DOSRule(nil), s.cfg.QoS.DOSRules...)
+	next.Certificates.Revocation.CRLFiles = append([]string(nil), s.cfg.Certificates.Revocation.CRLFiles...)
 	if err := fn(&next); err != nil {
 		s.cfgMu.Unlock()
 		return s.cfg, err
@@ -233,6 +239,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	if s.pki != nil {
 		s.pki.SetExternal(next.Certificates.External)
 	}
+	s.applyRevocation(next.Certificates.Revocation)
 	s.level.Set(ParseLevel(next.LogLevel))
 	jsonLogs.Store(next.Web.JSONLogs)
 	s.refreshFedPolicies()

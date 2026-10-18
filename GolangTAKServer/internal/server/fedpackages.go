@@ -83,6 +83,7 @@ func (s *Server) startFederationHTTPS() error {
 		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 			return s.pki.ServerCert(), nil
 		},
+		VerifyConnection: func(cs tls.ConnectionState) error { return s.revocationErr(cs.VerifiedChains) },
 	}
 	base.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 		c := base.Clone()
@@ -198,8 +199,11 @@ func (s *Server) fedHTTPClient() *http.Client {
 			for _, c := range cs.PeerCertificates[1:] {
 				inter.AddCert(c)
 			}
-			_, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{Roots: trust, Intermediates: inter, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
-			return err
+			chains, err := cs.PeerCertificates[0].Verify(x509.VerifyOptions{Roots: trust, Intermediates: inter, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
+			if err != nil {
+				return err
+			}
+			return s.revocationErr(chains)
 		},
 	}
 	return &http.Client{Timeout: 5 * time.Minute, Transport: &http.Transport{TLSClientConfig: tcfg, ForceAttemptHTTP2: false}}

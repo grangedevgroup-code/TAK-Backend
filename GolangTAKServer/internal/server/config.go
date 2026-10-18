@@ -52,6 +52,7 @@ type CertConfig struct {
 	External       ExternalCAConfig `json:"external"`
 	PublicCertFile string           `json:"publicCertFile,omitempty"`
 	PublicKeyFile  string           `json:"publicKeyFile,omitempty"`
+	Revocation     RevocationConfig `json:"revocation"`
 }
 
 type RetentionConfig struct {

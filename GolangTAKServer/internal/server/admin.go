@@ -867,6 +867,13 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		rb, _ := json.Marshal(before.Certificates.Revocation)
+		rn, _ := json.Marshal(c.Certificates.Revocation)
+		if string(rb) != string(rn) {
+			if err := s.validRevocation(c.Certificates.Revocation); err != nil {
+				return err
+			}
+		}
 		return validateConfig(c)
 	})
 	if err != nil {
