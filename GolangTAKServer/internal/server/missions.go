@@ -1618,6 +1618,8 @@ func (s *Server) missionExternalData(w http.ResponseWriter, r *http.Request) {
 	m, _ = s.missions.Update(m.Name, func(x *Mission) error {
 		if r.Method == http.MethodDelete {
 			x.ExternalData = slices.DeleteFunc(x.ExternalData, func(d map[string]any) bool { return d["id"] == idParam })
+		} else if i := slices.IndexFunc(x.ExternalData, func(d map[string]any) bool { return d["id"] == body["id"] }); i >= 0 {
+			x.ExternalData[i] = body
 		} else {
 			x.ExternalData = append(x.ExternalData, body)
 		}
