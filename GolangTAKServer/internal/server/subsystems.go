@@ -52,6 +52,9 @@ func (s *Server) initSubsystems() error {
 	if s.fedSeen, err = openSeenFederates(s.DataDir); err != nil {
 		return err
 	}
+	if s.icons, err = openIconsets(s.DataDir); err != nil {
+		return err
+	}
 	if s.props, err = openProps(s.DataDir); err != nil {
 		return err
 	}
@@ -203,6 +206,9 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.fedSeen != nil {
 		s.fedSeen.Close()
+	}
+	if s.icons != nil {
+		s.icons.sets.Close()
 	}
 	if s.profiles != nil {
 		s.profiles.Close()

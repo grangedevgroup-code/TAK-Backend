@@ -125,7 +125,6 @@ func (s *Server) routes() *http.ServeMux {
 		s.martiDataFeedTypes(w, r)
 	})
 	m("GET /Marti/api/datafeeds/{uuid}/cots/{type}", s.martiDataFeedCots)
-	m("GET /Marti/api/iconset/all/uid", s.martiEmpty("java.lang.String"))
 
 	pub("GET /Marti/api/tls/config", s.martiTLSConfig)
 	u("POST /Marti/api/tls/signClient", s.martiSignClientV1)
@@ -201,6 +200,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.takAdminRoutes(m, a)
 	s.retentionRoutes(a)
 	s.qosRoutes(a)
+	s.iconRoutes(m, a)
 	s.federationAPIRoutes(a)
 	pub("GET /Marti/api/cadownload", s.fedCADownload)
 	a("POST /Marti/api/generateFederationJwtToken", s.martiGenerateFedToken)

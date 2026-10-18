@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"image/png"
 	"net"
 	"net/http"
 	"os"
@@ -279,5 +280,36 @@ func TestParityInputsWithFilterGroups(t *testing.T) {
 	if c, err := net.DialTimeout("tcp", "127.0.0.1:"+itoa(port), time.Second); err == nil {
 		c.Close()
 		t.Fatal("input still listening after delete")
+	}
+}
+
+func TestParityIconsets(t *testing.T) {
+	s := newTestServer(t, nil)
+	a := adminHeaders(t, s)
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	f, _ := zw.Create("iconset.xml")
+	f.Write([]byte(`<iconset version="1" name="Fire" uid="fire-icons" skipResize="false" default_friendly="Fire/engine.png"/>`))
+	f, _ = zw.Create("Fire/engine.png")
+	png.Encode(f, renderTypeIcon("a-f-G", "", "", false))
+	zw.Close()
+	if st, b := doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/api/iconset"), bytes.NewReader(buf.Bytes()), map[string]string{"Authorization": a["Authorization"], "Content-Type": "application/zip"}); st != 200 {
+		t.Fatalf("upload: %d %s", st, b)
+	}
+	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/iconset/all/uid"), nil, a); !strings.Contains(string(b), "fire-icons") {
+		t.Fatalf("uids: %s", b)
+	}
+	_, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/iconseturl/fire-icons"), nil, a)
+	if !strings.Contains(string(b), "/Marti/api/icon/fire-icons/Fire/engine.png") {
+		t.Fatalf("urls: %s", b)
+	}
+	if st, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/icon/fire-icons/Fire/engine.png"), nil, a); st != 200 || !bytes.HasPrefix(b, []byte("\x89PNG")) {
+		t.Fatalf("icon: %d", st)
+	}
+	if st, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/iconimage?cotType=a-h-G&medevac=true"), nil, a); st != 200 || !bytes.HasPrefix(b, []byte("\x89PNG")) {
+		t.Fatalf("type icon: %d", st)
+	}
+	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/iconurl?iconsetpath=fire-icons/Fire/engine.png"), nil, a); !strings.HasSuffix(string(b), "/Marti/api/icon/fire-icons/Fire/engine.png") {
+		t.Fatalf("iconurl: %s", b)
 	}
 }

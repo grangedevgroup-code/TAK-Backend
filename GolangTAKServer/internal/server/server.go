@@ -68,6 +68,7 @@ type Server struct {
 	chatPurgeMu sync.Mutex
 	chatPurged  map[string]bool
 	fedSeen     *store.Collection[seenFederate]
+	icons       *iconStore
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
