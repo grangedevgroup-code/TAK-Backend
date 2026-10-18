@@ -115,8 +115,9 @@ func (s *Server) routes() *http.ServeMux {
 	u("POST /Marti/api/tls/signClient/v2", s.martiSignClientV2)
 	u("GET /Marti/api/tls/makeClientKeyStore", s.martiMakeKeyStore)
 	m("GET /Marti/api/tls/profile/enrollment", s.martiEnrollmentProfile)
-	m("GET /Marti/api/device/profile/connection", s.martiConnectionProfile)
-	m("GET /Marti/api/device/profile/tool/{tool}", s.martiToolProfile)
+	mux.HandleFunc("/Marti/api/device/profile", s.guard(accessMarti, s.deviceProfileRouter))
+	mux.HandleFunc("/Marti/api/device/profile/", s.guard(accessMarti, s.deviceProfileRouter))
+	m("GET /Marti/api/tls/profile/tool/{tool}/file", s.martiToolProfileFile)
 	m("GET /api/connection", s.martiConnectionProfile)
 
 	m("POST /Marti/sync/missionupload", s.martiMissionUpload)
