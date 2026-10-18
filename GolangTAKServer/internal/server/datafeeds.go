@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -267,16 +268,64 @@ func (s *Server) onFeedMessage(m *Message) {
 	s.feedToMissions(m)
 }
 
-func (s *Server) startDataFeeds() {
+type feedRun struct {
+	cancel context.CancelFunc
+	sig    string
+}
+
+func feedSig(f DataFeedConfig) string {
+	b, _ := json.Marshal(f) // #nosec G117 -- compared, never sent
+	return string(b)
+}
+
+func (s *Server) startDataFeeds() { s.syncDataFeeds() }
+
+func (s *Server) syncDataFeeds() {
+	if s.ctx == nil {
+		return
+	}
+	s.feedRunMu.Lock()
+	defer s.feedRunMu.Unlock()
+	if s.feedRuns == nil {
+		s.feedRuns = map[string]feedRun{}
+	}
+	want := map[string]DataFeedConfig{}
+	var order []string
 	for _, f := range s.Config().DataFeeds {
-		if !f.Enabled {
+		if f.Enabled {
+			want[f.UUID] = f
+			order = append(order, f.UUID)
+		}
+	}
+	stopped := false
+	for uuid, run := range s.feedRuns {
+		if f, ok := want[uuid]; !ok || feedSig(f) != run.sig {
+			run.cancel()
+			delete(s.feedRuns, uuid)
+			stopped = true
+			s.dfeeds.setError(uuid, "")
+		}
+	}
+	for _, uuid := range order {
+		if _, running := s.feedRuns[uuid]; running {
 			continue
 		}
-		if err := s.startDataFeed(f); err != nil {
+		f := want[uuid]
+		ctx, cancel := context.WithCancel(s.ctx)
+		var err error
+		for i := 0; i < 20; i++ {
+			if err = s.startDataFeed(ctx, f); err == nil || !stopped || !strings.Contains(err.Error(), "in use") {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err != nil {
+			cancel()
 			s.dfeeds.setError(f.UUID, err.Error())
 			s.log.Error("data feed could not start", "feed", f.Name, "err", err)
 			continue
 		}
+		s.feedRuns[uuid] = feedRun{cancel: cancel, sig: feedSig(f)}
 		s.dfeeds.setError(f.UUID, "")
 		s.log.Info("data feed listening", "feed", f.Name, "protocol", f.Protocol, "port", f.Port)
 	}
@@ -292,8 +341,8 @@ func (s *Server) feedClient(f DataFeedConfig, addr string) *Client {
 	return c
 }
 
-func (s *Server) startDataFeed(f DataFeedConfig) error {
-	if ok, err := s.startInputFeed(f); ok {
+func (s *Server) startDataFeed(fctx context.Context, f DataFeedConfig) error {
+	if ok, err := s.startInputFeed(fctx, f); ok {
 		return err
 	}
 	if f.Port <= 0 || f.Port > 65535 {
@@ -306,6 +355,7 @@ func (s *Server) startDataFeed(f DataFeedConfig) error {
 		if err != nil {
 			return err
 		}
+		context.AfterFunc(fctx, func() { ln.Close() })
 		secure := strings.EqualFold(f.Protocol, "tls") || strings.EqualFold(f.Protocol, "ssl")
 		if secure {
 			ln = tls.NewListener(ln, s.streamTLSConfig(true))
@@ -318,13 +368,17 @@ func (s *Server) startDataFeed(f DataFeedConfig) error {
 			for {
 				conn, err := ln.Accept()
 				if err != nil {
-					if errors.Is(err, net.ErrClosed) || s.ctx.Err() != nil {
+					if errors.Is(err, net.ErrClosed) || fctx.Err() != nil {
 						return
 					}
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
-				go s.serveFeedConn(f, c, conn, secure)
+				go func() {
+					stop := context.AfterFunc(fctx, func() { conn.Close() })
+					defer stop()
+					s.serveFeedConn(f, c, conn, secure)
+				}()
 			}
 		}()
 	case "udp", "mcast", "multicast":
@@ -353,6 +407,7 @@ func (s *Server) startDataFeed(f DataFeedConfig) error {
 			pc = uc
 		}
 		s.track(pc)
+		context.AfterFunc(fctx, func() { pc.Close() })
 		c := s.feedClient(f, addr)
 		s.wg.Add(1)
 		go func() {
@@ -362,7 +417,7 @@ func (s *Server) startDataFeed(f DataFeedConfig) error {
 			for {
 				n, from, err := pc.ReadFrom(buf)
 				if err != nil {
-					if errors.Is(err, net.ErrClosed) || s.ctx.Err() != nil {
+					if errors.Is(err, net.ErrClosed) || fctx.Err() != nil {
 						return
 					}
 					continue

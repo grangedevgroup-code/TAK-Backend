@@ -59,6 +59,8 @@ type Server struct {
 	devProfiles *deviceProfileStore
 	clientLogs  *clientLogStore
 	oidc        *oidcState
+	feedRunMu   sync.Mutex
+	feedRuns    map[string]feedRun
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex

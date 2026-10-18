@@ -886,7 +886,7 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	tn, _ := json.Marshal(next.Telegram)
 	mn, _ := json.Marshal(next.Meshtastic)
 	restart := before.Ports != next.Ports || before.Bind != next.Bind || before.Mesh.Enabled != next.Mesh.Enabled || before.Mesh.Send != next.Mesh.Send || string(mb) != string(mn) ||
-		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(fb) != string(fn) || string(vb) != string(vn) || string(ob) != string(on) || string(tb) != string(tn)
+		strings.Join(before.Mesh.Groups, ",") != strings.Join(next.Mesh.Groups, ",") || before.Federation.Enabled != next.Federation.Enabled || string(vb) != string(vn) || string(ob) != string(on) || string(tb) != string(tn)
 	if string(ab) != string(an) && next.ACME.Enabled && s.acme != nil {
 		select {
 		case s.acme.kick <- struct{}{}:
@@ -897,6 +897,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		if err := s.pki.EnsureServer(next); err != nil {
 			s.log.Error("server certificate update failed", "err", err)
 		}
+	}
+	if string(fb) != string(fn) {
+		s.syncDataFeeds()
 	}
 	s.reloadPeers()
 	s.log.Info("settings changed", "by", identityOf(r).Name, "restartRequired", restart)

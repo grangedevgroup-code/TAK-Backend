@@ -22,7 +22,7 @@ import (
 
 var inputFeedDefaults = map[string]int{"sbs": 30003, "ais": 10110, "osmand": 5055}
 
-func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
+func (s *Server) startInputFeed(fctx context.Context, f DataFeedConfig) (bool, error) {
 	proto := strings.ToLower(f.Protocol)
 	switch proto {
 	case "sbs", "ais", "osmand":
@@ -47,13 +47,13 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 		}
 		target := net.JoinHostPort(f.Address, strconv.Itoa(f.Port))
 		c := s.feedClient(f, target)
-		s.feedDialLoop(f, c, target, func(r io.Reader) error { return s.readSBS(f, c, r, target) })
+		s.feedDialLoop(fctx, f, c, target, func(r io.Reader) error { return s.readSBS(f, c, r, target) })
 	case "ais":
 		dec := newAISDecoder()
 		if f.Address != "" {
 			target := net.JoinHostPort(f.Address, strconv.Itoa(f.Port))
 			c := s.feedClient(f, target)
-			s.feedDialLoop(f, c, target, func(r io.Reader) error {
+			s.feedDialLoop(fctx, f, c, target, func(r io.Reader) error {
 				sc := bufio.NewScanner(r)
 				sc.Buffer(make([]byte, 4096), 4096)
 				for sc.Scan() {
@@ -69,6 +69,7 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 			return true, portError("udp", addr, err)
 		}
 		s.track(pc)
+		context.AfterFunc(fctx, func() { pc.Close() })
 		c := s.feedClient(f, addr)
 		s.wg.Add(1)
 		go func() {
@@ -79,7 +80,7 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 			for {
 				n, from, err := pc.ReadFrom(buf)
 				if err != nil {
-					if errors.Is(err, net.ErrClosed) || s.ctx.Err() != nil {
+					if errors.Is(err, net.ErrClosed) || fctx.Err() != nil {
 						return
 					}
 					continue
@@ -110,7 +111,7 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 			defer s.wg.Done()
 			defer s.hub.Remove(c)
 			go func() {
-				<-s.ctx.Done()
+				<-fctx.Done()
 				hs.Close()
 			}()
 			hs.Serve(ln)
@@ -132,10 +133,10 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 			hc := &http.Client{Timeout: 20 * time.Second}
 			failures := 0
 			for {
-				ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+				ctx, cancel := context.WithTimeout(fctx, 30*time.Second)
 				err := poll(ctx, hc, f, c)
 				cancel()
-				if s.ctx.Err() != nil {
+				if fctx.Err() != nil {
 					return
 				}
 				wait := time.Duration(every) * time.Second
@@ -153,7 +154,7 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 					failures = 0
 				}
 				select {
-				case <-s.ctx.Done():
+				case <-fctx.Done():
 					return
 				case <-time.After(wait):
 				}
@@ -163,7 +164,7 @@ func (s *Server) startInputFeed(f DataFeedConfig) (bool, error) {
 	return true, nil
 }
 
-func (s *Server) feedDialLoop(f DataFeedConfig, c *Client, target string, read func(io.Reader) error) {
+func (s *Server) feedDialLoop(fctx context.Context, f DataFeedConfig, c *Client, target string, read func(io.Reader) error) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -171,11 +172,11 @@ func (s *Server) feedDialLoop(f DataFeedConfig, c *Client, target string, read f
 		delay := time.Second
 		for {
 			d := net.Dialer{Timeout: 10 * time.Second}
-			conn, err := d.DialContext(s.ctx, "tcp", target)
+			conn, err := d.DialContext(fctx, "tcp", target)
 			if err == nil {
 				s.dfeeds.setError(f.UUID, "")
 				delay = time.Second
-				stop := context.AfterFunc(s.ctx, func() { conn.Close() })
+				stop := context.AfterFunc(fctx, func() { conn.Close() })
 				err = readSafely(read, &idleReader{conn: conn, idle: 2 * time.Minute})
 				stop()
 				conn.Close()
@@ -183,12 +184,12 @@ func (s *Server) feedDialLoop(f DataFeedConfig, c *Client, target string, read f
 					err = errors.New("the receiver closed the connection")
 				}
 			}
-			if s.ctx.Err() != nil {
+			if fctx.Err() != nil {
 				return
 			}
 			s.dfeeds.setError(f.UUID, "connecting to "+target+": "+err.Error())
 			select {
-			case <-s.ctx.Done():
+			case <-fctx.Done():
 				return
 			case <-time.After(delay):
 			}
