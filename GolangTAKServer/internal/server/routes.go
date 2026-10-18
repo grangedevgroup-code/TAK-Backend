@@ -100,6 +100,16 @@ func (s *Server) routes() *http.ServeMux {
 	m("GET /Marti/api/datafeeds/stats", s.martiDataFeedStats)
 	m("GET /Marti/api/datafeeds/stats/{uuid}", s.martiDataFeedStats)
 	m("GET /Marti/api/datafeeds/bounds/{bbox}", s.martiDataFeedsInBounds)
+	m("GET /Marti/api/datafeeds/bounds/polygon", s.martiDataFeedsInPolygon)
+	m("POST /Marti/api/datafeeds/bounds/polygon", s.martiDataFeedsInPolygon)
+	a("POST /Marti/api/datafeeds", s.martiDataFeedCreate)
+	m("GET /Marti/api/datafeeds/{name}", s.martiDataFeedGet)
+	a("PUT /Marti/api/datafeeds/{name}", s.martiDataFeedModify)
+	a("DELETE /Marti/api/datafeeds/{name}", s.martiDataFeedDelete)
+	a("POST /Marti/api/datafeeds/predicate", s.martiPredicateFeedSave)
+	a("PUT /Marti/api/datafeeds/predicate", s.martiPredicateFeedSave)
+	m("GET /Marti/api/datafeeds/predicate/{uuid}", s.martiPredicateFeedGet)
+	a("DELETE /Marti/api/datafeeds/predicate/{uuid}", s.martiPredicateFeedDelete)
 	m("GET /Marti/api/datafeeds/{uuid}/{what}", func(w http.ResponseWriter, r *http.Request) {
 		if r.PathValue("what") != "cots_types" {
 			s.martiUnknown(w, r)

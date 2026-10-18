@@ -186,6 +186,10 @@ type dataFeedView struct {
 	LastSeen string `json:"lastSeen,omitempty"`
 	Error    string `json:"error,omitempty"`
 	BuiltIn  bool   `json:"builtIn,omitempty"`
+
+	PredicateLang      string `json:"predicateLang,omitempty"`
+	DataSourceEndpoint string `json:"dataSourceEndpoint,omitempty"`
+	Predicate          string `json:"predicate,omitempty"`
 }
 
 func (s *Server) feedRetention() time.Duration {
@@ -240,6 +244,9 @@ func (s *Server) allDataFeeds() []dataFeedView {
 	add(dataFeedView{UUID: FeedAIS, Name: "AIS ships", Type: "API", Tags: []string{"ais", "maritime"}, Auth: "ANONYMOUS", Anongroup: cfg.Feeds.AIS.Group == "", Sync: true, FilterGroups: group(cfg.Feeds.AIS.Group), Enabled: cfg.Feeds.AIS.Enabled, BuiltIn: true})
 	add(dataFeedView{UUID: FeedMeshtastic, Name: "Meshtastic", Type: "Plugin", Tags: []string{"meshtastic", "lora"}, Auth: "ANONYMOUS", Anongroup: cfg.Meshtastic.Group == "", Archive: true, Sync: true, FilterGroups: group(cfg.Meshtastic.Group), Enabled: cfg.Meshtastic.Enabled, BuiltIn: true})
 	for _, f := range s.federatedFeeds() {
+		add(f)
+	}
+	for _, f := range s.predicateFeedViews() {
 		add(f)
 	}
 	return out

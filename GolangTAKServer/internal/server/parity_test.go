@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -181,5 +182,58 @@ func TestParityDeviceProfiles(t *testing.T) {
 	}
 	if st, _ := do("GET", "/Marti/api/device/profile/field-kit", ""); st != 404 {
 		t.Fatalf("still there: %d", st)
+	}
+}
+
+func TestParityDataFeedCRUD(t *testing.T) {
+	s := newTestServer(t, nil)
+	a := adminHeaders(t, s)
+	do := func(method, path, body string) (int, string) {
+		t.Helper()
+		st, b := doReq(t, http.DefaultClient, method, plainURL(s, path), strings.NewReader(body), a)
+		return st, string(b)
+	}
+	port := freeUDPPort(t)
+	if st, b := do("POST", "/Marti/api/datafeeds", `{"name":"sensors","protocol":"udp","port":`+itoa(port)+`,"tag":["wx"],"filtergroup":[],"sync":true}`); st != 200 || !strings.Contains(b, `"sensors"`) {
+		t.Fatalf("create: %d %s", st, b)
+	}
+	if st, _ := do("POST", "/Marti/api/datafeeds", `{"name":"sensors","protocol":"udp","port":1}`); st != 400 {
+		t.Fatalf("duplicate accepted: %d", st)
+	}
+	conn, err := net.Dial("udp", "127.0.0.1:"+itoa(port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	var b string
+	for time.Now().Before(deadline) {
+		conn.Write([]byte(saXML("WX-1", "WX", 2, 3)))
+		time.Sleep(150 * time.Millisecond)
+		if _, b = do("GET", "/Marti/api/datafeeds/sensors", ""); strings.Contains(b, `"messages":`) && !strings.Contains(b, `"messages":0`) {
+			break
+		}
+	}
+	conn.Close()
+	if !strings.Contains(b, `"messages":`) || strings.Contains(b, `"messages":0`) {
+		t.Fatalf("live feed received nothing: %s", b)
+	}
+	port2 := freeUDPPort(t)
+	if st, b := do("PUT", "/Marti/api/datafeeds/sensors", `{"port":`+itoa(port2)+`}`); st != 200 || !strings.Contains(b, `"port":`+itoa(port2)) {
+		t.Fatalf("modify: %d %s", st, b)
+	}
+	if st, _ := do("DELETE", "/Marti/api/datafeeds/sensors", ""); st != 200 {
+		t.Fatalf("delete: %d", st)
+	}
+	if st, _ := do("GET", "/Marti/api/datafeeds/sensors", ""); st != 404 {
+		t.Fatalf("still there: %d", st)
+	}
+	if st, b := do("POST", "/Marti/api/datafeeds/predicate", `{"uuid":"p1","name":"hostiles","predicateLang":"cql","dataSourceEndpoint":"https://example.org/feed","predicate":"type LIKE 'a-h-%'"}`); st != 200 {
+		t.Fatalf("predicate create: %d %s", st, b)
+	}
+	if _, b := do("GET", "/Marti/api/datafeeds", ""); !strings.Contains(b, `"Predicate"`) || !strings.Contains(b, `"predicateLang":"cql"`) {
+		t.Fatalf("predicate feed not listed: %s", b)
+	}
+	if st, _ := do("DELETE", "/Marti/api/datafeeds/predicate/p1", ""); st != 200 {
+		t.Fatalf("predicate delete: %d", st)
 	}
 }
