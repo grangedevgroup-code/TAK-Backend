@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Explorer</title>
+<link rel="icon" href="/assets/icon.svg">
+<style>
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-weight: 200 800; font-display: swap; src: url(/assets/fonts/hyperlegible-latin.woff2) format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Mono"; font-weight: 200 800; font-display: swap; src: url(/assets/fonts/hyperlegible-mono-latin.woff2) format("woff2"); }
+:root {
+  --canvas: #f4f4f3; --panel: #ffffff; --border: rgba(20, 20, 22, 0.09); --border-strong: rgba(20, 20, 22, 0.17);
+  --text: #1d1d20; --text-2: #5d5d64; --text-3: #8a8a91; --accent: #157f8c; --accent-weak: rgba(21, 127, 140, 0.12);
+  --get: #1d8656; --post: #157f8c; --put: #a8690d; --delete: #cf3434; --other: #6b5bb5; --hover: rgba(20, 20, 22, 0.045);
+  --sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Atkinson Hyperlegible Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #161618; --panel: #1f1f22; --border: rgba(255, 255, 255, 0.08); --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #ececee; --text-2: #a6a6ad; --text-3: #75757c; --accent: #4fb8c4; --accent-weak: rgba(79, 184, 196, 0.14);
+    --get: #4cbf86; --post: #4fb8c4; --put: #e0a245; --delete: #f06a6a; --other: #a99cf0; --hover: rgba(255, 255, 255, 0.05);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--canvas); color: var(--text); font: 15px/1.45 var(--sans); }
+header { position: sticky; top: 0; z-index: 2; background: var(--canvas); border-bottom: 1px solid var(--border); padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+h1 { font-size: 18px; margin: 0; font-weight: 700; }
+#meta { color: var(--text-2); font-size: 13px; }
+#search { flex: 1 1 260px; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; }
+header a { color: var(--accent); font-size: 13px; text-decoration: none; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+section { margin-bottom: 18px; }
+h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin: 0 0 8px; }
+.op { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; overflow: hidden; }
+.op > button { all: unset; box-sizing: border-box; width: 100%; display: flex; gap: 10px; align-items: center; padding: 9px 12px; cursor: pointer; }
+.op > button:hover { background: var(--hover); }
+.op > button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.method { flex: none; width: 64px; text-align: center; font: 700 12px var(--mono); padding: 3px 0; border-radius: 6px; color: #fff; }
+.m-get { background: var(--get); } .m-post { background: var(--post); } .m-put { background: var(--put); } .m-delete { background: var(--delete); } .m-other { background: var(--other); }
+.path { font: 14px var(--mono); word-break: break-all; min-width: 0; }
+.summary { color: var(--text-2); font-size: 13px; margin-left: auto; text-align: right; flex: 0 1 auto; min-width: 0; }
+.badge { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-2); }
+.detail { display: none; border-top: 1px solid var(--border); padding: 12px; }
+.op.open .detail { display: block; }
+label { display: block; font-size: 13px; color: var(--text-2); margin: 8px 0 4px; }
+input[type=text], textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--canvas); color: var(--text); font: 13px var(--mono); }
+textarea { min-height: 90px; resize: vertical; }
+.send { margin-top: 10px; padding: 8px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: 600 14px var(--sans); cursor: pointer; }
+.send:disabled { opacity: .6; cursor: default; }
+pre { margin: 10px 0 0; padding: 10px; background: var(--canvas); border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 420px; font: 12px/1.4 var(--mono); white-space: pre-wrap; word-break: break-word; }
+.status { font: 600 13px var(--mono); margin-top: 10px; }
+.empty { color: var(--text-3); padding: 24px 0; text-align: center; }
+@media (max-width: 640px) { .summary { display: none; } .method { width: 56px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>API Explorer</h1>
+  <span id="meta"></span>
+  <input id="search" type="search" placeholder="Filter by path, tag or summary" aria-label="Filter endpoints">
+  <a href="/v3/api-docs" target="_blank" rel="noopener">OpenAPI JSON</a>
+  <a href="/v3/api-docs.yaml" target="_blank" rel="noopener">YAML</a>
+</header>
+<main id="list"><p class="empty">Loading…</p></main>
+<script src="/assets/api.js"></script>
+</body>
+</html>
