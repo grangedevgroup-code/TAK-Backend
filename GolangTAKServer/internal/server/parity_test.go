@@ -1,8 +1,12 @@
 package server
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -109,5 +113,73 @@ func TestParityActiveGroups(t *testing.T) {
 	}
 	if st, _ := doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/TracksKML"), strings.NewReader(""), a); st != 200 {
 		t.Fatalf("TracksKML POST: %d", st)
+	}
+}
+
+func zipNames(t *testing.T, data []byte) []string {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("not a zip: %v", err)
+	}
+	var out []string
+	for _, f := range zr.File {
+		out = append(out, f.Name)
+	}
+	return out
+}
+
+func TestParityDeviceProfiles(t *testing.T) {
+	s := newTestServer(t, nil)
+	a := adminHeaders(t, s)
+	do := func(method, path, body string) (int, []byte) {
+		t.Helper()
+		return doReq(t, http.DefaultClient, method, plainURL(s, path), strings.NewReader(body), a)
+	}
+	if st, b := do("POST", "/Marti/api/device/profile/field-kit", ""); st != 200 {
+		t.Fatalf("create: %d %s", st, b)
+	}
+	if st, b := do("PUT", "/Marti/api/device/profile/field-kit/file?filename=team.pref", "<preferences/>"); st != 200 {
+		t.Fatalf("add file: %d %s", st, b)
+	}
+	st, b := do("GET", "/Marti/api/device/profile/field-kit/files", "")
+	if st != 200 || !strings.Contains(string(b), `"team.pref"`) {
+		t.Fatalf("files: %d %s", st, b)
+	}
+	os.MkdirAll(filepath.Join(s.DataDir, "profiles", "maps"), 0o700)
+	os.WriteFile(filepath.Join(s.DataDir, "profiles", "maps", "area.kml"), []byte("<kml/>"), 0o600)
+	if st, b := do("GET", "/Marti/api/device/profile/directories", ""); st != 200 || !strings.Contains(string(b), `"maps"`) {
+		t.Fatalf("valid directories: %d %s", st, b)
+	}
+	if st, b := do("PUT", "/Marti/api/device/profile/field-kit/directories/maps", ""); st != 200 {
+		t.Fatalf("set directories: %d %s", st, b)
+	}
+	if st, b := do("PUT", "/Marti/api/device/profile/field-kit/directories/..", ""); st != 400 {
+		t.Fatalf("traversal accepted: %d %s", st, b)
+	}
+	st, b = do("GET", "/Marti/api/device/profile/field-kit/missionpackage", "")
+	if names := zipNames(t, b); st != 200 || !slices.Contains(names, "team.pref") || !slices.Contains(names, "maps/area.kml") {
+		t.Fatalf("mission package: %d %v", st, names)
+	}
+	st, b = do("GET", "/Marti/api/device/profile/connection?clientUid=x&syncSecago=0", "")
+	if st != 200 || !slices.Contains(zipNames(t, b), "profile-"+s.shortID()+"/team.pref") {
+		t.Fatalf("connection profile missing named profile: %d", st)
+	}
+	if st, b := do("PUT", "/Marti/api/device/profile/field-kit", `{"type":"Tool","tool":"medic","applyOnConnect":false}`); st != 200 {
+		t.Fatalf("update: %d %s", st, b)
+	}
+	st, b = do("GET", "/Marti/api/device/profile/tool/medic?clientUid=x", "")
+	if st != 200 || !slices.Contains(zipNames(t, b), "profile-medic/team.pref") {
+		t.Fatalf("tool profile: %d", st)
+	}
+	st, b = do("GET", "/Marti/api/device/profile/tool/medic/file?relativePath=maps/area.kml", "")
+	if names := zipNames(t, b); st != 200 || len(names) != 2 || !slices.Contains(names, "maps/area.kml") {
+		t.Fatalf("tool file: %d %v", st, names)
+	}
+	if st, _ := do("DELETE", "/Marti/api/device/profile/field-kit", ""); st != 200 {
+		t.Fatalf("delete: %d", st)
+	}
+	if st, _ := do("GET", "/Marti/api/device/profile/field-kit", ""); st != 404 {
+		t.Fatalf("still there: %d", st)
 	}
 }
