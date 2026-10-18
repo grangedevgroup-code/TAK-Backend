@@ -532,6 +532,14 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 	case "contacts":
 		s.missionContacts(w, r)
 	case "parent":
+		if len(seg) == 3 && seg[1] == "guid" && method == http.MethodPut {
+			r.SetPathValue("parent", seg[2])
+			if p, ok := s.missions.ByGUID(seg[2]); ok {
+				r.SetPathValue("parent", p.Name)
+			}
+			s.missionSetParent(w, r)
+			return
+		}
 		if len(seg) == 2 {
 			r.SetPathValue("parent", seg[1])
 			s.missionSetParent(w, r)
