@@ -73,7 +73,7 @@ jobs:
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/golangtakserver"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tags=$image:$version,$image:latest" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc
         with:
           context: GolangTAKServer
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
