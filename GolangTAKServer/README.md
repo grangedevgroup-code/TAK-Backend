@@ -194,7 +194,8 @@ ATAK checks the certificate on the enrollment port (8446) before it enrolls by Q
 
 | Software | How it connects |
 | --- | --- |
-| ATAK, ATAK-CIV, ATAK-MIL | SSL on 8089 with certificate enrollment, TCP on 8087, QR codes, connection packages, Data Sync, update server |
+| ATAK, ATAK-CIV, ATAK-MIL | SSL on 8089 with certificate enrollment, TCP on 8087, QUIC when a QUIC input is added, QR codes, connection packages, Data Sync, update server |
+| WebTAK and browser TAK clients | TAK protobuf over WebSocket at `/takproto/1` on the HTTPS and WebSocket ports |
 | WinTAK | SSL, TCP, connection packages, Data Sync |
 | iTAK | SSL with quick connect QR and enrollment, TCP, server packages |
 | TAK Aware and other CoT apps | SSL, TCP, UDP, connection packages |
