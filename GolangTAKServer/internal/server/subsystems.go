@@ -164,6 +164,9 @@ func (s *Server) closeSubsystems() {
 	if s.videos != nil {
 		s.videos.Close()
 	}
+	if s.devProfiles != nil {
+		s.devProfiles.Close()
+	}
 	if s.profiles != nil {
 		s.profiles.Close()
 	}
