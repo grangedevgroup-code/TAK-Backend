@@ -65,7 +65,11 @@ func (ca *testCA) crl(t *testing.T, next time.Time, serials ...int64) []byte {
 	for _, s := range serials {
 		entries = append(entries, x509.RevocationListEntry{SerialNumber: big.NewInt(s), RevocationTime: time.Now().Add(-time.Minute)})
 	}
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{Number: big.NewInt(time.Now().UnixNano()), ThisUpdate: time.Now().Add(-time.Minute), NextUpdate: next, RevokedCertificateEntries: entries}, ca.cert, ca.key)
+	this := time.Now().Add(-time.Minute)
+	if !this.Before(next) {
+		this = next.Add(-time.Hour)
+	}
+	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{Number: big.NewInt(time.Now().UnixNano()), ThisUpdate: this, NextUpdate: next, RevokedCertificateEntries: entries}, ca.cert, ca.key)
 	if err != nil {
 		t.Fatal(err)
 	}
