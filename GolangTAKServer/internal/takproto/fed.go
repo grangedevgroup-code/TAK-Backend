@@ -31,13 +31,15 @@ type Provenance struct {
 }
 
 type FedEvent struct {
-	Event       *cot.Event
-	Contact     *ContactEntry
-	Groups      []string
-	Provenance  []Provenance
-	MaxHops     int64
-	CurrentHops int64
-	HopLimits   []byte
+	Event        *cot.Event
+	Contact      *ContactEntry
+	Groups       []string
+	Provenance   []Provenance
+	MaxHops      int64
+	CurrentHops  int64
+	HopLimits    []byte
+	FeedUID      string
+	MissionGUIDs []string
 }
 
 func appendInt(b []byte, field int, v int64) []byte {
@@ -68,6 +70,10 @@ func millisInt(e *cot.Event, which int) int64 {
 }
 
 func MarshalGeoEvent(e *cot.Event) []byte {
+	return marshalGeo(e, "", nil)
+}
+
+func marshalGeo(e *cot.Event, feedUID string, missionGUIDs []string) []byte {
 	var b []byte
 	b = appendInt(b, 1, millisInt(e, 0))
 	b = appendInt(b, 2, millisInt(e, 1))
@@ -132,17 +138,19 @@ func MarshalGeoEvent(e *cot.Event) []byte {
 	}
 	b = appendRepeated(b, 23, ptpUIDs)
 	b = appendRepeated(b, 24, ptpCallsigns)
+	b = appendString(b, 25, feedUID)
 	b = appendRepeated(b, 26, missions)
 	b = appendString(b, 27, e.Access)
 	b = appendString(b, 28, e.Caveat)
 	b = appendString(b, 29, e.Releasable)
+	b = appendRepeated(b, 31, missionGUIDs)
 	return b
 }
 
 func MarshalFed(f FedEvent) []byte {
 	var b []byte
 	if f.Event != nil {
-		b = appendBytes(b, 1, MarshalGeoEvent(f.Event))
+		b = appendBytes(b, 1, marshalGeo(f.Event, f.FeedUID, f.MissionGUIDs))
 	}
 	if c := f.Contact; c != nil {
 		var cb []byte
@@ -183,6 +191,8 @@ type geo struct {
 	ptpUIDs, ptpCallsigns, missions []string
 	access, caveat, releasable      string
 	image                           []byte
+	feedUID                         string
+	missionGUIDs                    []string
 }
 
 func UnmarshalFed(b []byte) (*FedEvent, error) {
@@ -193,11 +203,11 @@ func UnmarshalFed(b []byte) (*FedEvent, error) {
 			if fd.wire != wireBytes {
 				return ErrWireType
 			}
-			e, err := unmarshalGeo(fd.bytes)
+			e, g, err := unmarshalGeo(fd.bytes)
 			if err != nil {
 				return err
 			}
-			f.Event = e
+			f.Event, f.FeedUID, f.MissionGUIDs = e, g.feedUID, g.missionGUIDs
 		case 2:
 			if fd.wire != wireBytes {
 				return ErrWireType
@@ -264,7 +274,7 @@ func UnmarshalFed(b []byte) (*FedEvent, error) {
 	return f, nil
 }
 
-func unmarshalGeo(b []byte) (*cot.Event, error) {
+func unmarshalGeo(b []byte) (*cot.Event, geo, error) {
 	var g geo
 	err := eachField(b, func(f field) error {
 		switch f.num {
@@ -312,6 +322,8 @@ func unmarshalGeo(b []byte) (*cot.Event, error) {
 			g.ptpUIDs = append(g.ptpUIDs, f.str())
 		case 24:
 			g.ptpCallsigns = append(g.ptpCallsigns, f.str())
+		case 25:
+			g.feedUID = f.str()
 		case 26:
 			g.missions = append(g.missions, f.str())
 		case 27:
@@ -320,17 +332,19 @@ func unmarshalGeo(b []byte) (*cot.Event, error) {
 			g.caveat = f.str()
 		case 29:
 			g.releasable = f.str()
+		case 31:
+			g.missionGUIDs = append(g.missionGUIDs, f.str())
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, g, err
 	}
 	if g.uid == "" {
-		return nil, cot.ErrNoUID
+		return nil, g, cot.ErrNoUID
 	}
 	if g.typ == "" {
-		return nil, cot.ErrNoType
+		return nil, g, cot.ErrNoType
 	}
 	e := &cot.Event{Version: "2.0", UID: g.uid, Type: g.typ, How: g.how,
 		Time: fromMillis(uint64(max(g.send, 0))), Start: fromMillis(uint64(max(g.start, 0))), Stale: fromMillis(uint64(max(g.stale, 0))),
@@ -379,7 +393,7 @@ func unmarshalGeo(b []byte) (*cot.Event, error) {
 		e.SetDests(dests)
 	}
 	e.Normalize()
-	return e, nil
+	return e, g, nil
 }
 
 func FedFrame(payload []byte) []byte {

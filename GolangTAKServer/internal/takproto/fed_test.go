@@ -2,10 +2,12 @@ package takproto
 
 import (
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/xmltree"
 )
 
 func TestFedEventFeedAndMissionGUIDs(t *testing.T) {
@@ -28,7 +30,8 @@ func TestFedEventFeedAndMissionGUIDs(t *testing.T) {
 func TestGeoEventMatchesOfficialDetailHandling(t *testing.T) {
 	e := cot.New("GEO-1", "a-f-G-U-C", "m-g", time.Minute)
 	e.Point = cot.Point{Lat: 10, Lon: 20, Hae: 30, Ce: 9, Le: 9}
-	d := e.EnsureDetail()
+	d := xmltree.New("detail")
+	e.Detail = d
 	d.AddNew("track", "speed", "12.5", "course", "270")
 	d.AddNew("status", "battery", "88")
 	d.AddNew("precisionlocation", "geopointsrc", "GPS", "altsrc", "DTED0")
@@ -38,7 +41,8 @@ func TestGeoEventMatchesOfficialDetailHandling(t *testing.T) {
 		t.Fatal(err)
 	}
 	od := out.Event.Detail
-	if tr := od.Child("track"); tr == nil || tr.Attr("speed") != "12.5" || tr.Attr("course") != "270" {
+	num := func(v string) float64 { f, _ := strconv.ParseFloat(v, 64); return f }
+	if tr := od.Child("track"); tr == nil || num(tr.Attr("speed")) != 12.5 || num(tr.Attr("course")) != 270 {
 		t.Fatalf("track %v", od)
 	}
 	if st := od.Child("status"); st == nil || st.Attr("battery") != "88" {
@@ -50,7 +54,7 @@ func TestGeoEventMatchesOfficialDetailHandling(t *testing.T) {
 	if c := od.Child("contact"); c == nil || c.Attr("callsign") != "ALPHA" {
 		t.Fatalf("contact %v", od)
 	}
-	if n := len(od.Children("track")); n != 1 {
+	if n := len(od.All("track")); n != 1 {
 		t.Fatalf("%d track elements", n)
 	}
 }

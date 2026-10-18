@@ -409,6 +409,23 @@ func (s *Server) fedOutEvent(c *Client, m *Message) (takproto.FedEvent, bool) {
 	e := m.Event.Clone()
 	e.AddFlowTag(s.FlowKey(), time.Now())
 	f := takproto.FedEvent{Event: e, Groups: groups, Provenance: []takproto.Provenance{{ServerID: cfg.NodeID, ServerName: cfg.Name}}, MaxHops: maxHops, CurrentHops: hops}
+	if m.Feed != "" && !cfg.Federation.NoDataFeeds {
+		for _, df := range cfg.DataFeeds {
+			if df.UUID == m.Feed {
+				f.FeedUID = m.Feed
+			}
+		}
+	}
+	if s.missions != nil {
+		for _, d := range e.Dests() {
+			if d.Mission == "" {
+				continue
+			}
+			if ms, ok := s.missions.Get(d.Mission); ok && ms.GUID != "" {
+				f.MissionGUIDs = append(f.MissionGUIDs, ms.GUID)
+			}
+		}
+	}
 	if f.CurrentHops > f.MaxHops {
 		return takproto.FedEvent{}, false
 	}
@@ -457,8 +474,28 @@ func (s *Server) federatedIn(c *Client, f *takproto.FedEvent) {
 		if e.FlowTag(s.FlowKey()) != "" || e.UID == s.UID() {
 			return
 		}
+		if s.missions != nil && len(f.MissionGUIDs) > 0 {
+			has := false
+			for _, d := range e.Dests() {
+				has = has || d.Mission != ""
+			}
+			if !has {
+				dests := e.Dests()
+				for _, g := range f.MissionGUIDs {
+					if ms, ok := s.missions.ByGUID(g); ok {
+						dests = append(dests, cot.Dest{Mission: ms.Name})
+					}
+				}
+				e.SetDests(dests)
+			}
+		}
 		m := NewMessage(e, c, mask)
 		m.Hops = f.CurrentHops
+		if f.FeedUID != "" {
+			if _, ok := s.dataFeedConfig(f.FeedUID); ok {
+				m.Feed = f.FeedUID
+			}
+		}
 		if c.fedPol() != nil && c.fedPol().noArchive {
 			m.NoHistory = true
 		}
