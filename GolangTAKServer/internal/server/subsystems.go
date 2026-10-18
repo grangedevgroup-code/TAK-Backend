@@ -34,6 +34,9 @@ func (s *Server) initSubsystems() error {
 	if s.profiles, err = OpenProfiles(s.DataDir); err != nil {
 		return err
 	}
+	if s.devProfiles, err = openDeviceProfiles(s.DataDir); err != nil {
+		return err
+	}
 	if s.props, err = openProps(s.DataDir); err != nil {
 		return err
 	}
