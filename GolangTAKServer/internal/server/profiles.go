@@ -165,6 +165,7 @@ func (s *Server) profileEntries(enrollment bool, clientUID string, secago int64)
 			b.prefs = append(b.prefs, prefEntry{Key: it.Key, Class: javaClass(it.Class), Value: it.Value})
 		}
 	}
+	b.files = append(b.files, s.namedProfileFiles(enrollment, "", groups, cut)...)
 	for _, pl := range s.profiles.Plugins() {
 		if (enrollment && !pl.Enrollment) || (!enrollment && !pl.Connection) {
 			continue
