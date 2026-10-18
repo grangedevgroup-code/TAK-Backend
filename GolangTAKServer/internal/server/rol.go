@@ -191,8 +191,8 @@ func (s *Server) rolFor(t rolTarget, rol takproto.ROL, groups []string) (takprot
 	rol.Provenance = append(slices.Clone(rol.Provenance), takproto.Provenance{ServerID: cfg.NodeID, ServerName: cfg.Name})
 	if rol.MaxHops == 0 {
 		rol.MaxHops = int64(cfg.Federation.MaxHops)
-		if t.c.fed != nil {
-			rol.MaxHops = int64(t.c.fed.maxHops)
+		if t.c.fedPol() != nil {
+			rol.MaxHops = int64(t.c.fedPol().maxHops)
 		}
 	}
 	rol.CurrentHops++
@@ -330,8 +330,8 @@ func (s *Server) rolPermitted(c *Client, rol takproto.ROL) bool {
 	if resource == "data_feed" && cfg.Federation.NoDataFeeds {
 		return false
 	}
-	if c != nil && c.fed != nil {
-		if name := rolMissionOf(rol); name != "" && !c.fed.missionAllowed(name) {
+	if c != nil && c.fedPol() != nil {
+		if name := rolMissionOf(rol); name != "" && !c.fedPol().missionAllowed(name) {
 			return false
 		}
 	}
@@ -355,7 +355,7 @@ func (s *Server) snapshotSince(t rolTarget, m Mission) time.Time {
 	if !d.Enabled || t.c == nil {
 		return time.Time{}
 	}
-	last := s.federateLastSeen(t.c.fed)
+	last := s.federateLastSeen(t.c.fedPol())
 	if last.IsZero() {
 		return time.Time{}
 	}

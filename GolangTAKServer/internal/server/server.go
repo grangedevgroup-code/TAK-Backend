@@ -225,6 +225,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 		s.pki.SetExternal(next.Certificates.External)
 	}
 	s.level.Set(ParseLevel(next.LogLevel))
+	s.refreshFedPolicies()
 	return next, nil
 }
 

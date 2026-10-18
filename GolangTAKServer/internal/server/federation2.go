@@ -143,7 +143,7 @@ func (f *fig2Server) release(ss *fig2Session) {
 	f.mu.Unlock()
 	if last {
 		close(ss.done)
-		f.s.noteFederate(ss.c.fed, ss.remote, "v2", "inbound", nil, false)
+		f.s.noteFederate(ss.c.fedPol(), ss.remote, "v2", "inbound", nil, false)
 		f.s.fed.remove(ss.c)
 		f.s.hub.Remove(ss.c)
 		f.s.log.Info("federate disconnected", "federate", ss.name, "version", "v2")
@@ -243,7 +243,7 @@ func (f *fig2Server) serve(w http.ResponseWriter, r *http.Request) {
 				f.mu.Lock()
 				ss.groups = g.Groups
 				f.mu.Unlock()
-				f.s.noteRemoteGroups(ss.c.fed, g.Groups)
+				f.s.noteRemoteGroups(ss.c.fedPol(), g.Groups)
 			}
 		}
 	case "ClientROLStream":
@@ -272,7 +272,7 @@ func (f *fig2Server) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if rol, err := takproto.UnmarshalROL(msg); err == nil {
-				f.s.handleROL(ss.c, rol, ss.c.fed.in, f.nodeOf(ss))
+				f.s.handleROL(ss.c, rol, ss.c.fedPol().in, f.nodeOf(ss))
 			}
 		}
 	case "BinaryMessageStream":

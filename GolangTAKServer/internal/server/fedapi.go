@@ -420,7 +420,7 @@ func (s *Server) fedContacts(w http.ResponseWriter, r *http.Request) {
 	f, _ := s.federateRecord(id)
 	out := []map[string]any{}
 	for _, fc := range s.fed.clients() {
-		p := fc.c.fed
+		p := fc.c.fedPol()
 		if p == nil || !(p.id == normFingerprint(id) || p.id == normFingerprint(f.ID) || strings.EqualFold(p.name, id) || strings.EqualFold(p.name, f.Name)) {
 			continue
 		}

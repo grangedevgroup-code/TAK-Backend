@@ -116,6 +116,7 @@ func chainCAFingerprint(chains [][]*x509.Certificate) string {
 }
 
 type fedPolicy struct {
+	link      []string
 	id        string
 	name      string
 	caFP      string
@@ -163,7 +164,7 @@ func (c FederationConfig) federateCA(fp string) (FederateCAConfig, bool) {
 
 func (s *Server) fedPolicyFor(id, name, caFP string, linkGroups []string) *fedPolicy {
 	cfg := s.Config().Federation
-	p := &fedPolicy{id: normFingerprint(id), name: name, caFP: normFingerprint(caFP), in: slices.Clone(cfg.Groups), out: slices.Clone(cfg.Groups), maxHops: cfg.MaxHops, missionOn: true}
+	p := &fedPolicy{link: slices.Clone(linkGroups), id: normFingerprint(id), name: name, caFP: normFingerprint(caFP), in: slices.Clone(cfg.Groups), out: slices.Clone(cfg.Groups), maxHops: cfg.MaxHops, missionOn: true}
 	if len(linkGroups) > 0 {
 		p.in, p.out = slices.Clone(linkGroups), slices.Clone(linkGroups)
 	}
@@ -233,12 +234,12 @@ func (s *Server) fedClient(kind, name, remote string, p *fedPolicy) *Client {
 	c := s.hub.NewClient(kind, remote, id)
 	c.Name = name
 	c.authed.Store(true)
-	c.fed = p
+	c.fedp.Store(p)
 	return c
 }
 
 func (s *Server) inboundMask(c *Client, remote []string) (GroupMask, bool) {
-	p := c.fed
+	p := c.fedPol()
 	if p == nil || len(remote) == 0 {
 		return c.InMask(), true
 	}
@@ -268,7 +269,7 @@ func (s *Server) inboundMask(c *Client, remote []string) (GroupMask, bool) {
 }
 
 func (s *Server) outboundGroups(c *Client, m *Message, hops int64) ([]string, bool) {
-	p := c.fed
+	p := c.fedPol()
 	out := []string{}
 	if p != nil {
 		out = p.out
@@ -401,4 +402,26 @@ func zipEntryNames(data []byte) []string {
 		out = append(out, f.Name)
 	}
 	return out
+}
+
+func (s *Server) refreshFedPolicies() {
+	if s.fed == nil {
+		return
+	}
+	for _, fc := range s.fed.clients() {
+		old := fc.c.fedPol()
+		if old == nil {
+			continue
+		}
+		p := s.fedPolicyFor(old.id, old.name, old.caFP, old.link)
+		p.name = old.name
+		fc.c.fedp.Store(p)
+		in, out := s.dir.Mask(p.in), s.dir.Mask(p.out)
+		if !in.Empty() || !out.Empty() {
+			fc.c.SetIdentity(&Identity{Via: KindFederation, In: in, Out: out, Anon: true})
+		}
+		if p.disabled {
+			fc.c.Close()
+		}
+	}
 }

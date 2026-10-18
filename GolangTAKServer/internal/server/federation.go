@@ -375,7 +375,7 @@ func (s *Server) fedOutEvent(c *Client, m *Message) (takproto.FedEvent, bool) {
 	}
 	cfg := s.Config()
 	maxHops := int64(cfg.Federation.MaxHops)
-	if p := c.fed; p != nil {
+	if p := c.fedPol(); p != nil {
 		maxHops = int64(p.maxHops)
 		if p.noAlerts && m.Event.Is("b-a-") {
 			return takproto.FedEvent{}, false
@@ -452,7 +452,7 @@ func (s *Server) federatedIn(c *Client, f *takproto.FedEvent) {
 		}
 		m := NewMessage(e, c, mask)
 		m.Hops = f.CurrentHops
-		if c.fed != nil && c.fed.noArchive {
+		if c.fedPol() != nil && c.fedPol().noArchive {
 			m.NoHistory = true
 		}
 		s.hub.Identify(c, m)

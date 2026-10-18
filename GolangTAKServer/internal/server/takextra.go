@@ -285,12 +285,25 @@ func (s *Server) vbmSet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) activeConnections(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
+	links := map[string]bool{}
 	for _, p := range s.peerStatus() {
 		if p.State != "connected" {
 			continue
 		}
+		links[p.Name] = true
 		out = append(out, map[string]any{"federateId": p.Name, "connectionId": p.URL, "remoteAddress": p.URL, "direction": strings.ToUpper(p.Direction),
 			"connectionStatusValue": "CONNECTED", "since": p.Since, "messagesReceived": p.Rx, "messagesSent": p.Tx})
+	}
+	for _, fc := range s.fed.clients() {
+		if fc.dir != "inbound" || links[fc.name] {
+			continue
+		}
+		id := fc.name
+		if fc.c.fedPol() != nil && fc.c.fedPol().id != "" {
+			id = colonFingerprint(fc.c.fedPol().id)
+		}
+		out = append(out, map[string]any{"federateId": id, "name": fc.name, "connectionId": fc.c.Remote, "remoteAddress": remoteIP(fc.c.Remote), "direction": "INBOUND",
+			"connectionStatusValue": "CONNECTED", "since": fc.since, "messagesReceived": fc.c.rx.Load(), "messagesSent": fc.c.tx.Load(), "version": fc.version})
 	}
 	writeJSON(w, http.StatusOK, s.envelope("com.bbn.marti.network.FederationApi.ConnectionInfoSummary", out))
 }

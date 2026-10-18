@@ -201,6 +201,8 @@ func (s *Server) routes() *http.ServeMux {
 	s.takAdminRoutes(m, a)
 	s.retentionRoutes(a)
 	s.qosRoutes(a)
+	s.federationAPIRoutes(a)
+	pub("GET /Marti/api/cadownload", s.fedCADownload)
 	a("POST /Marti/api/generateFederationJwtToken", s.martiGenerateFedToken)
 	a("POST /Marti/api/generateAndSaveFederationJwtToken", s.martiGenerateAndSaveFedToken)
 
