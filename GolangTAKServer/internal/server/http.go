@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
@@ -21,7 +22,23 @@ const (
 	keyIdentity ctxKey = iota
 	keyListener
 	keySession
+	keyReqInfo
 )
+
+type reqInfo struct {
+	id *Identity
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijacking is not supported")
+	}
+	if r.status == 0 {
+		r.status = http.StatusSwitchingProtocols
+	}
+	return h.Hijack()
+}
 
 const sessionCookie = "golangtakserver_session"
 
@@ -30,7 +47,7 @@ func (s *Server) newHTTPServer(h http.Handler, tlsCfg *tls.Config) *http.Server 
 		Handler:           h,
 		ReadHeaderTimeout: 20 * time.Second,
 		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+		MaxHeaderBytes:    s.maxHeaderBytes(),
 		ErrorLog:          log.New(io.Discard, "", 0),
 		TLSConfig:         tlsCfg,
 		TLSNextProto:      map[string]func(*http.Server, *tls.Conn, http.Handler){},
@@ -67,7 +84,7 @@ func (s *Server) serveHTTP(port int, name string, h http.Handler, tlsCfg *tls.Co
 }
 
 func (s *Server) enrollTLSConfig() *tls.Config {
-	return &tls.Config{
+	return s.tuneTLS(&tls.Config{
 		MinVersion: tls.VersionTLS12,
 		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			if c := s.publicCertFor(hello); c != nil {
@@ -75,7 +92,7 @@ func (s *Server) enrollTLSConfig() *tls.Config {
 			}
 			return s.pki.ServerCert(), nil
 		},
-	}
+	})
 }
 
 func (s *Server) startHTTP() error {
@@ -115,7 +132,18 @@ func (s *Server) recoverer(h http.Handler) http.Handler {
 			}
 		}()
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		h.ServeHTTP(w, r)
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w}
+		ri := &reqInfo{}
+		r = r.WithContext(context.WithValue(r.Context(), keyReqInfo, ri))
+		if s.webPolicy(rec, r) {
+			h.ServeHTTP(rec, r)
+		}
+		if ri.id != nil {
+			r = r.WithContext(context.WithValue(r.Context(), keyIdentity, ri.id))
+		}
+		s.logAccess(r, rec, start)
+		s.audit(r, ri.id, max(rec.status, 200))
 	})
 }
 
@@ -259,6 +287,9 @@ func (s *Server) guard(level access, h http.HandlerFunc) http.HandlerFunc {
 		ctx := r.Context()
 		if id != nil {
 			ctx = context.WithValue(ctx, keyIdentity, id)
+			if ri, ok := ctx.Value(keyReqInfo).(*reqInfo); ok {
+				ri.id = id
+			}
 		}
 		if sess != nil {
 			ctx = context.WithValue(ctx, keySession, sess)

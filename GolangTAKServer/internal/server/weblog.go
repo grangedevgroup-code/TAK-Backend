@@ -205,3 +205,10 @@ func validWebConfig(wc WebConfig) error {
 type configError struct{ msg string }
 
 func (e *configError) Error() string { return e.msg }
+
+func (s *Server) maxHeaderBytes() int {
+	if kb := s.Config().Web.MaxHTTPHeaderKB; kb > 0 {
+		return kb << 10
+	}
+	return 1 << 20
+}

@@ -247,6 +247,7 @@ type Config struct {
 	OAuth          OAuthConfig         `json:"oauth"`
 	QoS            QoSConfig           `json:"qos"`
 	MissionPolicy  MissionPolicy       `json:"missionPolicy"`
+	Web            WebConfig           `json:"web"`
 	ACME           ACMEConfig          `json:"letsEncrypt"`
 	TileURL        string              `json:"tileUrl"`
 	LogLevel       string              `json:"logLevel"`

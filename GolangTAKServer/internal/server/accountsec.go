@@ -314,8 +314,12 @@ func (s *Server) startLogin(w http.ResponseWriter, r *http.Request, u User) bool
 }
 
 func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request, u User) {
-	sess := s.dir.NewSession(u, 12*time.Hour)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: 12 * 3600}) // #nosec G124 nosemgrep -- Secure whenever the request arrived over TLS; plain HTTP is a LAN option
+	ttl := 12 * time.Hour
+	if m := s.Config().Web.SessionMinutes; m > 0 {
+		ttl = time.Duration(m) * time.Minute
+	}
+	sess := s.dir.NewSession(u, ttl)
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: int(ttl / time.Second)}) // #nosec G124 nosemgrep -- Secure whenever the request arrived over TLS; plain HTTP is a LAN option
 	s.log.Info("dashboard sign-in", "user", u.Name, "remote", requestIP(r))
 	writeJSON(w, http.StatusOK, map[string]any{"user": u.Name, "admin": u.Admin, "csrf": sess.CSRF})
 }

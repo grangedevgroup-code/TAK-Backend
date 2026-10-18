@@ -26,7 +26,7 @@ func (s *Server) streamTLSConfig(requireCert bool) *tls.Config {
 		auth = tls.RequireAndVerifyClientCert
 	}
 	build := func() *tls.Config {
-		return &tls.Config{
+		return s.tuneTLS(&tls.Config{
 			MinVersion: tls.VersionTLS12,
 			ClientAuth: auth,
 			ClientCAs:  s.pki.ClientPool(),
@@ -39,7 +39,7 @@ func (s *Server) streamTLSConfig(requireCert bool) *tls.Config {
 				}
 				return nil
 			},
-		}
+		})
 	}
 	cfg := build()
 	cfg.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {

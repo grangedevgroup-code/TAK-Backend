@@ -74,6 +74,7 @@ type Server struct {
 	cotSearch   cotSearches
 	drops       dropCounter
 	intercept   interceptorSet
+	weblogs     *webLogs
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
@@ -161,6 +162,8 @@ func newServer(dataDir string, opts Options) (*Server, error) {
 	s.level.Set(ParseLevel(cfg.LogLevel))
 	s.logs = NewLogBuffer(filepath.Join(dataDir, "logs", "golangtakserver.log"), opts.Console)
 	s.log = NewLogger(s.logs, s.level)
+	jsonLogs.Store(cfg.Web.JSONLogs)
+	s.openWebLogs()
 	if s.dir, err = OpenDirectory(filepath.Join(dataDir, "db"), cfg.AnonymousGroup); err != nil {
 		s.logs.Close()
 		return nil, err
@@ -231,6 +234,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 		s.pki.SetExternal(next.Certificates.External)
 	}
 	s.level.Set(ParseLevel(next.LogLevel))
+	jsonLogs.Store(next.Web.JSONLogs)
 	s.refreshFedPolicies()
 	return next, nil
 }
@@ -450,6 +454,7 @@ func (s *Server) Stop() {
 			s.log.Info("GolangTAKServer stopped")
 		}
 		s.logs.Close()
+		s.closeWebLogs()
 		s.lock.Release()
 	})
 }

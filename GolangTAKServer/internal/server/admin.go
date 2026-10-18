@@ -959,6 +959,9 @@ func validateConfig(c *Config) error {
 			return err
 		}
 	}
+	if err := validWebConfig(c.Web); err != nil {
+		return err
+	}
 	names := map[string]bool{}
 	for _, in := range c.Inputs {
 		if err := validateInput(in); err != nil {
