@@ -193,6 +193,7 @@ func (s *Server) martiToolProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		prefs = append(prefs, prefEntry{Key: it.Key, Class: javaClass(it.Class), Value: it.Value})
 	}
+	files = append(files, s.namedProfileFiles(false, tool, groups, cut)...)
 	if len(prefs) == 0 && len(files) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
