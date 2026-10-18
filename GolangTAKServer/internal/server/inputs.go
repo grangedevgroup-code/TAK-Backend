@@ -27,6 +27,7 @@ type InputConfig struct {
 	NoArchive    bool     `json:"noArchive,omitempty"`
 	ArchiveOnly  bool     `json:"archiveOnly,omitempty"`
 	CoreVersion  int      `json:"coreVersion,omitempty"`
+	QUICTimeout  int      `json:"quicConnectionTimeoutSeconds,omitempty"`
 	Disabled     bool     `json:"disabled,omitempty"`
 }
 
@@ -35,7 +36,7 @@ func (in InputConfig) proto() string { return strings.ToLower(firstNonEmpty(in.P
 func (in InputConfig) auth() string {
 	a := strings.ToLower(in.Auth)
 	if a == "" {
-		if in.proto() == "tls" || in.proto() == "ssl" {
+		if in.proto() == "tls" || in.proto() == "ssl" || in.proto() == "quic" {
 			return "x509"
 		}
 		return "anonymous"
@@ -71,9 +72,9 @@ func validateInput(in InputConfig) error {
 		return errors.New("an input needs a name")
 	}
 	switch in.proto() {
-	case "tcp", "stcp", "tls", "ssl", "udp", "mcast", "multicast":
+	case "tcp", "stcp", "tls", "ssl", "quic", "udp", "mcast", "multicast":
 	default:
-		return fmt.Errorf("input %s: protocol %q is not supported; use tcp, stcp, tls, udp or mcast", in.Name, in.Protocol)
+		return fmt.Errorf("input %s: protocol %q is not supported; use tcp, stcp, tls, quic, udp or mcast", in.Name, in.Protocol)
 	}
 	if in.Port <= 0 || in.Port > 65535 {
 		return fmt.Errorf("input %s: port %d is out of range", in.Name, in.Port)
@@ -187,6 +188,34 @@ func (s *Server) startInput(ctx context.Context, in *InputConfig, st *inputStats
 					st.clients.Add(1)
 					defer st.clients.Add(-1)
 					s.serveStreamInput(conn, kind, in, st)
+				}()
+			}
+		}()
+		return nil
+	case "quic":
+		addr := s.addr(in.Port)
+		pc, err := net.ListenPacket("udp", addr)
+		if err != nil {
+			return portError("udp", addr, err)
+		}
+		timeout := time.Duration(firstNonZero(in.QUICTimeout, 30)) * time.Second
+		ln := quic.Listen(pc, s.streamTLSConfig(in.auth() == "x509"), timeout)
+		ln.MaxConns = s.Config().Limits.MaxClients
+		context.AfterFunc(ctx, func() { ln.Close() })
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			for {
+				qs, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() {
+					stop := context.AfterFunc(ctx, func() { qs.Close() })
+					defer stop()
+					st.clients.Add(1)
+					defer st.clients.Add(-1)
+					s.serveStreamInput(qs, KindQUIC, in, st)
 				}()
 			}
 		}()
