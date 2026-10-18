@@ -3,6 +3,7 @@ package revocation
 import (
 	"bytes"
 	"crypto"
+	"crypto/rand"
 	"crypto/sha1"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -338,7 +339,7 @@ func CreateResponse(issuer, responder *x509.Certificate, key crypto.Signer, seri
 	default:
 		return nil, errors.New("ocsp: unsupported responder key")
 	}
-	sig, err := key.Sign(nil, digest, opts)
+	sig, err := key.Sign(rand.Reader, digest, opts)
 	if err != nil {
 		return nil, err
 	}

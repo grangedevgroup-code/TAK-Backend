@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -33,7 +32,7 @@ type crlFile struct {
 	path  string
 	mtime time.Time
 	size  int64
-	lists []*x509.RevocationList
+	lists []*CRL
 }
 
 type cacheEntry struct {
@@ -62,34 +61,6 @@ func (c *Checker) warn(msg string, args ...any) {
 	if c.Warn != nil {
 		c.Warn(msg, args...)
 	}
-}
-
-func ParseCRLs(data []byte) ([]*x509.RevocationList, error) {
-	var out []*x509.RevocationList
-	rest := data
-	for {
-		var b *pem.Block
-		b, rest = pem.Decode(rest)
-		if b == nil {
-			break
-		}
-		if b.Type != "X509 CRL" {
-			continue
-		}
-		l, err := x509.ParseRevocationList(b.Bytes)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, l)
-	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	l, err := x509.ParseRevocationList(data)
-	if err != nil {
-		return nil, err
-	}
-	return []*x509.RevocationList{l}, nil
 }
 
 func loadCRLFile(path string) (*crlFile, error) {
@@ -174,7 +145,7 @@ func (c *Checker) CRLs() []CRLInfo {
 			continue
 		}
 		for _, l := range f.lists {
-			out = append(out, CRLInfo{File: f.path, Issuer: l.Issuer.String(), ThisUpdate: l.ThisUpdate, NextUpdate: l.NextUpdate, Revoked: len(l.RevokedCertificateEntries), Loaded: true})
+			out = append(out, CRLInfo{File: f.path, Issuer: l.Issuer, ThisUpdate: l.ThisUpdate, NextUpdate: l.NextUpdate, Revoked: l.Revoked(), Loaded: true})
 		}
 	}
 	return out
@@ -186,10 +157,8 @@ func (c *Checker) crlStatus(cert, issuer *x509.Certificate, now time.Time) (dete
 			if !bytes.Equal(l.RawIssuer, issuer.RawSubject) || l.CheckSignatureFrom(issuer) != nil {
 				continue
 			}
-			for _, e := range l.RevokedCertificateEntries {
-				if e.SerialNumber != nil && e.SerialNumber.Cmp(cert.SerialNumber) == 0 {
-					return true, ErrRevoked
-				}
+			if l.Lists(cert.SerialNumber) {
+				return true, ErrRevoked
 			}
 			if l.NextUpdate.IsZero() || now.Before(l.NextUpdate) {
 				determined = true
@@ -219,8 +188,8 @@ func (c *Checker) ocspStatus(ctx context.Context, cert, issuer *x509.Certificate
 		until = now.Add(time.Hour)
 		if !res.NextUpdate.IsZero() && res.NextUpdate.After(now) {
 			until = res.NextUpdate
-			if cap := now.Add(24 * time.Hour); until.After(cap) {
-				until = cap
+			if limit := now.Add(24 * time.Hour); until.After(limit) {
+				until = limit
 			}
 		}
 	}
