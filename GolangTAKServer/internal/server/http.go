@@ -113,7 +113,7 @@ func (s *Server) startHTTP() error {
 		}
 	}
 	if cfg.Ports.WebSocket > 0 {
-		if err := s.serveHTTP(cfg.Ports.WebSocket, "websocket", http.HandlerFunc(s.serveCoTWebSocket), nil); err != nil {
+		if err := s.serveHTTP(cfg.Ports.WebSocket, "websocket", http.HandlerFunc(s.serveWebSocketPort), nil); err != nil {
 			return err
 		}
 	}

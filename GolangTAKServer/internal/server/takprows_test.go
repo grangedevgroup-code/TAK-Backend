@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -35,7 +36,7 @@ func readTakProtoWS(t *testing.T, conn *websocket.Conn, uid string) {
 		if op != websocket.OpBinary || len(data) == 0 || data[0] != takproto.Magic {
 			t.Fatalf("expected a binary TAK protobuf stream frame, got op %d %q", op, data)
 		}
-		fr := takproto.NewReader(bytesReader(data), 1<<20)
+		fr := takproto.NewReader(bytes.NewReader(data), 1<<20)
 		f, err := fr.Next()
 		if err != nil || !f.Proto {
 			t.Fatalf("frame %v %v", f, err)

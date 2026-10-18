@@ -207,6 +207,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.ldapMgmtRoutes(a)
 	s.federationAPIRoutes(a)
 	pub("GET /Marti/api/cadownload", s.fedCADownload)
+	pub("GET /takproto/1", s.serveTakProtoWebSocket)
 	a("POST /Marti/api/generateFederationJwtToken", s.martiGenerateFedToken)
 	a("POST /Marti/api/generateAndSaveFederationJwtToken", s.martiGenerateAndSaveFedToken)
 
