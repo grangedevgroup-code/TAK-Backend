@@ -286,6 +286,17 @@ More federation settings under **Server links**, **Federation**:
 
 Turn on **Server links**, **Federation hub** to broker traffic between partner servers. Each partner links or federates with this server once, and rules decide whose traffic reaches whom, optionally limited to certain CoT types (for example only positions from partner A to partner B, everything from partner B to all). **Broker only** keeps federated traffic off this server's own devices. TAK Servers federate with the hub the usual way (federation v2 on port 9001, or v1 on 9000).
 
+**Hub policy.** For the policy model of the TAK Federation Hub, add nodes and rules under **Hub policy**:
+
+| Node | Matches |
+| --- | --- |
+| CA group | Every federate whose certificate a CA issued. **Interconnected** lets federates of the same CA share everything with each other, and **Token sign-in** lets them get a token instead of using mutual TLS. |
+| Token group | Holders of hub tokens. Generate tokens there and give them to the other server's administrator; revoking a token disconnects whoever uses it. |
+| Outgoing connection | A link or federation connection this server makes. |
+| Single federate | One federate by name (names may end with `*`) or certificate fingerprint. |
+
+Rules are one way, from one node to another, and filter by group like the hub: allow all messages, only messages in allowed groups, none in disallowed groups, or both, with group sets for groups used together, and optionally only some CoT types. **Refuse federates that do not match a node** turns away anyone outside the policy. The same policy is available at `/api/fedhub/policy`, with tokens under `/api/fedhub/nodes/ID/tokens` and current connections at `/api/fedhub/connections`.
+
 ## Clusters
 
 Run several servers as one, for more devices or so a server can fail without taking everyone offline. Devices connect to any node with the same certificates and see everyone on every node. Users, groups, certificates, missions, files, devices, data packages and pending chats are shared, and live traffic passes between all nodes.
