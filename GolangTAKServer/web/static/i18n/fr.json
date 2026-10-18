@@ -1532,5 +1532,9 @@
  "Secret access key": "Clé d'accès secrète",
  "Last sent": "Dernier envoi",
  "{n} values sent": "{n} valeurs envoyées",
- "Waiting for the first send.": "En attente du premier envoi."
+ "Waiting for the first send.": "En attente du premier envoi.",
+ "Registration code": "Code d'inscription",
+ "only if you were given one": "seulement si on vous en a donné un",
+ "Registration whitelist": "Liste blanche d'inscription",
+ "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Comme la liste blanche de TAK Server : un domaine de messagerie par ligne (* pour tous). token= réserve la ligne aux personnes ayant ce code d'inscription, group= et groups= définissent les groupes du nouveau compte, et private donne au domaine son propre groupe. Avec des lignes ici, seuls les domaines listés peuvent s'inscrire."
 }

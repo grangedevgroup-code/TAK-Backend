@@ -1575,5 +1575,9 @@
  "Secret access key": "Секретний ключ доступу",
  "Last sent": "Останнє надсилання",
  "{n} values sent": "Надіслано значень: {n}",
- "Waiting for the first send.": "Очікування першого надсилання."
+ "Waiting for the first send.": "Очікування першого надсилання.",
+ "Registration code": "Код реєстрації",
+ "only if you were given one": "лише якщо вам його надали",
+ "Registration whitelist": "Білий список реєстрації",
+ "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register.": "Як білий список TAK Server: один поштовий домен на рядок (* для будь-якого). token= дозволяє використовувати рядок лише тим, хто має цей код реєстрації, group= і groups= задають групи нового облікового запису, а private дає домену власну групу. Якщо тут є рядки, зареєструватися можуть лише перелічені домени."
 }

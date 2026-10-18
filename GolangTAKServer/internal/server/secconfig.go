@@ -229,7 +229,8 @@ func (s *Server) registerSignUp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, s.envelope("error", "enter a valid email address"))
 		return
 	}
-	if !ec.Enabled || !ec.AllowRegistration || !domainAllowed(ec, addr) {
+	groups, listed := registrationGroups(ec, addr, strings.TrimSpace(q.Get("token")))
+	if !ec.Enabled || !ec.AllowRegistration || !domainAllowed(ec, addr) || !listed {
 		writeJSON(w, http.StatusForbidden, s.envelope("error", "registration is not open for that email address"))
 		return
 	}
@@ -239,7 +240,10 @@ func (s *Server) registerSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authLimiter.fail(ip)
-	data, _ := json.Marshal(inviteData{Email: addr, Groups: ec.RegistrationGroups})
+	for _, g := range groups {
+		s.dir.EnsureGroup(g, "Registration", false)
+	}
+	data, _ := json.Marshal(inviteData{Email: addr, Groups: groups})
 	tok := s.acct.issue(inviteKind, string(data), 24*time.Hour)
 	link := s.publicBase(r) + "/register/token/" + tok
 	if err := s.sendMail(addr, "Confirm your "+s.Config().Name+" account", "Open this link within a day to create your account:\n"+link); err != nil {

@@ -1435,6 +1435,7 @@
     }[kind];
     const form = h("form", { class: "login" }, mark(40), h("h1", null, fields[0]), fields[1] ? h("p", { class: "lead" }, fields[1]) : null);
     for (const [id, label, type, ac] of fields[2]) form.append(h("label", { for: id }, label), h("input", { id: id, type: type, autocomplete: ac, required: true, autocapitalize: "none", spellcheck: "false", minlength: type === "password" ? 8 : null }));
+    if (kind === "register") form.append(h("label", { for: "regtoken" }, "Registration code"), h("input", { id: "regtoken", type: "text", autocomplete: "off", autocapitalize: "none", spellcheck: "false", placeholder: "only if you were given one" }));
     if (fields[3]) form.append(h("button", { type: "submit", class: "primary" }, fields[3]));
     form.append(done, err, h("div", { class: "login-links" }, h("a", { href: "#", onclick: (ev) => (ev.preventDefault(), (location.hash = ""), showLogin()) }, "Back to sign in")));
     const v = (id) => form.querySelector("#" + id).value;
@@ -1443,7 +1444,7 @@
       try {
         let r;
         if (kind === "forgot") r = await api("POST", "/api/password/forgot", { login: v("login").trim() });
-        if (kind === "register") r = await api("POST", "/api/register", { username: v("username").trim(), email: v("email").trim(), password: v("password") });
+        if (kind === "register") r = await api("POST", "/api/register", { username: v("username").trim(), email: v("email").trim(), password: v("password"), token: v("regtoken").trim() });
         if (kind === "reset") {
           if (v("password") !== v("password2")) throw new Error("The passwords do not match.");
           await api("POST", "/api/password/reset", { token: token, password: v("password") });
@@ -3837,6 +3838,33 @@
     return () => clearInterval(spTimer);
   }
 
+  function fmtWhitelist(list) {
+    return (list || [])
+      .map((w) => [w.domain || "*", w.token ? "token=" + w.token : "", w.group ? "group=" + w.group : "", (w.groups || []).length ? "groups=" + w.groups.join(",") : "", w.privateGroup ? "private" : ""].filter(Boolean).join(" "))
+      .join("\n");
+  }
+
+  function parseWhitelist(text) {
+    return String(text || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => {
+        const parts = l.split(/\s+/);
+        const w = { domain: parts[0] === "*" ? "" : parts[0] };
+        for (const p of parts.slice(1)) {
+          const i = p.indexOf("=");
+          const k = (i < 0 ? p : p.slice(0, i)).toLowerCase();
+          const v = i < 0 ? "" : p.slice(i + 1);
+          if (k === "token") w.token = v;
+          else if (k === "group") w.group = v;
+          else if (k === "groups") w.groups = v.split(",").map((x) => x.trim()).filter(Boolean);
+          else if (k === "private") w.privateGroup = true;
+        }
+        return w;
+      });
+  }
+
   function inputsEditor(initial) {
     let list = (initial || []).slice();
     const box = h("div", { class: "full" });
@@ -4550,6 +4578,7 @@
         field("Allowed domains", input("em_allow", (em.allowedDomains || []).join(", "), { placeholder: "any" }), "Only these can register, for example example.org or .mil. Empty allows any."),
         field("Blocked domains", input("em_block", (em.blockedDomains || []).join(", "))),
         field("Groups for new accounts", input("em_groups", (em.registrationGroups || []).join(", "), { placeholder: "default group" })),
+        field("Registration whitelist", h("textarea", { id: "em_wl", rows: 4, style: "font-size:12px", placeholder: "partner.org private groups=Shared\nagency.gov token=CODE group=Agency" }, fmtWhitelist(em.whitelist)), "Like the whitelist of TAK Server: one email domain per line (* for any). token= only lets people with that registration code use the line, group= and groups= set the new account's groups, and private gives the domain a group of its own. With lines here, only listed domains can register."),
         h("div", { class: "full" }, btn("Send a test email", async () => {
           const tf = h("form", { class: "grid" }, field("Send to", input("em_to", "", { type: "email", required: true })));
           modal("Test email", tf, [{ label: "Cancel" }, { label: "Send", primary: true, run: async () => { await api("POST", "/api/settings/email/test", { to: tf.querySelector("#em_to").value }); toast("Sent. Save the settings first if you changed them."); } }]);
@@ -4987,7 +5016,7 @@
         }),
         telegram: Object.assign({}, tg, { enabled: val(form, "tg_on"), token: val(form, "tg_token"), chatId: val(form, "tg_chat"), chat: val(form, "tg_msg"), alerts: val(form, "tg_alert"), locations: val(form, "tg_loc"), group: val(form, "tg_group") }),
         letsEncrypt: Object.assign({}, le, { enabled: val(form, "le_on"), domains: splitList(val(form, "le_dom")), email: val(form, "le_mail"), challengePort: num(form, "le_port") }),
-        email: Object.assign({}, em, { enabled: val(form, "em_on"), host: val(form, "em_host"), port: num(form, "em_port"), security: val(form, "em_sec"), username: val(form, "em_user"), password: val(form, "em_pw"), from: val(form, "em_from"), publicUrl: val(form, "em_url"), allowRegistration: val(form, "em_reg"), approveRegistrations: val(form, "em_appr"), allowedDomains: splitList(val(form, "em_allow")), blockedDomains: splitList(val(form, "em_block")), registrationGroups: splitList(val(form, "em_groups")) }),
+        email: Object.assign({}, em, { enabled: val(form, "em_on"), host: val(form, "em_host"), port: num(form, "em_port"), security: val(form, "em_sec"), username: val(form, "em_user"), password: val(form, "em_pw"), from: val(form, "em_from"), publicUrl: val(form, "em_url"), allowRegistration: val(form, "em_reg"), approveRegistrations: val(form, "em_appr"), allowedDomains: splitList(val(form, "em_allow")), blockedDomains: splitList(val(form, "em_block")), registrationGroups: splitList(val(form, "em_groups")), whitelist: parseWhitelist(val(form, "em_wl")) }),
         locate: Object.assign({}, lo, { enabled: val(form, "lo_on"), public: val(form, "lo_pub"), group: val(form, "lo_group"), mission: val(form, "lo_mis"), cotType: val(form, "lo_type") }),
         voice: Object.assign({}, vo, { enabled: val(form, "vo_on"), port: num(form, "vo_port"), anonymous: val(form, "vo_anon"), maxUsers: num(form, "vo_max"), welcome: val(form, "vo_welcome") }),
         videoServer: Object.assign({}, vs, { enabled: val(form, "vs_on"), rtspPort: num(form, "vs_rtsp"), rtspsPort: num(form, "vs_rtsps"), rtmpPort: num(form, "vs_rtmp"), rtpPort: num(form, "vs_rtp"), anonymousRead: val(form, "vs_ar"), anonymousPublish: val(form, "vs_ap"), maxStreams: num(form, "vs_max"), record: val(form, "vs_rec"), recordPaths: splitList(val(form, "vs_recp")), recordMinutes: num(form, "vs_recm"), recordDays: num(form, "vs_recd"), hideUAS: !val(form, "vs_uas") }),

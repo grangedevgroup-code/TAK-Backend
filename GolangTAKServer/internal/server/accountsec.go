@@ -16,6 +16,7 @@ import (
 	"net/smtp"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,23 +26,77 @@ import (
 )
 
 type EmailConfig struct {
-	Enabled              bool     `json:"enabled"`
-	Host                 string   `json:"host"`
-	Port                 int      `json:"port"`
-	Username             string   `json:"username"`
-	Password             string   `json:"password"`
-	From                 string   `json:"from"`
-	Security             string   `json:"security"`
-	PublicURL            string   `json:"publicUrl"`
-	AllowRegistration    bool     `json:"allowRegistration"`
-	ApproveRegistrations bool     `json:"approveRegistrations"`
-	AllowedDomains       []string `json:"allowedDomains"`
-	BlockedDomains       []string `json:"blockedDomains"`
-	RegistrationGroups   []string `json:"registrationGroups"`
-	LogAlertsEnabled     bool     `json:"logAlertsEnabled,omitempty"`
-	LogAlertsTo          []string `json:"logAlertsTo,omitempty"`
-	LogAlertsSubject     string   `json:"logAlertsSubject,omitempty"`
-	LogAlertsExtensions  []string `json:"logAlertsExtensions,omitempty"`
+	Enabled              bool                    `json:"enabled"`
+	Host                 string                  `json:"host"`
+	Port                 int                     `json:"port"`
+	Username             string                  `json:"username"`
+	Password             string                  `json:"password"`
+	From                 string                  `json:"from"`
+	Security             string                  `json:"security"`
+	PublicURL            string                  `json:"publicUrl"`
+	AllowRegistration    bool                    `json:"allowRegistration"`
+	ApproveRegistrations bool                    `json:"approveRegistrations"`
+	AllowedDomains       []string                `json:"allowedDomains"`
+	BlockedDomains       []string                `json:"blockedDomains"`
+	RegistrationGroups   []string                `json:"registrationGroups"`
+	LogAlertsEnabled     bool                    `json:"logAlertsEnabled,omitempty"`
+	LogAlertsTo          []string                `json:"logAlertsTo,omitempty"`
+	LogAlertsSubject     string                  `json:"logAlertsSubject,omitempty"`
+	LogAlertsExtensions  []string                `json:"logAlertsExtensions,omitempty"`
+	Whitelist            []RegistrationWhitelist `json:"whitelist,omitempty"`
+}
+
+type RegistrationWhitelist struct {
+	Domain       string   `json:"domain"`
+	Token        string   `json:"token,omitempty"`
+	Group        string   `json:"group,omitempty"`
+	Groups       []string `json:"groups,omitempty"`
+	PrivateGroup bool     `json:"privateGroup,omitempty"`
+}
+
+func domainMatches(dom, rule string) bool {
+	rule = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(rule)), "@")
+	if rule == "" {
+		return false
+	}
+	if strings.HasPrefix(rule, ".") {
+		return strings.HasSuffix(dom, rule)
+	}
+	return dom == rule || strings.HasSuffix(dom, "."+rule)
+}
+
+func registrationGroups(ec EmailConfig, addr, token string) ([]string, bool) {
+	at := strings.LastIndex(addr, "@")
+	if at < 0 {
+		return nil, false
+	}
+	dom := strings.ToLower(addr[at+1:])
+	if len(ec.Whitelist) == 0 {
+		return ec.RegistrationGroups, token == ""
+	}
+	for _, w := range ec.Whitelist {
+		if token != "" {
+			if w.Token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(w.Token)) != 1 {
+				continue
+			}
+		} else if w.Token != "" {
+			continue
+		}
+		if strings.TrimSpace(w.Domain) != "" && !domainMatches(dom, w.Domain) {
+			continue
+		}
+		groups := slices.Clone(w.Groups)
+		if g := strings.TrimSpace(w.Group); g != "" {
+			groups = append([]string{g}, groups...)
+		} else if w.PrivateGroup && strings.TrimSpace(w.Domain) != "" {
+			groups = append([]string{strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(w.Domain)), "@"), ".")}, groups...)
+		}
+		if len(groups) == 0 {
+			groups = ec.RegistrationGroups
+		}
+		return groups, true
+	}
+	return nil, false
 }
 
 type authToken struct {
@@ -261,16 +316,7 @@ func domainAllowed(ec EmailConfig, addr string) bool {
 		return false
 	}
 	dom := strings.ToLower(addr[at+1:])
-	match := func(rule string) bool {
-		rule = strings.ToLower(strings.TrimSpace(rule))
-		if rule == "" {
-			return false
-		}
-		if strings.HasPrefix(rule, ".") {
-			return strings.HasSuffix(dom, rule)
-		}
-		return dom == rule || strings.HasSuffix(dom, "."+rule)
-	}
+	match := func(rule string) bool { return domainMatches(dom, rule) }
 	for _, b := range ec.BlockedDomains {
 		if match(b) {
 			return false
@@ -678,6 +724,7 @@ func (s *Server) apiRegister(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
+		Token    string `json:"token"`
 	}
 	if err := decodeBody(r, &body); err != nil {
 		apiError(w, http.StatusBadRequest, err)
@@ -694,9 +741,13 @@ func (s *Server) apiRegister(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadRequest, errors.New("enter a valid email address"))
 		return
 	}
-	if !domainAllowed(ec, addr) {
+	groups, listed := registrationGroups(ec, addr, strings.TrimSpace(body.Token))
+	if !domainAllowed(ec, addr) || !listed {
 		apiError(w, http.StatusForbidden, errors.New("accounts cannot be created with that email address"))
 		return
+	}
+	for _, g := range groups {
+		s.dir.EnsureGroup(g, "Registration", false)
 	}
 	if strings.ContainsAny(body.Password, "@:") {
 		apiError(w, http.StatusBadRequest, errors.New("passwords cannot contain @ or : because they break video and server links"))
@@ -708,7 +759,7 @@ func (s *Server) apiRegister(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := s.dir.AddUser(strings.TrimSpace(body.Username), body.Password, false, ec.RegistrationGroups); err != nil {
+	if _, err := s.dir.AddUser(strings.TrimSpace(body.Username), body.Password, false, groups); err != nil {
 		apiError(w, http.StatusBadRequest, err)
 		return
 	}
