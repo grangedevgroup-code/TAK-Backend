@@ -169,6 +169,88 @@ func (f *fakeServer) serve(c net.Conn) {
 				f.reply(c, id, seq(opSearchEntry, encStr(tagOctetString, u.dn), seq(tagSequence, attrs...)))
 			}
 			f.reply(c, id, ldapResult(opSearchDone, 0, ""))
+		case opAddRequest:
+			dn := op.children[0].str()
+			u := fakeUser{dn: dn, attrs: map[string][]string{}}
+			for _, a := range op.children[1].children {
+				name := strings.ToLower(a.children[0].str())
+				for _, v := range a.children[1].children {
+					u.attrs[name] = append(u.attrs[name], v.str())
+				}
+			}
+			if pw := u.attrs["userpassword"]; len(pw) > 0 {
+				u.password = pw[0]
+			}
+			f.mu.Lock()
+			_, exists := f.users[strings.ToLower(dn)]
+			if !exists {
+				f.users[strings.ToLower(dn)] = u
+			}
+			f.mu.Unlock()
+			code := int64(0)
+			if exists {
+				code = 68
+			}
+			f.reply(c, id, ldapResult(opAddResponse, code, ""))
+		case opModifyRequest:
+			dn := strings.ToLower(op.children[0].str())
+			f.mu.Lock()
+			u, ok := f.users[dn]
+			if ok {
+				for _, ch := range op.children[1].children {
+					mod := ch.children[0].int()
+					name := strings.ToLower(ch.children[1].children[0].str())
+					var vals []string
+					for _, v := range ch.children[1].children[1].children {
+						vals = append(vals, v.str())
+					}
+					switch mod {
+					case ModAdd:
+						u.attrs[name] = append(u.attrs[name], vals...)
+					case ModReplace:
+						u.attrs[name] = vals
+					case ModDelete:
+						if len(vals) == 0 {
+							delete(u.attrs, name)
+						} else {
+							var keep []string
+							for _, x := range u.attrs[name] {
+								drop := false
+								for _, v := range vals {
+									if strings.EqualFold(x, v) {
+										drop = true
+									}
+								}
+								if !drop {
+									keep = append(keep, x)
+								}
+							}
+							u.attrs[name] = keep
+						}
+					}
+					if name == "userpassword" && len(vals) > 0 {
+						u.password = vals[0]
+					}
+				}
+				f.users[dn] = u
+			}
+			f.mu.Unlock()
+			code := int64(0)
+			if !ok {
+				code = 32
+			}
+			f.reply(c, id, ldapResult(opModifyResponse, code, ""))
+		case opDelRequest:
+			dn := strings.ToLower(string(op.content))
+			f.mu.Lock()
+			_, ok := f.users[dn]
+			delete(f.users, dn)
+			f.mu.Unlock()
+			code := int64(0)
+			if !ok {
+				code = 32
+			}
+			f.reply(c, id, ldapResult(opDelResponse, code, ""))
 		case opUnbindRequest:
 			return
 		default:

@@ -11,7 +11,6 @@ const (
 	opAddResponse    = 0x69
 	opDelRequest     = 0x4a
 	opDelResponse    = 0x6b
-	tagSet           = 0x31
 
 	ModAdd     = 0
 	ModDelete  = 1
