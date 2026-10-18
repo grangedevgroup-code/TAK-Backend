@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type LogBuffer struct {
@@ -149,7 +152,44 @@ func quoteValue(s string) string {
 	return s
 }
 
+var jsonLogs atomic.Bool
+
+func (h *lineHandler) handleJSON(r slog.Record) error {
+	level := "info"
+	switch {
+	case r.Level >= slog.LevelError:
+		level = "error"
+	case r.Level >= slog.LevelWarn:
+		level = "warn"
+	case r.Level < slog.LevelInfo:
+		level = "debug"
+	}
+	m := map[string]any{"time": r.Time.UTC().Format(time.RFC3339Nano), "level": level, "msg": r.Message}
+	add := func(a slog.Attr) bool {
+		m[a.Key] = a.Value.Any()
+		if err, ok := m[a.Key].(error); ok {
+			m[a.Key] = err.Error()
+		}
+		return true
+	}
+	for _, a := range h.attrs {
+		add(a)
+	}
+	r.Attrs(add)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, err = h.w.Write(append(b, 10))
+	return err
+}
+
 func (h *lineHandler) Handle(_ context.Context, r slog.Record) error {
+	if jsonLogs.Load() {
+		return h.handleJSON(r)
+	}
 	var sb strings.Builder
 	sb.WriteString(r.Time.UTC().Format("2006-01-02 15:04:05"))
 	sb.WriteByte(' ')
