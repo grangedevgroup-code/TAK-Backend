@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	ErrClosed       = errors.New("quic: connection closed")
-	errStreamLimit  = errors.New("quic: stream limit exceeded")
-	errFlowControl  = errors.New("quic: flow control violated")
-	errHandshakeTLS = errors.New("quic: TLS handshake failed")
+	ErrClosed      = errors.New("quic: connection closed")
+	errStreamLimit = errors.New("quic: stream limit exceeded")
+	errFlowControl = errors.New("quic: flow control violated")
+	errIdle        = errors.New("quic: idle timeout")
+	errHandshake   = errors.New("quic: handshake timeout")
 )
 
 const (
@@ -27,11 +28,12 @@ const (
 )
 
 const (
-	recvWindow     = 4 << 20
-	connRecvWindow = 16 << 20
-	maxSendBuffer  = 8 << 20
-	initialCwnd    = 10 * maxDatagram
-	minCwnd        = 2 * maxDatagram
+	recvWindow       = 4 << 20
+	connRecvWindow   = 16 << 20
+	maxSendBuffer    = 8 << 20
+	initialCwnd      = 10 * maxDatagram
+	minCwnd          = 2 * maxDatagram
+	handshakeTimeout = 10 * time.Second
 )
 
 type rangeSet []ackRange
@@ -41,16 +43,11 @@ func (rs *rangeSet) add(lo, hi uint64) {
 	i := sort.Search(len(s), func(i int) bool { return s[i].hi+1 >= lo })
 	j := i
 	for j < len(s) && s[j].lo <= hi+1 {
-		if s[j].lo < lo {
-			lo = s[j].lo
-		}
-		if s[j].hi > hi {
-			hi = s[j].hi
-		}
+		lo = min(lo, s[j].lo)
+		hi = max(hi, s[j].hi)
 		j++
 	}
-	s = append(s[:i], append([]ackRange{{lo, hi}}, s[j:]...)...)
-	*rs = s
+	*rs = append(s[:i], append([]ackRange{{lo, hi}}, s[j:]...)...)
 }
 
 func (rs rangeSet) contains(v uint64) bool {
@@ -104,6 +101,11 @@ func newSpace() *space {
 	return &space{largestRecv: -1, largestAcked: -1, sent: map[uint64]*sentPacket{}, crypto: cryptoStream{inParts: map[uint64][]byte{}}}
 }
 
+type datagram struct {
+	data []byte
+	addr net.Addr
+}
+
 type Conn struct {
 	mu        sync.Mutex
 	client    bool
@@ -118,8 +120,7 @@ type Conn struct {
 	firstPeer bool
 	params    transportParams
 	peer      transportParams
-	peerSet   bool
-	in        chan []byte
+	in        chan datagram
 	wake      chan struct{}
 	done      chan struct{}
 	closeOnce sync.Once
@@ -127,6 +128,7 @@ type Conn struct {
 	closing   bool
 	sentClose bool
 	idle      time.Duration
+	created   time.Time
 	lastRecv  time.Time
 	lastSend  time.Time
 	validated bool
@@ -135,6 +137,7 @@ type Conn struct {
 
 	handshakeDone bool
 	hsDonePending bool
+	pingPending   bool
 	established   chan struct{}
 	estOnce       sync.Once
 
@@ -156,9 +159,8 @@ type Conn struct {
 	maxDataUpdate bool
 	pathResponse  [][8]byte
 
-	stream      *Stream
-	streamCount uint64
-	onStream    func(*Stream)
+	stream   *Stream
+	onStream func(*Stream)
 }
 
 func randomCID() []byte {
@@ -168,8 +170,9 @@ func randomCID() []byte {
 }
 
 func newConn(client bool, pc net.PacketConn, addr net.Addr, idle time.Duration) *Conn {
-	c := &Conn{client: client, pc: pc, addr: addr, in: make(chan []byte, 256), wake: make(chan struct{}, 1), done: make(chan struct{}),
-		idle: idle, established: make(chan struct{}), cwnd: initialCwnd, ssthresh: 1 << 30, rxMaxData: connRecvWindow, lastRecv: time.Now()}
+	now := time.Now()
+	c := &Conn{client: client, pc: pc, addr: addr, in: make(chan datagram, 256), wake: make(chan struct{}, 1), done: make(chan struct{}),
+		idle: idle, established: make(chan struct{}), cwnd: initialCwnd, ssthresh: 1 << 30, rxMaxData: connRecvWindow, created: now, lastRecv: now}
 	for i := range c.spaces {
 		c.spaces[i] = newSpace()
 	}
@@ -200,8 +203,7 @@ func spaceLevel(sp int) tls.QUICEncryptionLevel {
 
 func (c *Conn) ourTransportParams() transportParams {
 	p := transportParams{maxIdleTimeoutMs: uint64(c.idle / time.Millisecond), initialMaxData: connRecvWindow, maxStreamDataBL: recvWindow,
-		maxStreamDataBR: recvWindow, maxStreamDataUni: 0, maxStreamsBidi: 1, maxStreamsUni: 0, activeCIDLimit: 2, disableMigration: true,
-		maxUDPPayload: 1452, initialSCID: c.ourCID}
+		maxStreamDataBR: recvWindow, maxStreamsBidi: 1, activeCIDLimit: 2, disableMigration: true, maxUDPPayload: 1452, initialSCID: c.ourCID}
 	if !c.client {
 		p.origDCID = c.origDCID
 	}
@@ -247,8 +249,7 @@ func (c *Conn) handleTLSEvents() error {
 				c.spaces[sp].tx = k
 			}
 		case tls.QUICWriteData:
-			sp := levelSpace(e.Level)
-			if sp >= 0 {
+			if sp := levelSpace(e.Level); sp >= 0 {
 				c.spaces[sp].crypto.out = append(c.spaces[sp].crypto.out, e.Data...)
 			}
 		case tls.QUICTransportParameters:
@@ -256,10 +257,8 @@ func (c *Conn) handleTLSEvents() error {
 			if err != nil {
 				return err
 			}
-			c.peer, c.peerSet = p, true
-			if p.initialMaxData > c.txMaxData {
-				c.txMaxData = p.initialMaxData
-			}
+			c.peer = p
+			c.txMaxData = max(c.txMaxData, p.initialMaxData)
 			if p.maxIdleTimeoutMs > 0 && (c.idle == 0 || time.Duration(p.maxIdleTimeoutMs)*time.Millisecond < c.idle) {
 				c.idle = time.Duration(p.maxIdleTimeoutMs) * time.Millisecond
 			}
@@ -297,7 +296,8 @@ func (c *Conn) dropSpace(sp int) {
 	s.ackNeeded = false
 }
 
-func (c *Conn) handleDatagram(d []byte) {
+func (c *Conn) handleDatagram(dg datagram) {
+	d := dg.data
 	c.rxBytes += len(d)
 	for len(d) > 0 {
 		h, err := parseHeader(d, cidLen)
@@ -323,19 +323,21 @@ func (c *Conn) handleDatagram(d []byte) {
 			continue
 		}
 		pn, payload, keyPhase, err := unprotectTry(s.rx, pkt, h, s.largestRecv)
+		if err == nil && sp == spApp && keyPhase != c.keyPhase {
+			err = errFrame
+		}
 		if err != nil && sp == spApp && c.nextRx != nil {
-			var pn2 uint64
 			var p2 []byte
+			var pn2 uint64
 			pn2, p2, keyPhase, err = unprotectTry(c.nextRx, pkt, h, s.largestRecv)
 			if err == nil && keyPhase != c.keyPhase {
 				c.rotateKeys()
 				pn, payload = pn2, p2
+			} else if err == nil {
+				err = errFrame
 			}
 		}
-		if err != nil {
-			continue
-		}
-		if s.recvd.contains(pn) {
+		if err != nil || s.recvd.contains(pn) {
 			continue
 		}
 		if c.client && !c.firstPeer && h.typ != ptShort {
@@ -351,10 +353,13 @@ func (c *Conn) handleDatagram(d []byte) {
 			c.fail(err)
 			return
 		}
-		s.recvd.add(pn, pn)
 		if int64(pn) > s.largestRecv {
 			s.largestRecv = int64(pn)
+			if sp == spApp && dg.addr != nil && dg.addr.String() != c.addr.String() {
+				c.addr = dg.addr
+			}
 		}
+		s.recvd.add(pn, pn)
 		if len(s.recvd) > 64 {
 			s.recvd = s.recvd[len(s.recvd)-64:]
 		}
@@ -396,23 +401,23 @@ func (c *Conn) handleFrame(sp int, f frame) error {
 			return errFlowControl
 		}
 		cs.inParts[f.offset] = append([]byte(nil), f.data...)
-		for {
-			progressed := false
+		for progressed := true; progressed; {
+			progressed = false
 			for off, data := range cs.inParts {
-				if off <= cs.inNext && off+uint64(len(data)) > cs.inNext {
+				e := off + uint64(len(data))
+				if e <= cs.inNext {
+					delete(cs.inParts, off)
+					continue
+				}
+				if off <= cs.inNext {
 					chunk := data[cs.inNext-off:]
 					delete(cs.inParts, off)
-					cs.inNext += uint64(len(chunk))
+					cs.inNext = e
 					if err := c.tls.HandleData(spaceLevel(sp), chunk); err != nil {
 						return err
 					}
 					progressed = true
-				} else if off+uint64(len(data)) <= cs.inNext {
-					delete(cs.inParts, off)
 				}
-			}
-			if !progressed {
-				break
 			}
 		}
 		return c.handleTLSEvents()
@@ -426,27 +431,32 @@ func (c *Conn) handleFrame(sp int, f frame) error {
 		}
 		return st.receive(f.offset, f.data, f.fin)
 	case frMaxData:
-		if f.maxValue > c.txMaxData {
-			c.txMaxData = f.maxValue
-		}
+		c.txMaxData = max(c.txMaxData, f.maxValue)
 	case frMaxStreamData:
-		if c.stream != nil && c.stream.id == f.streamID && f.maxValue > c.stream.peerMax {
-			c.stream.peerMax = f.maxValue
+		if st := c.stream; st != nil && st.id == f.streamID {
+			st.mu.Lock()
+			st.peerMax = max(st.peerMax, f.maxValue)
+			st.mu.Unlock()
 		}
 	case frResetStream:
-		if c.stream != nil && c.stream.id == f.streamID {
-			c.stream.resetErr = io.ErrUnexpectedEOF
-			c.stream.signal()
+		if st := c.stream; st != nil && st.id == f.streamID {
+			st.mu.Lock()
+			st.resetErr = io.ErrUnexpectedEOF
+			st.mu.Unlock()
+			st.signal()
 		}
 	case frStopSending:
-		if c.stream != nil && c.stream.id == f.streamID {
-			c.stream.writeErr = io.ErrClosedPipe
-			c.stream.signal()
+		if st := c.stream; st != nil && st.id == f.streamID {
+			st.mu.Lock()
+			st.writeErr = io.ErrClosedPipe
+			st.mu.Unlock()
+			st.signal()
 		}
 	case frPathChallenge:
 		c.pathResponse = append(c.pathResponse, f.pathData)
 	case frConnClose, frConnCloseApp:
 		c.sentClose = true
+		c.closing = true
 		c.terminate(ErrClosed)
 	case frHandshakeDone:
 		if c.client {
@@ -464,10 +474,7 @@ func (c *Conn) streamFor(id uint64) (*Stream, error) {
 	if c.client {
 		return nil, nil
 	}
-	if id%4 != 0 {
-		return nil, errStreamLimit
-	}
-	if c.stream != nil || id/4 >= c.params.maxStreamsBidi {
+	if id%4 != 0 || c.stream != nil || id/4 >= c.params.maxStreamsBidi {
 		return nil, errStreamLimit
 	}
 	c.stream = newStream(c, id)
@@ -481,26 +488,22 @@ func (c *Conn) streamFor(id uint64) (*Stream, error) {
 func (c *Conn) onAck(sp int, ranges []ackRange) {
 	s := c.spaces[sp]
 	now := time.Now()
-	var newlyAcked []*sentPacket
+	var acked []*sentPacket
 	largest := int64(-1)
 	for _, r := range ranges {
-		if int64(r.hi) > largest {
-			largest = int64(r.hi)
-		}
+		largest = max(largest, int64(r.hi))
 		for pn, p := range s.sent {
 			if pn >= r.lo && pn <= r.hi {
-				newlyAcked = append(newlyAcked, p)
+				acked = append(acked, p)
 				delete(s.sent, pn)
 			}
 		}
 	}
-	if len(newlyAcked) == 0 {
+	if len(acked) == 0 {
 		return
 	}
-	if largest > s.largestAcked {
-		s.largestAcked = largest
-	}
-	for _, p := range newlyAcked {
+	s.largestAcked = max(s.largestAcked, largest)
+	for _, p := range acked {
 		if int64(p.pn) == largest && p.ackEliciting {
 			c.updateRTT(now.Sub(p.time))
 		}
@@ -512,12 +515,15 @@ func (c *Conn) onAck(sp int, ranges []ackRange) {
 				c.cwnd += maxDatagram * p.size / c.cwnd
 			}
 		}
-		if sp == spApp && c.stream != nil {
+		if st := c.stream; sp == spApp && st != nil {
 			for _, r := range p.stream {
-				c.stream.acked(r)
+				st.acked(r)
 			}
 			if p.fin {
-				c.stream.finAcked = true
+				st.mu.Lock()
+				st.finAcked = true
+				st.mu.Unlock()
+				st.signal()
 			}
 		}
 	}
@@ -575,25 +581,34 @@ func (c *Conn) detectLoss(sp int, now time.Time) {
 
 func (c *Conn) requeue(sp int, p *sentPacket) {
 	s := c.spaces[sp]
-	s.crypto.lost = append(s.crypto.lost, p.crypto...)
-	if sp == spApp {
-		if c.stream != nil {
-			for _, r := range p.stream {
-				c.stream.lost = append(c.stream.lost, r)
+	for _, r := range p.crypto {
+		if r.hi > r.lo {
+			s.crypto.lost = append(s.crypto.lost, r)
+		}
+	}
+	if sp != spApp {
+		return
+	}
+	if st := c.stream; st != nil {
+		st.mu.Lock()
+		for _, r := range p.stream {
+			if r.hi > r.lo {
+				st.lost = append(st.lost, r)
 			}
-			if p.fin && !c.stream.finAcked {
-				c.stream.finSent = false
-			}
 		}
-		if p.hsDone {
-			c.hsDonePending = true
+		if p.fin && !st.finAcked {
+			st.finSent = false
 		}
-		if p.maxData {
-			c.maxDataUpdate = true
+		if p.maxStream {
+			st.maxUpdate = true
 		}
-		if p.maxStream && c.stream != nil {
-			c.stream.maxUpdate = true
-		}
+		st.mu.Unlock()
+	}
+	if p.hsDone {
+		c.hsDonePending = true
+	}
+	if p.maxData {
+		c.maxDataUpdate = true
 	}
 }
 
@@ -609,7 +624,7 @@ func (c *Conn) pto() time.Duration {
 func (c *Conn) nextTimer() time.Time {
 	var t time.Time
 	set := func(x time.Time) {
-		if !x.IsZero() && (t.IsZero() || x.Before(t)) {
+		if t.IsZero() || x.Before(t) {
 			t = x
 		}
 	}
@@ -617,6 +632,9 @@ func (c *Conn) nextTimer() time.Time {
 		if len(s.sent) > 0 && !s.lastAckElic.IsZero() {
 			set(s.lastAckElic.Add(c.pto()))
 		}
+	}
+	if !c.handshakeDone {
+		set(c.created.Add(handshakeTimeout))
 	}
 	if c.idle > 0 {
 		set(c.lastRecv.Add(c.idle))
@@ -631,7 +649,12 @@ func (c *Conn) onTimer() {
 	now := time.Now()
 	if c.idle > 0 && now.Sub(c.lastRecv) >= c.idle {
 		c.sentClose = true
-		c.terminate(errors.New("quic: idle timeout"))
+		c.terminate(errIdle)
+		return
+	}
+	if !c.handshakeDone && now.Sub(c.created) >= handshakeTimeout {
+		c.sentClose = true
+		c.terminate(errHandshake)
 		return
 	}
 	fired := false
@@ -652,84 +675,86 @@ func (c *Conn) onTimer() {
 		c.ptoCount++
 	}
 	if c.handshakeDone && c.idle > 0 && now.Sub(c.lastSend) >= c.idle/3 {
-		c.spaces[spApp].ackNeeded = true
 		c.pingPending = true
 	}
 }
 
-func (c *Conn) send(dg []byte) {
-	c.txBytes += len(dg)
-	c.lastSend = time.Now()
-	c.pc.WriteTo(dg, c.addr)
-}
-
-func (c *Conn) canSendMore(n int) bool {
-	if c.client || c.validated {
-		return true
+func (c *Conn) overhead(sp int) int {
+	if sp == spApp {
+		return 1 + len(c.peerCID) + 4 + 16
 	}
-	return c.txBytes+n <= 3*c.rxBytes
+	o := 1 + 4 + 1 + len(c.peerCID) + 1 + len(c.ourCID) + 2 + 4 + 16
+	if sp == spInitial {
+		o++
+	}
+	return o
 }
 
 func (c *Conn) flush() {
+	type part struct {
+		sp      int
+		payload []byte
+		p       *sentPacket
+	}
 	for i := 0; i < 64; i++ {
-		var dg []byte
-		ackOnly := true
-		hasInitial := false
+		if !c.client && !c.validated && 3*c.rxBytes-c.txBytes < maxDatagram {
+			return
+		}
+		var parts []part
+		size := 0
+		pad := false
 		for sp := spInitial; sp <= spApp; sp++ {
 			s := c.spaces[sp]
 			if s.tx == nil || s.discarded {
 				continue
 			}
-			room := maxDatagram - len(dg) - 64
-			if room < 64 {
+			room := maxDatagram - size - c.overhead(sp)
+			if room < 48 {
 				break
 			}
 			payload, p := c.buildPayload(sp, room)
 			if len(payload) == 0 {
 				continue
 			}
-			if p.ackEliciting {
-				ackOnly = false
+			if sp == spInitial && (c.client || p.ackEliciting) {
+				pad = true
 			}
+			parts = append(parts, part{sp, payload, p})
+			size += len(payload) + c.overhead(sp)
+		}
+		if len(parts) == 0 {
+			return
+		}
+		if pad && size < minInitial {
+			last := &parts[len(parts)-1]
+			last.payload = append(last.payload, make([]byte, minInitial-size)...)
+		}
+		var dg []byte
+		now := time.Now()
+		for _, pt := range parts {
+			s := c.spaces[pt.sp]
 			pn := s.nextPN
 			s.nextPN++
 			var pkt []byte
-			if sp == spApp {
-				pkt = seal(s.tx, shortHeader(c.peerCID, pn, c.keyPhase), pn, payload, true)
-			} else {
-				if sp == spInitial && p.ackEliciting && (c.client || len(dg) == 0) {
-					hasInitial = true
-				}
-				t := ptInitial
-				if sp == spHandshake {
-					t = ptHandshake
-				}
-				if hasInitial && sp == spInitial {
-					hdrLen := len(longHeader(t, c.peerCID, c.ourCID, nil, pn, len(payload)))
-					if need := minInitial - len(dg) - hdrLen - len(payload) - 16; need > 0 {
-						payload = append(payload, make([]byte, need)...)
-					}
-				}
-				pkt = seal(s.tx, longHeader(t, c.peerCID, c.ourCID, nil, pn, len(payload)), pn, payload, false)
+			switch pt.sp {
+			case spApp:
+				pkt = seal(s.tx, shortHeader(c.peerCID, pn, c.keyPhase), pn, pt.payload, true)
+			case spHandshake:
+				pkt = seal(s.tx, longHeader(ptHandshake, c.peerCID, c.ourCID, nil, pn, len(pt.payload)), pn, pt.payload, false)
+			default:
+				pkt = seal(s.tx, longHeader(ptInitial, c.peerCID, c.ourCID, nil, pn, len(pt.payload)), pn, pt.payload, false)
 			}
-			p.pn, p.time, p.size = pn, time.Now(), len(pkt)
-			if p.ackEliciting {
-				s.sent[pn] = p
-				s.lastAckElic = p.time
-				c.inFlight += p.size
+			pt.p.pn, pt.p.time, pt.p.size = pn, now, len(pkt)
+			if pt.p.ackEliciting {
+				s.sent[pn] = pt.p
+				s.lastAckElic = now
+				c.inFlight += len(pkt)
 			}
 			dg = append(dg, pkt...)
 		}
-		if len(dg) == 0 {
-			return
-		}
-		if !c.canSendMore(len(dg)) {
-			return
-		}
-		c.send(dg)
-		if ackOnly {
-			continue
-		}
+		c.txBytes += len(dg)
+		c.lastSend = now
+		c.pc.WriteTo(dg, c.addr)
 	}
 }
 
@@ -741,22 +766,20 @@ func (c *Conn) buildPayload(sp int, room int) ([]byte, *sentPacket) {
 		b = appendAck(b, s.recvd.descending(32))
 		s.ackNeeded = false
 	}
-	if c.closing && !c.sentClose && (sp == spApp || !c.handshakeDone) {
-		b = appendConnClose(b, 0, "")
-		if sp == spApp || c.spaces[spApp].tx == nil {
-			c.sentClose = true
+	if c.closing {
+		if !c.sentClose && (sp == spApp || !c.handshakeDone) {
+			b = appendConnClose(b, 0, "")
+			if sp == spApp || c.spaces[spApp].tx == nil || !c.handshakeDone {
+				c.sentClose = true
+			}
 		}
 		return b, p
 	}
 	elicit := func() { p.ackEliciting = true }
-	congested := c.inFlight >= c.cwnd && c.ptoCount == 0
 	cs := &s.crypto
 	for len(cs.lost) > 0 && room-len(b) > 32 {
 		r := cs.lost[0]
 		n := min(int(r.hi-r.lo), room-len(b)-16)
-		if n <= 0 {
-			break
-		}
 		b = appendCrypto(b, r.lo, cs.out[r.lo:r.lo+uint64(n)])
 		p.crypto = append(p.crypto, ackRange{r.lo, r.lo + uint64(n)})
 		if uint64(n) < r.hi-r.lo {
@@ -794,67 +817,8 @@ func (c *Conn) buildPayload(sp int, room int) ([]byte, *sentPacket) {
 			p.maxData = true
 			elicit()
 		}
-		if st := c.stream; st != nil {
-			st.mu.Lock()
-			if st.maxUpdate {
-				st.rxMax = st.consumed + recvWindow
-				b = appendVarint(b, frMaxStreamData)
-				b = appendVarint(b, st.id)
-				b = appendVarint(b, st.rxMax)
-				st.maxUpdate = false
-				p.maxStream = true
-				elicit()
-			}
-			for len(st.lost) > 0 && room-len(b) > 32 {
-				r := st.lost[0]
-				if r.hi <= st.sbase {
-					st.lost = st.lost[1:]
-					continue
-				}
-				lo := max(r.lo, st.sbase)
-				n := min(int(r.hi-lo), room-len(b)-streamFrameOverhead(st.id, lo, 1400))
-				if n <= 0 {
-					break
-				}
-				data := st.sbuf[lo-st.sbase : lo-st.sbase+uint64(n)]
-				b = appendStream(b, st.id, lo, data, false)
-				p.stream = append(p.stream, ackRange{lo, lo + uint64(n)})
-				if lo+uint64(n) < r.hi {
-					st.lost[0].lo = lo + uint64(n)
-				} else {
-					st.lost = st.lost[1:]
-				}
-				elicit()
-			}
-			for !congested && room-len(b) > 32 {
-				unsent := st.sbase + uint64(len(st.sbuf)) - st.snext
-				limit := min(st.peerMax-min(st.peerMax, st.snext), c.txMaxData-min(c.txMaxData, c.txSentData))
-				n := int(min(unsent, limit))
-				fin := st.closed && !st.finSent && uint64(n) == unsent
-				if n == 0 && !fin {
-					break
-				}
-				n = min(n, room-len(b)-streamFrameOverhead(st.id, st.snext, 1400))
-				if n < 0 {
-					break
-				}
-				if uint64(n) < unsent {
-					fin = false
-				}
-				data := st.sbuf[st.snext-st.sbase : st.snext-st.sbase+uint64(n)]
-				b = appendStream(b, st.id, st.snext, data, fin)
-				p.stream = append(p.stream, ackRange{st.snext, st.snext + uint64(n)})
-				st.snext += uint64(n)
-				c.txSentData += uint64(n)
-				if fin {
-					st.finSent, p.fin = true, true
-				}
-				elicit()
-				if n == 0 {
-					break
-				}
-			}
-			st.mu.Unlock()
+		if st := c.stream; st != nil && c.buildStream(st, &b, room, p) {
+			elicit()
 		}
 		if c.pingPending && !p.ackEliciting {
 			b = appendVarint(b, frPing)
@@ -869,6 +833,70 @@ func (c *Conn) buildPayload(sp int, room int) ([]byte, *sentPacket) {
 	return b, p
 }
 
+func (c *Conn) buildStream(st *Stream, bp *[]byte, room int, p *sentPacket) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	b := *bp
+	defer func() { *bp = b }()
+	wrote := false
+	if st.maxUpdate {
+		st.rxMax = st.consumed + recvWindow
+		b = appendVarint(b, frMaxStreamData)
+		b = appendVarint(b, st.id)
+		b = appendVarint(b, st.rxMax)
+		st.maxUpdate = false
+		p.maxStream = true
+		wrote = true
+	}
+	for len(st.lost) > 0 && room-len(b) > 32 {
+		r := st.lost[0]
+		if r.hi <= st.sbase {
+			st.lost = st.lost[1:]
+			continue
+		}
+		lo := max(r.lo, st.sbase)
+		n := min(int(r.hi-lo), room-len(b)-streamFrameOverhead(st.id, lo, 1400))
+		if n <= 0 {
+			break
+		}
+		b = appendStream(b, st.id, lo, st.sbuf[lo-st.sbase:lo-st.sbase+uint64(n)], false)
+		p.stream = append(p.stream, ackRange{lo, lo + uint64(n)})
+		if lo+uint64(n) < r.hi {
+			st.lost[0].lo = lo + uint64(n)
+		} else {
+			st.lost = st.lost[1:]
+		}
+		wrote = true
+	}
+	if c.inFlight >= c.cwnd && c.ptoCount == 0 {
+		return wrote
+	}
+	for room-len(b) > 32 {
+		unsent := st.sbase + uint64(len(st.sbuf)) - st.snext
+		limit := min(st.peerMax-min(st.peerMax, st.snext), c.txMaxData-min(c.txMaxData, c.txSentData))
+		n := min(int(min(unsent, limit)), room-len(b)-streamFrameOverhead(st.id, st.snext, 1400))
+		if n < 0 {
+			break
+		}
+		fin := st.closed && !st.finSent && uint64(n) == unsent
+		if n == 0 && !fin {
+			break
+		}
+		b = appendStream(b, st.id, st.snext, st.sbuf[st.snext-st.sbase:st.snext-st.sbase+uint64(n)], fin)
+		p.stream = append(p.stream, ackRange{st.snext, st.snext + uint64(n)})
+		st.snext += uint64(n)
+		c.txSentData += uint64(n)
+		if fin {
+			st.finSent, p.fin = true, true
+		}
+		wrote = true
+		if n == 0 {
+			break
+		}
+	}
+	return wrote
+}
+
 func (c *Conn) probeSpace() int {
 	for sp := spApp; sp >= spInitial; sp-- {
 		if c.spaces[sp].tx != nil && !c.spaces[sp].discarded {
@@ -880,7 +908,9 @@ func (c *Conn) probeSpace() int {
 
 func (c *Conn) fail(err error) {
 	c.closing = true
-	c.closeErr = err
+	if c.closeErr == nil {
+		c.closeErr = err
+	}
 }
 
 func (c *Conn) terminate(err error) {
@@ -905,8 +935,8 @@ func (c *Conn) run(onExit func()) {
 	for {
 		c.mu.Lock()
 		if c.closing && c.sentClose {
-			c.mu.Unlock()
 			c.terminate(ErrClosed)
+			c.mu.Unlock()
 			return
 		}
 		if t := c.nextTimer(); !t.IsZero() {
@@ -953,17 +983,23 @@ func (c *Conn) poke() {
 
 func (c *Conn) Close() error {
 	c.mu.Lock()
-	if !c.closing {
-		c.closing = true
-	}
+	c.closing = true
 	c.mu.Unlock()
 	c.poke()
 	select {
 	case <-c.done:
 	case <-time.After(time.Second):
+		c.mu.Lock()
 		c.terminate(ErrClosed)
+		c.mu.Unlock()
 	}
 	return nil
+}
+
+func (c *Conn) Err() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closeErr
 }
 
 func (c *Conn) ConnectionState() tls.ConnectionState {
@@ -973,41 +1009,49 @@ func (c *Conn) ConnectionState() tls.ConnectionState {
 }
 
 type Stream struct {
-	c         *Conn
-	id        uint64
-	mu        sync.Mutex
-	rbuf      []byte
-	rnext     uint64
-	rparts    map[uint64][]byte
-	rfin      bool
-	rfinAt    uint64
-	consumed  uint64
-	rxMax     uint64
+	c        *Conn
+	id       uint64
+	mu       sync.Mutex
+	rbuf     []byte
+	rnext    uint64
+	rhigh    uint64
+	rparts   map[uint64][]byte
+	rfin     bool
+	rfinAt   uint64
+	consumed uint64
+	rxMax    uint64
+	resetErr error
+	sbuf     []byte
+	sbase    uint64
+	snext    uint64
+	sacked   rangeSet
+	lost     []ackRange
+	closed   bool
+	finSent  bool
+	finAcked bool
+	writeErr error
+	peerMax  uint64
+	rnotify  chan struct{}
+	wnotify  chan struct{}
+	rdl, wdl time.Time
+
 	maxUpdate bool
-	resetErr  error
-	sbuf      []byte
-	sbase     uint64
-	snext     uint64
-	sacked    rangeSet
-	lost      []ackRange
-	closed    bool
-	finSent   bool
-	finAcked  bool
-	writeErr  error
-	peerMax   uint64
-	notify    chan struct{}
-	rdl, wdl  time.Time
 }
 
 func newStream(c *Conn, id uint64) *Stream {
-	return &Stream{c: c, id: id, rparts: map[uint64][]byte{}, rxMax: recvWindow, notify: make(chan struct{}, 1)}
+	return &Stream{c: c, id: id, rparts: map[uint64][]byte{}, rxMax: recvWindow, rnotify: make(chan struct{}, 1), wnotify: make(chan struct{}, 1)}
+}
+
+func notify(ch chan struct{}) {
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
 }
 
 func (st *Stream) signal() {
-	select {
-	case st.notify <- struct{}{}:
-	default:
-	}
+	notify(st.rnotify)
+	notify(st.wnotify)
 }
 
 func (st *Stream) receive(off uint64, data []byte, fin bool) error {
@@ -1017,20 +1061,21 @@ func (st *Stream) receive(off uint64, data []byte, fin bool) error {
 	if end > st.rxMax {
 		return errFlowControl
 	}
+	if end > st.rhigh {
+		st.c.rxReceived += end - st.rhigh
+		st.rhigh = end
+		if st.c.rxReceived > st.c.rxMaxData {
+			return errFlowControl
+		}
+	}
 	if fin {
 		st.rfin, st.rfinAt = true, end
 	}
-	if end > st.rnext {
-		if newBytes := end - max(off, st.rnext); end > st.rnext {
-			st.c.rxReceived += newBytes
-			if st.c.rxReceived > st.c.rxMaxData {
-				return errFlowControl
-			}
-		}
+	if end > st.rnext && len(data) > 0 {
 		st.rparts[off] = append([]byte(nil), data...)
 	}
-	for {
-		progressed := false
+	for progressed := true; progressed; {
+		progressed = false
 		for o, d := range st.rparts {
 			e := o + uint64(len(d))
 			if e <= st.rnext {
@@ -1044,34 +1089,56 @@ func (st *Stream) receive(off uint64, data []byte, fin bool) error {
 				progressed = true
 			}
 		}
-		if !progressed {
-			break
-		}
 	}
-	st.signal()
+	notify(st.rnotify)
 	return nil
 }
 
 func (st *Stream) acked(r ackRange) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
 	if r.hi <= r.lo {
 		return
 	}
+	st.mu.Lock()
 	st.sacked.add(r.lo, r.hi-1)
 	for len(st.sacked) > 0 && st.sacked[0].lo <= st.sbase {
 		if st.sacked[0].hi+1 > st.sbase {
-			n := st.sacked[0].hi + 1 - st.sbase
-			n = min(n, uint64(len(st.sbuf)))
+			n := min(st.sacked[0].hi+1-st.sbase, uint64(len(st.sbuf)))
 			st.sbuf = st.sbuf[n:]
 			st.sbase += n
+		}
+		if st.sacked[0].hi+1 > st.sbase {
+			break
 		}
 		st.sacked = st.sacked[1:]
 	}
 	if len(st.sbuf) == 0 {
 		st.sbuf = nil
 	}
-	st.signal()
+	st.mu.Unlock()
+	notify(st.wnotify)
+}
+
+func wait(ch, done <-chan struct{}, dl time.Time) error {
+	if dl.IsZero() {
+		select {
+		case <-ch:
+		case <-done:
+		}
+		return nil
+	}
+	d := time.Until(dl)
+	if d <= 0 {
+		return os.ErrDeadlineExceeded
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ch:
+	case <-done:
+	case <-t.C:
+		return os.ErrDeadlineExceeded
+	}
+	return nil
 }
 
 func (st *Stream) Read(p []byte) (int, error) {
@@ -1081,17 +1148,20 @@ func (st *Stream) Read(p []byte) (int, error) {
 			n := copy(p, st.rbuf)
 			st.rbuf = st.rbuf[n:]
 			st.consumed += uint64(n)
-			st.c.mu.Lock()
-			st.c.rxConsumed += uint64(n)
-			if st.c.rxMaxData-st.c.rxConsumed < connRecvWindow/2 {
-				st.c.maxDataUpdate = true
-			}
-			st.c.mu.Unlock()
-			if st.rxMax-st.consumed < recvWindow/2 {
+			update := st.rxMax-st.consumed < recvWindow/2
+			if update {
 				st.maxUpdate = true
 			}
 			st.mu.Unlock()
-			st.c.poke()
+			st.c.mu.Lock()
+			st.c.rxConsumed += uint64(n)
+			if st.c.rxMaxData-st.c.rxConsumed < connRecvWindow/2 {
+				st.c.maxDataUpdate, update = true, true
+			}
+			st.c.mu.Unlock()
+			if update {
+				st.c.poke()
+			}
 			return n, nil
 		}
 		if st.rfin && st.rnext >= st.rfinAt {
@@ -1110,21 +1180,8 @@ func (st *Stream) Read(p []byte) (int, error) {
 			return 0, io.EOF
 		default:
 		}
-		var timeout <-chan time.Time
-		if !dl.IsZero() {
-			d := time.Until(dl)
-			if d <= 0 {
-				return 0, os.ErrDeadlineExceeded
-			}
-			t := time.NewTimer(d)
-			defer t.Stop()
-			timeout = t.C
-		}
-		select {
-		case <-st.notify:
-		case <-st.c.done:
-		case <-timeout:
-			return 0, os.ErrDeadlineExceeded
+		if err := wait(st.rnotify, st.c.done, dl); err != nil {
+			return 0, err
 		}
 	}
 }
@@ -1132,6 +1189,11 @@ func (st *Stream) Read(p []byte) (int, error) {
 func (st *Stream) Write(p []byte) (int, error) {
 	total := 0
 	for len(p) > 0 {
+		select {
+		case <-st.c.done:
+			return total, ErrClosed
+		default:
+		}
 		st.mu.Lock()
 		if st.writeErr != nil || st.closed {
 			err := st.writeErr
@@ -1141,9 +1203,8 @@ func (st *Stream) Write(p []byte) (int, error) {
 			}
 			return total, err
 		}
-		space := maxSendBuffer - len(st.sbuf)
-		if space > 0 {
-			n := min(space, len(p))
+		if room := maxSendBuffer - len(st.sbuf); room > 0 {
+			n := min(room, len(p))
 			st.sbuf = append(st.sbuf, p[:n]...)
 			p = p[n:]
 			total += n
@@ -1153,22 +1214,8 @@ func (st *Stream) Write(p []byte) (int, error) {
 		}
 		dl := st.wdl
 		st.mu.Unlock()
-		var timeout <-chan time.Time
-		if !dl.IsZero() {
-			d := time.Until(dl)
-			if d <= 0 {
-				return total, os.ErrDeadlineExceeded
-			}
-			t := time.NewTimer(d)
-			defer t.Stop()
-			timeout = t.C
-		}
-		select {
-		case <-st.notify:
-		case <-st.c.done:
-			return total, ErrClosed
-		case <-timeout:
-			return total, os.ErrDeadlineExceeded
+		if err := wait(st.wnotify, st.c.done, dl); err != nil {
+			return total, err
 		}
 	}
 	return total, nil
@@ -1180,25 +1227,30 @@ func (st *Stream) Close() error {
 	st.mu.Unlock()
 	st.c.poke()
 	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
+	for {
 		st.mu.Lock()
-		done := st.finAcked || len(st.sbuf) == 0
+		done := st.finAcked
 		st.mu.Unlock()
-		if done {
+		if done || wait(st.wnotify, st.c.done, deadline) != nil {
 			break
 		}
 		select {
-		case <-st.notify:
 		case <-st.c.done:
 			return nil
-		case <-time.After(50 * time.Millisecond):
+		default:
 		}
 	}
 	return st.c.Close()
 }
 
-func (st *Stream) LocalAddr() net.Addr  { return st.c.pc.LocalAddr() }
-func (st *Stream) RemoteAddr() net.Addr { return st.c.addr }
+func (st *Stream) Conn() *Conn         { return st.c }
+func (st *Stream) LocalAddr() net.Addr { return st.c.pc.LocalAddr() }
+
+func (st *Stream) RemoteAddr() net.Addr {
+	st.c.mu.Lock()
+	defer st.c.mu.Unlock()
+	return st.c.addr
+}
 
 func (st *Stream) SetDeadline(t time.Time) error {
 	st.SetReadDeadline(t)
@@ -1209,7 +1261,7 @@ func (st *Stream) SetReadDeadline(t time.Time) error {
 	st.mu.Lock()
 	st.rdl = t
 	st.mu.Unlock()
-	st.signal()
+	notify(st.rnotify)
 	return nil
 }
 
@@ -1217,6 +1269,7 @@ func (st *Stream) SetWriteDeadline(t time.Time) error {
 	st.mu.Lock()
 	st.wdl = t
 	st.mu.Unlock()
+	notify(st.wnotify)
 	return nil
 }
 
