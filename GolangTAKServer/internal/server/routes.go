@@ -449,6 +449,14 @@ func (s *Server) missionRouter(w http.ResponseWriter, r *http.Request) {
 			notFound()
 		}
 	case "subscription":
+		if method == http.MethodPost {
+			body, _ := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+			if t := bytes.TrimSpace(body); len(t) > 0 && t[0] == '[' {
+				s.missionSetSubscriptionRoles(w, r, t)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
 		switch method {
 		case http.MethodPut, http.MethodPost:
 			s.missionSubscribe(w, r)
