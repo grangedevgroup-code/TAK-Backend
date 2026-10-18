@@ -211,22 +211,76 @@ func (s *Server) martiGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.envelope("com.bbn.marti.remote.groups.Group", s.groupJSON(g, dir, true)))
 }
 
+type activeGroup struct {
+	Name      string `json:"name"`
+	Direction string `json:"direction"`
+	Active    bool   `json:"active"`
+}
+
 func (s *Server) martiGroupsActive(w http.ResponseWriter, r *http.Request) {
 	id := identityOf(r)
 	if id == nil || id.Anon || id.Name == "" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	var body []struct {
-		Name      string `json:"name"`
-		Direction string `json:"direction"`
-		Active    bool   `json:"active"`
-	}
+	var body []activeGroup
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a JSON list of groups"})
 		return
 	}
+	s.applyActiveGroups(w, r, id.Name, body)
+}
+
+func (s *Server) martiGroupsActiveForce(w http.ResponseWriter, r *http.Request) {
+	id := identityOf(r)
+	if id == nil || !id.Admin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrator access required"})
+		return
+	}
+	user := r.URL.Query().Get("username")
+	if _, ok := s.dir.User(user); !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such user"})
+		return
+	}
+	var body []activeGroup
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a JSON list of groups"})
+		return
+	}
+	s.applyActiveGroups(w, r, user, body)
+}
+
+func (s *Server) martiGroupsActiveBits(w http.ResponseWriter, r *http.Request) {
+	id := identityOf(r)
+	if id == nil || id.Anon || id.Name == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	var bits []int
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&bits); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a JSON list of group bit positions"})
+		return
+	}
 	u, ok := s.dir.User(id.Name)
+	if !ok {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	var body []activeGroup
+	add := func(names []string, dir string) {
+		for _, name := range names {
+			if g, ok := s.dir.Group(name); ok {
+				body = append(body, activeGroup{Name: name, Direction: dir, Active: slices.Contains(bits, g.Bit)})
+			}
+		}
+	}
+	add(u.In, DirIn)
+	add(u.Out, DirOut)
+	s.applyActiveGroups(w, r, id.Name, body)
+}
+
+func (s *Server) applyActiveGroups(w http.ResponseWriter, r *http.Request, user string, body []activeGroup) {
+	u, ok := s.dir.User(user)
 	if !ok {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -240,16 +294,16 @@ func (s *Server) martiGroupsActive(w http.ResponseWriter, r *http.Request) {
 		}
 		member := (dir == DirIn && slices.Contains(u.In, g.Name)) || (dir == DirOut && slices.Contains(u.Out, g.Name))
 		if !member {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": id.Name + " is not in group " + g.Name})
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": user + " is not in group " + g.Name})
 			return
 		}
 		changes[g.Name+"|"+dir] = g.Active
 	}
-	if err := s.dir.SetActive(id.Name, changes); err != nil {
+	if err := s.dir.SetActive(user, changes); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	s.log.Info("channel selection changed", "user", id.Name, "client", r.URL.Query().Get("clientUid"))
+	s.log.Info("channel selection changed", "user", user, "client", r.URL.Query().Get("clientUid"), "by", identityOf(r).Name)
 	w.WriteHeader(http.StatusOK)
 }
 
