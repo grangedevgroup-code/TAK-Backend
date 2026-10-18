@@ -118,7 +118,11 @@ func (p *Provider) fromSharedFile(context.Context) (Credentials, error) {
 		return Credentials{}, err
 	}
 	defer f.Close()
-	return ParseSharedCredentials(f, firstEnv("AWS_PROFILE", "AWS_DEFAULT_PROFILE")+map[bool]string{true: "default"}[firstEnv("AWS_PROFILE", "AWS_DEFAULT_PROFILE") == ""])
+	profile := firstEnv("AWS_PROFILE", "AWS_DEFAULT_PROFILE")
+	if profile == "" {
+		profile = "default"
+	}
+	return ParseSharedCredentials(f, profile)
 }
 
 type roleCredentials struct {
