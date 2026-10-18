@@ -376,6 +376,9 @@ func (s *Server) oidcKeys(c OAuthConfig, kid string, force bool) (map[string]cry
 }
 
 func verifyJWTSignature(alg string, key crypto.PublicKey, signed, sig []byte) bool {
+	if len(alg) != 5 {
+		return false
+	}
 	var h crypto.Hash
 	switch alg[2:] {
 	case "256":
