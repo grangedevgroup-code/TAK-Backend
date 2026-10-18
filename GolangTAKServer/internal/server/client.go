@@ -119,6 +119,7 @@ type Client struct {
 	incognito  atomic.Bool
 	input      *InputConfig
 	qos        qosClientState
+	fed        *fedPolicy
 	istats     *inputStats
 }
 

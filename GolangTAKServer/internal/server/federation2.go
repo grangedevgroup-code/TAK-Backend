@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/grpcx"
@@ -113,9 +115,14 @@ func (f *fig2Server) acquire(r *http.Request) (*fig2Session, error) {
 		ss.refs++
 		return ss, nil
 	}
-	allowed := f.s.Config().Federation.Groups
-	c := f.s.relayClient(KindFederation, name, r.RemoteAddr, allowed)
+	pol := f.s.fedPolicyFor(certFingerprint(cert), name, chainCAFingerprint(r.TLS.VerifiedChains), nil)
+	if pol.disabled {
+		return nil, grpcx.Errorf(grpcx.PermissionDenied, "this federate is disabled")
+	}
+	allowed := pol.out
+	c := f.s.fedClient(KindFederation, name, r.RemoteAddr, pol)
 	f.s.hub.Add(c)
+	f.s.noteFederate(pol, r.RemoteAddr, "v2", "inbound", cert, true)
 	ss := &fig2Session{key: key, name: name, remote: r.RemoteAddr, c: c, allowed: allowed, refs: 1, since: time.Now(), rolOut: make(chan takproto.ROL, 256), done: make(chan struct{})}
 	f.sessions[key] = ss
 	f.s.fed.add(&fedConn{c: c, name: name, dir: "inbound", since: ss.since, version: "v2"})
@@ -133,6 +140,7 @@ func (f *fig2Server) release(ss *fig2Session) {
 	f.mu.Unlock()
 	if last {
 		close(ss.done)
+		f.s.noteFederate(ss.c.fed, ss.remote, "v2", "inbound", nil, false)
 		f.s.fed.remove(ss.c)
 		f.s.hub.Remove(ss.c)
 		f.s.log.Info("federate disconnected", "federate", ss.name, "version", "v2")
@@ -232,6 +240,7 @@ func (f *fig2Server) serve(w http.ResponseWriter, r *http.Request) {
 				f.mu.Lock()
 				ss.groups = g.Groups
 				f.mu.Unlock()
+				f.s.noteRemoteGroups(ss.c.fed, g.Groups)
 			}
 		}
 	case "ClientROLStream":
@@ -260,7 +269,7 @@ func (f *fig2Server) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if rol, err := takproto.UnmarshalROL(msg); err == nil {
-				f.s.handleROL(ss.c, rol, ss.allowed, f.nodeOf(ss))
+				f.s.handleROL(ss.c, rol, ss.c.fed.in, f.nodeOf(ss))
 			}
 		}
 	case "BinaryMessageStream":
@@ -310,7 +319,7 @@ func (f *fig2Server) inbound(ss *fig2Session, msg []byte) {
 		return
 	}
 	ss.c.touch()
-	f.s.federatedIn(ss.c, ev, ss.allowed)
+	f.s.federatedIn(ss.c, ev)
 }
 
 func (f *fig2Server) streamEvents(st *grpcx.ServerStream, ss *fig2Session) error {
@@ -333,7 +342,7 @@ func (f *fig2Server) streamEvents(st *grpcx.ServerStream, ss *fig2Session) error
 		case <-ss.c.closed:
 			return grpcx.Errorf(grpcx.Unavailable, "federate closed")
 		case m := <-ss.c.out:
-			ev, ok := f.s.fedOutEvent(m, ss.allowed)
+			ev, ok := f.s.fedOutEvent(ss.c, m)
 			if !ok {
 				continue
 			}
@@ -379,6 +388,11 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 	if l.cfg.Insecure {
 		tcfg.InsecureSkipVerify = true
 	}
+	var peerState atomic.Pointer[tls.ConnectionState]
+	tcfg.VerifyConnection = func(cs tls.ConnectionState) error {
+		peerState.Store(&cs)
+		return nil
+	}
 	tr := &http.Transport{
 		TLSClientConfig:     tcfg,
 		ForceAttemptHTTP2:   true,
@@ -413,11 +427,23 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 	icancel()
 
 	cfg := s.Config()
-	allowed := cfg.Federation.Groups
-	if len(l.cfg.Groups) > 0 {
-		allowed = l.cfg.Groups
+	var peerCert *x509.Certificate
+	caFP := ""
+	if v := peerState.Load(); v != nil {
+		if len(v.PeerCertificates) > 0 {
+			peerCert = v.PeerCertificates[0]
+		}
+		caFP = chainCAFingerprint(v.VerifiedChains)
 	}
-	c := s.relayClient(KindFederation, l.cfg.Name, net.JoinHostPort(host, port), allowed)
+	pol := s.fedPolicyFor(certFingerprint(peerCert), l.cfg.Name, caFP, l.cfg.Groups)
+	pol.name = l.cfg.Name
+	if pol.disabled {
+		return errors.New("this federate is disabled")
+	}
+	allowed := pol.out
+	c := s.fedClient(KindFederation, l.cfg.Name, net.JoinHostPort(host, port), pol)
+	s.noteFederate(pol, net.JoinHostPort(host, port), "v2", "outbound", peerCert, true)
+	defer s.noteFederate(pol, net.JoinHostPort(host, port), "v2", "outbound", peerCert, false)
 	if strings.EqualFold(l.cfg.Direction, "in") {
 		c.filter = func(*Message) bool { return false }
 	}
@@ -496,13 +522,13 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 			return
 		}
 		c.touch()
-		s.federatedIn(c, ev, allowed)
+		s.federatedIn(c, ev)
 	}); err != nil {
 		return err
 	}
 	if err := serverStream("ClientROLStream", func(msg []byte) {
 		if rol, err := takproto.UnmarshalROL(msg); err == nil {
-			s.handleROL(c, rol, allowed, remoteNode)
+			s.handleROL(c, rol, pol.in, remoteNode)
 		}
 	}); err != nil {
 		return err
@@ -535,7 +561,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 				fail(errors.New("federation link closed"))
 				return
 			case m := <-c.out:
-				ev, ok := s.fedOutEvent(m, allowed)
+				ev, ok := s.fedOutEvent(c, m)
 				if !ok {
 					continue
 				}

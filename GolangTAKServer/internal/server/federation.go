@@ -155,13 +155,16 @@ func (s *Server) startFederation() error {
 				}
 				tc.SetDeadline(time.Time{})
 				name := conn.RemoteAddr().String()
-				if pc := tc.ConnectionState().PeerCertificates; len(pc) > 0 {
+				st := tc.ConnectionState()
+				var cert *x509.Certificate
+				if pc := st.PeerCertificates; len(pc) > 0 {
+					cert = pc[0]
 					name = pc[0].Subject.CommonName
 					if len(pc[0].Issuer.CommonName) > 0 {
 						name += " (" + pc[0].Issuer.CommonName + ")"
 					}
 				}
-				err := s.serveFederate(s.ctx, tc, name, "inbound", nil)
+				err := s.serveFederate(s.ctx, tc, name, "inbound", nil, cert, chainCAFingerprint(st.VerifiedChains))
 				s.log.Info("federate disconnected", "federate", name, "err", errString(err))
 			}()
 		}
@@ -209,7 +212,12 @@ func (s *Server) connectFederation(ctx context.Context, l *peerLink, u *url.URL)
 	}
 	l.set("connected", "")
 	s.log.Info("federation link connected", "federate", l.cfg.Name, "remote", conn.RemoteAddr())
-	return s.serveFederate(ctx, conn, l.cfg.Name, "outbound", l)
+	st := conn.(*tls.Conn).ConnectionState()
+	var cert *x509.Certificate
+	if len(st.PeerCertificates) > 0 {
+		cert = st.PeerCertificates[0]
+	}
+	return s.serveFederate(ctx, conn, l.cfg.Name, "outbound", l, cert, chainCAFingerprint(st.VerifiedChains))
 }
 
 func (s *Server) fedGroups(m *Message, allowed []string) []string {
@@ -225,14 +233,24 @@ func (s *Server) fedGroups(m *Message, allowed []string) []string {
 	return out
 }
 
-func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir string, l *peerLink) error {
+func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir string, l *peerLink, cert *x509.Certificate, caFP string) error {
 	defer conn.Close()
 	cfg := s.Config()
-	allowed := cfg.Federation.Groups
-	if l != nil && len(l.cfg.Groups) > 0 {
-		allowed = l.cfg.Groups
+	var linkGroups []string
+	if l != nil {
+		linkGroups = l.cfg.Groups
 	}
-	c := s.relayClient(KindFederation, name, conn.RemoteAddr().String(), allowed)
+	pol := s.fedPolicyFor(certFingerprint(cert), name, caFP, linkGroups)
+	if l != nil {
+		pol.name = l.cfg.Name
+	}
+	if pol.disabled {
+		return errors.New("this federate is disabled")
+	}
+	allowed := pol.out
+	c := s.fedClient(KindFederation, name, conn.RemoteAddr().String(), pol)
+	s.noteFederate(pol, conn.RemoteAddr().String(), "v1", dir, cert, true)
+	defer s.noteFederate(pol, conn.RemoteAddr().String(), "v1", dir, cert, false)
 	c.onClose = func() { conn.Close() }
 	if l != nil && strings.EqualFold(l.cfg.Direction, "in") {
 		c.filter = func(*Message) bool { return false }
@@ -284,7 +302,7 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 				errc <- errors.New("federate closed")
 				return
 			case m := <-c.out:
-				f, ok := s.fedOutEvent(m, allowed)
+				f, ok := s.fedOutEvent(c, m)
 				if !ok {
 					continue
 				}
@@ -322,7 +340,7 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 				continue
 			}
 			c.touch()
-			s.federatedIn(c, f, allowed)
+			s.federatedIn(c, f)
 		}
 	}()
 	err := <-errc
@@ -351,12 +369,26 @@ func (s *Server) fedInitial(c *Client, allowed []string, send func(takproto.FedE
 	return nil
 }
 
-func (s *Server) fedOutEvent(m *Message, allowed []string) (takproto.FedEvent, bool) {
+func (s *Server) fedOutEvent(c *Client, m *Message) (takproto.FedEvent, bool) {
 	if m.ForceXML || m.SwitchProto {
 		return takproto.FedEvent{}, false
 	}
 	cfg := s.Config()
-	groups := s.fedGroups(m, allowed)
+	maxHops := int64(cfg.Federation.MaxHops)
+	if p := c.fed; p != nil {
+		maxHops = int64(p.maxHops)
+		if p.noAlerts && m.Event.Is("b-a-") {
+			return takproto.FedEvent{}, false
+		}
+	}
+	hops := int64(1)
+	if m.Hops > 0 {
+		hops = m.Hops + 1
+	}
+	groups, ok := s.outboundGroups(c, m, hops)
+	if !ok {
+		return takproto.FedEvent{}, false
+	}
 	if m.Disconnect {
 		links := m.Event.Links()
 		if len(links) == 0 {
@@ -369,10 +401,7 @@ func (s *Server) fedOutEvent(m *Message, allowed []string) (takproto.FedEvent, b
 	}
 	e := m.Event.Clone()
 	e.AddFlowTag(s.FlowKey(), time.Now())
-	f := takproto.FedEvent{Event: e, Groups: groups, Provenance: []takproto.Provenance{{ServerID: cfg.NodeID, ServerName: cfg.Name}}, MaxHops: int64(cfg.Federation.MaxHops), CurrentHops: 1}
-	if m.Hops > 0 {
-		f.CurrentHops = m.Hops + 1
-	}
+	f := takproto.FedEvent{Event: e, Groups: groups, Provenance: []takproto.Provenance{{ServerID: cfg.NodeID, ServerName: cfg.Name}}, MaxHops: maxHops, CurrentHops: hops}
 	if f.CurrentHops > f.MaxHops {
 		return takproto.FedEvent{}, false
 	}
@@ -389,25 +418,15 @@ func intersectNames(a, b []string) []string {
 	return out
 }
 
-func (s *Server) federatedIn(c *Client, f *takproto.FedEvent, allowed []string) {
+func (s *Server) federatedIn(c *Client, f *takproto.FedEvent) {
 	for _, p := range f.Provenance {
 		if p.ServerID == s.Config().NodeID {
 			return
 		}
 	}
-	mask := c.InMask()
-	if len(f.Groups) > 0 {
-		var mapped []string
-		for _, g := range f.Groups {
-			if slices.Contains(allowed, g) {
-				if _, ok := s.dir.Group(g); ok {
-					mapped = append(mapped, g)
-				}
-			}
-		}
-		if len(mapped) > 0 {
-			mask = s.dir.Mask(mapped)
-		}
+	mask, ok := s.inboundMask(c, f.Groups)
+	if !ok {
+		return
 	}
 	if ct := f.Contact; ct != nil {
 		switch ct.Operation {
@@ -433,6 +452,9 @@ func (s *Server) federatedIn(c *Client, f *takproto.FedEvent, allowed []string) 
 		}
 		m := NewMessage(e, c, mask)
 		m.Hops = f.CurrentHops
+		if c.fed != nil && c.fed.noArchive {
+			m.NoHistory = true
+		}
 		s.hub.Identify(c, m)
 		s.hub.Publish(m)
 	}

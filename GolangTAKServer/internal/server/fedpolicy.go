@@ -1,9 +1,12 @@
 package server
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -373,7 +376,7 @@ func (s *Server) fileBlocked(name string, data []byte) bool {
 	return false
 }
 
-func rolMissionName(rol takproto.ROL) string {
+func rolMissionOf(rol takproto.ROL) string {
 	_, resource, params := parseROL(rol.Program)
 	if resource != "mission" && resource != "data_feed" {
 		return ""
@@ -382,8 +385,20 @@ func rolMissionName(rol takproto.ROL) string {
 		MissionName string `json:"missionName"`
 		Name        string `json:"name"`
 	}
-	if jsonUnmarshalLoose(params, &v) != nil {
+	if json.Unmarshal(params, &v) != nil {
 		return ""
 	}
 	return firstNonEmpty(v.MissionName, v.Name)
+}
+
+func zipEntryNames(data []byte) []string {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(zr.File))
+	for _, f := range zr.File {
+		out = append(out, f.Name)
+	}
+	return out
 }

@@ -98,6 +98,15 @@ type FederationConfig struct {
 
 	NoMissions  bool `json:"disableMissionFederation"`
 	AllowDelete bool `json:"allowFederatedDelete"`
+
+	Federates   []FederateConfig   `json:"federates,omitempty"`
+	CAs         []FederateCAConfig `json:"federateCAs,omitempty"`
+	Token       FedTokenConfig     `json:"tokenAuth"`
+	FileFilter  FedFileFilter      `json:"fileFilter"`
+	Disruption  FedDisruption      `json:"disruptionTolerance"`
+	CADownload  bool               `json:"caDownload,omitempty"`
+	HTTPSPort   int                `json:"httpsPort,omitempty"`
+	NoDataFeeds bool               `json:"disableDataFeedFederation,omitempty"`
 }
 
 type ADSBFeed struct {

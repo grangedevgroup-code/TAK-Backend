@@ -184,10 +184,16 @@ func (s *Server) rolFor(t rolTarget, rol takproto.ROL, groups []string) (takprot
 		return rol, false
 	}
 	cfg := s.Config()
+	if !s.rolPermitted(t.c, rol) {
+		return rol, false
+	}
 	rol.Groups = intersectNames(groups, t.allowed)
 	rol.Provenance = append(slices.Clone(rol.Provenance), takproto.Provenance{ServerID: cfg.NodeID, ServerName: cfg.Name})
 	if rol.MaxHops == 0 {
 		rol.MaxHops = int64(cfg.Federation.MaxHops)
+		if t.c.fed != nil {
+			rol.MaxHops = int64(t.c.fed.maxHops)
+		}
 	}
 	rol.CurrentHops++
 	return rol, rol.CurrentHops <= rol.MaxHops
@@ -318,6 +324,66 @@ func (s *Server) rolMissionExpiration(m Mission) {
 	}
 }
 
+func (s *Server) rolPermitted(c *Client, rol takproto.ROL) bool {
+	cfg := s.Config()
+	_, resource, params := parseROL(rol.Program)
+	if resource == "data_feed" && cfg.Federation.NoDataFeeds {
+		return false
+	}
+	if c != nil && c.fed != nil {
+		if name := rolMissionOf(rol); name != "" && !c.fed.missionAllowed(name) {
+			return false
+		}
+	}
+	if resource == "resource" && cfg.Federation.FileFilter.Enabled {
+		var rr rolResource
+		json.Unmarshal(params, &rr)
+		var data []byte
+		if len(rol.Payload) > 0 {
+			data = rol.Payload[0].Data
+		}
+		if s.fileBlocked(firstNonEmpty(rr.Name, rr.Filename), data) {
+			s.log.Info("federated file blocked by the file filter", "name", firstNonEmpty(rr.Name, rr.Filename))
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) snapshotSince(t rolTarget, m Mission) time.Time {
+	d := s.Config().Federation.Disruption
+	if !d.Enabled || t.c == nil {
+		return time.Time{}
+	}
+	last := s.federateLastSeen(t.c.fed)
+	if last.IsZero() {
+		return time.Time{}
+	}
+	rec, unlimited := d.RecencySeconds, d.Unlimited
+	if rec <= 0 {
+		rec = 2 * 24 * 3600
+	}
+	if v, ok := d.Missions[m.Name]; ok {
+		rec, unlimited = v, v < 0
+	}
+	if unlimited {
+		return last
+	}
+	floor := time.Now().Add(-time.Duration(rec) * time.Second)
+	if last.Before(floor) {
+		return floor
+	}
+	return last
+}
+
+func missionLastChange(m Mission) time.Time {
+	last := m.Created
+	if n := len(m.Changes); n > 0 && m.Changes[n-1].Time.After(last) {
+		last = m.Changes[n-1].Time
+	}
+	return last
+}
+
 func (s *Server) rolSnapshot(ctx context.Context, t rolTarget) {
 	cfg := s.Config()
 	if !cfg.Federation.Enabled || cfg.Federation.NoMissions {
@@ -338,6 +404,9 @@ func (s *Server) rolSnapshot(ctx context.Context, t rolTarget) {
 	}
 	for _, m := range s.missions.All() {
 		if !s.missionFederates(m) || (t.node != "" && m.Origin == t.node) {
+			continue
+		}
+		if since := s.snapshotSince(t, m); !since.IsZero() && missionLastChange(m).Before(since) {
 			continue
 		}
 		if !push(takproto.ROL{Program: rolProgram("create", "mission", missionMetaOf(m))}, m.Groups) {
@@ -415,6 +484,9 @@ func (s *Server) handleROL(src *Client, rol takproto.ROL, allowed []string, node
 		}
 	}
 	if cfg.Federation.NoMissions {
+		return
+	}
+	if !s.rolPermitted(src, rol) {
 		return
 	}
 	op, resource, params := parseROL(rol.Program)

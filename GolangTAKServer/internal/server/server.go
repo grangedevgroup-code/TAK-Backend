@@ -67,6 +67,7 @@ type Server struct {
 	archive     *missionArchive
 	chatPurgeMu sync.Mutex
 	chatPurged  map[string]bool
+	fedSeen     *store.Collection[seenFederate]
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
@@ -196,6 +197,15 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	next.Mesh.Groups = append([]string(nil), s.cfg.Mesh.Groups...)
 	next.Federation.Groups = append([]string(nil), s.cfg.Federation.Groups...)
 	next.Federation.TrustPEM = append([]string(nil), s.cfg.Federation.TrustPEM...)
+	next.DataFeeds = append([]DataFeedConfig(nil), s.cfg.DataFeeds...)
+	next.Inputs = append([]InputConfig(nil), s.cfg.Inputs...)
+	next.Federation.Federates = cloneFederates(s.cfg.Federation.Federates)
+	next.Federation.CAs = append([]FederateCAConfig(nil), s.cfg.Federation.CAs...)
+	next.Federation.FileFilter.Extensions = append([]string(nil), s.cfg.Federation.FileFilter.Extensions...)
+	next.Retention.ExemptKeywords = append([]string(nil), s.cfg.Retention.ExemptKeywords...)
+	next.QoS.DeliveryRules = append([]QoSRule(nil), s.cfg.QoS.DeliveryRules...)
+	next.QoS.ReadRules = append([]QoSRule(nil), s.cfg.QoS.ReadRules...)
+	next.QoS.DOSRules = append([]DOSRule(nil), s.cfg.QoS.DOSRules...)
 	if err := fn(&next); err != nil {
 		s.cfgMu.Unlock()
 		return s.cfg, err
