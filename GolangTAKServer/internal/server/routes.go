@@ -48,7 +48,8 @@ func (s *Server) routes() *http.ServeMux {
 	m("GET /Marti/api/cot/xml/{uid}", s.martiCotXML)
 	m("GET /Marti/api/cot/xml/{uid}/all", s.martiCotXMLAll)
 	m("GET /Marti/api/cot/sa", s.martiCotSA)
-	m("GET /Marti/api/cot", s.martiCotSA)
+	m("GET /Marti/api/cot", s.martiCotByUIDs)
+	m("POST /Marti/api/cot", s.martiCotByUIDs)
 	m("GET /Marti/api/plugins/info/all", s.martiPluginInfo)
 	m("GET /Marti/api/plugins/info/all/started", s.martiPluginInfo)
 	m("GET /Marti/api/plugins/info/started", s.martiPluginInfo)
@@ -130,6 +131,7 @@ func (s *Server) routes() *http.ServeMux {
 	m("POST /Marti/sync/missionupload", s.martiMissionUpload)
 	m("PUT /Marti/sync/missionupload", s.martiMissionUpload)
 	m("GET /Marti/sync/missionquery", s.martiMissionQuery)
+	m("POST /Marti/sync/missionquery", formAsQuery(s.martiMissionQuery))
 	m("POST /Marti/sync/upload", s.martiSyncUpload)
 	m("PUT /Marti/sync/upload", s.martiSyncUpload)
 	m("GET /Marti/sync/content", s.martiSyncContent)
@@ -137,7 +139,14 @@ func (s *Server) routes() *http.ServeMux {
 	m("PUT /Marti/sync/content", s.martiSyncContentPut)
 	m("POST /Marti/sync/content", s.martiSyncContentPut)
 	m("GET /Marti/sync/search", s.martiSyncSearch)
+	m("POST /Marti/sync/search", formAsQuery(s.martiSyncSearch))
 	m("DELETE /Marti/sync/delete", s.martiFileDelete)
+	m("GET /Marti/sync/delete", s.martiFileDelete)
+	m("POST /Marti/sync/delete", formAsQuery(s.martiFileDelete))
+	m("GET /Marti/GetTime", s.martiServerTime)
+	m("POST /Marti/GetTime", s.martiServerTime)
+	m("GET /Marti/GetCotData", s.martiGetCotData)
+	m("POST /Marti/GetCotData", s.martiGetCotData)
 	m("GET /Marti/api/sync/search", s.martiAPISyncSearch)
 	m("GET /Marti/api/sync/metadata/{hash}/tool", s.martiMetadataTool)
 	m("PUT /Marti/api/sync/metadata/{hash}/tool", s.martiMetadataTool)
@@ -145,6 +154,15 @@ func (s *Server) routes() *http.ServeMux {
 	m("PUT /Marti/api/sync/metadata/{hash}/expiration", s.martiMetadataExpiration)
 	m("GET /Marti/api/files/metadata", s.martiFilesMetadata)
 	m("GET /Marti/api/files/{hash}", s.martiFileGet)
+	m("PUT /Marti/api/files/{hash}/metadata", s.martiFilePutMetadata)
+	m("PUT /Marti/api/sync/metadata/{hash}/{metadata}", s.martiSetMetadata)
+	m("GET /Marti/api/resources/{hash}", s.martiResource)
+	m("GET /Marti/api/users/all", s.martiUsersAll)
+	m("GET /Marti/api/users/{id}", s.martiUserByConnection)
+	m("GET /Marti/api/home", s.martiHome)
+	m("GET /Marti/api/ver", s.martiVer)
+	m("GET /Marti/api/util/isLdapAdmin", s.martiIsLdapAdmin)
+	a("GET /Marti/api/groups/members", s.martiGroupMembers)
 	m("DELETE /Marti/api/files/{hash}", s.martiFileDelete)
 
 	mux.HandleFunc("/Marti/api/missions", s.guard(accessMarti, s.missionRouter))
@@ -317,6 +335,16 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /{$}", s.dashboardIndex)
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	return mux
+}
+
+func formAsQuery(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		if err := r.ParseForm(); err == nil {
+			r.URL.RawQuery = r.Form.Encode()
+		}
+		h(w, r)
+	}
 }
 
 func noCache(h http.Handler) http.Handler {
