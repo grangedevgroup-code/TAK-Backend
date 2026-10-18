@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"image/png"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -333,5 +334,64 @@ func TestParitySignalAndXMPP(t *testing.T) {
 	}
 	if st, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/xmpp/transfer/u1/photo.jpg"), nil, a); st != 200 || string(b) != "JPEGDATA" {
 		t.Fatalf("xmpp get: %d %s", st, b)
+	}
+}
+
+func TestParityLegacyServlets(t *testing.T) {
+	s := newTestServer(t, nil)
+	a := adminHeaders(t, s)
+	form := map[string]string{"Authorization": a["Authorization"], "Content-Type": "application/x-www-form-urlencoded"}
+	c := dialTCP(t, s)
+	c.send(saXML("KML-1", "KMLONE", 10, 20))
+	time.Sleep(300 * time.Millisecond)
+	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/LatestKML?cotType=a-f"), nil, a); !strings.Contains(string(b), "KMLONE") {
+		t.Fatalf("LatestKML: %s", b)
+	}
+	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/KmlMasterSA"), nil, a); !strings.Contains(string(b), "<NetworkLink><name>Friendlies") {
+		t.Fatalf("KmlMasterSA: %s", b)
+	}
+	st, b := doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/vcu"), strings.NewReader("alias=cam1&protocol=rtsp&address=10.0.0.5&port=554&path=/live"), form)
+	if st != 200 {
+		t.Fatalf("vcu: %d %s", st, b)
+	}
+	feed := strings.TrimSpace(string(b))
+	if st, _ := doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/vcs"), strings.NewReader("feedId="+feed+"&contacts=KML-1"), form); st != 200 {
+		t.Fatalf("vcs: %d", st)
+	}
+	c.expect(func(e *cot.Event) bool { return e.Type == "b-i-v" }, "video feed sent to the contact")
+	if st, _ := doReq(t, http.DefaultClient, "DELETE", plainURL(s, "/Marti/vcm?id="+feed), nil, a); st != 200 {
+		t.Fatalf("vcm delete: %d", st)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	got := make(chan string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf, _ := io.ReadAll(conn)
+		got <- string(buf)
+	}()
+	port := ln.Addr().(*net.TCPAddr).Port
+	st, b = doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/CotQueryServlet"), strings.NewReader("hostName=127.0.0.1&port="+itoa(port)+"&protocol=tcp&uid=KML-1"), form)
+	if st != 200 {
+		t.Fatalf("cot query: %d %s", st, b)
+	}
+	select {
+	case out := <-got:
+		if !strings.Contains(out, `uid="KML-1"`) {
+			t.Fatalf("query results: %s", out)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("query results not delivered")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/cot/search/"+strings.TrimSpace(string(b))), nil, a); !strings.Contains(string(b), `"status":"DONE"`) {
+		t.Fatalf("search status: %s", b)
 	}
 }

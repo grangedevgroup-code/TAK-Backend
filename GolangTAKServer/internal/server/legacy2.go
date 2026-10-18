@@ -43,8 +43,7 @@ func (s *Server) vcuPost(w http.ResponseWriter, r *http.Request) {
 		Buffer: q.Get("buffer"), Timeout: q.Get("timeout"), RTSPReliable: q.Get("rtspReliable"), Thumbnail: q.Get("thumbnail"), Classification: q.Get("classification"),
 		Groups: s.identityGroups(id), Creator: id.Name, Active: q.Get("active") != "false" && q.Get("active") != "0"}
 	f.Port, _ = strconv.Atoi(q.Get("port"))
-	f.Lat, _ = strconv.ParseFloat(q.Get("latitude"), 64)
-	f.Lon, _ = strconv.ParseFloat(q.Get("longitude"), 64)
+	f.Lat, f.Lon = q.Get("latitude"), q.Get("longitude")
 	if f.Address == "" && f.Path == "" {
 		writeText(w, http.StatusBadRequest, "address is required")
 		return
@@ -86,7 +85,7 @@ func (s *Server) vcsPost(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func kmlColor(t string) string {
+func affiliationKMLColor(t string) string {
 	switch {
 	case strings.HasPrefix(t, "a-f") || strings.HasPrefix(t, "a-a"):
 		return "ffffff00"
@@ -132,7 +131,7 @@ func (s *Server) latestKML(w http.ResponseWriter, r *http.Request) {
 		}
 		name := firstNonEmpty(e.Callsign(), e.UID)
 		b.WriteString(`<Placemark><name>` + kmlEscape(name) + `</name><description>` + kmlEscape(e.Type+" "+cot.FormatTime(e.Time)) + `</description>`)
-		b.WriteString(`<Style><IconStyle><color>` + kmlColor(e.Type) + `</color><Icon><href>` + kmlEscape(s.baseURL(r)+"/Marti/api/iconimage?cotType="+url.QueryEscape(e.Type)) + `</href></Icon></IconStyle></Style>`)
+		b.WriteString(`<Style><IconStyle><color>` + affiliationKMLColor(e.Type) + `</color><Icon><href>` + kmlEscape(s.baseURL(r)+"/Marti/api/iconimage?cotType="+url.QueryEscape(e.Type)) + `</href></Icon></IconStyle></Style>`)
 		b.WriteString(fmt.Sprintf(`<Point><coordinates>%s,%s,%s</coordinates></Point></Placemark>`, cot.FormatFloat(e.Point.Lon), cot.FormatFloat(e.Point.Lat), cot.FormatFloat(e.Point.Hae)))
 	}
 	b.WriteString(`</Document></kml>`)
