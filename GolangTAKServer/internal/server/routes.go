@@ -239,6 +239,7 @@ func (s *Server) routes() *http.ServeMux {
 	pub("POST /api/login", s.apiLogin)
 	pub("POST /oauth/token", s.oauthToken)
 	pub("GET /login", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/", http.StatusFound) })
+	pub("POST /login", s.formLogin)
 	pub("GET /login/auth", s.loginAuth)
 	pub("GET /login/redirect", s.loginRedirect)
 	pub("GET /login/refresh", s.loginRefresh)

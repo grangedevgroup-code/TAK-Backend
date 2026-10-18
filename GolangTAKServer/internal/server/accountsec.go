@@ -313,7 +313,7 @@ func (s *Server) startLogin(w http.ResponseWriter, r *http.Request, u User) bool
 	return true
 }
 
-func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request, u User) {
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u User) *Session {
 	ttl := 12 * time.Hour
 	if m := s.Config().Web.SessionMinutes; m > 0 {
 		ttl = time.Duration(m) * time.Minute
@@ -321,7 +321,44 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request, u User) {
 	sess := s.dir.NewSession(u, ttl)
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: int(ttl / time.Second)}) // #nosec G124 nosemgrep -- Secure whenever the request arrived over TLS; plain HTTP is a LAN option
 	s.log.Info("dashboard sign-in", "user", u.Name, "remote", requestIP(r))
+	return sess
+}
+
+func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request, u User) {
+	sess := s.startSession(w, r, u)
 	writeJSON(w, http.StatusOK, map[string]any{"user": u.Name, "admin": u.Admin, "csrf": sess.CSRF})
+}
+
+func (s *Server) formLogin(w http.ResponseWriter, r *http.Request) {
+	if o := r.Header.Get("Origin"); o != "" && o != "null" {
+		if u, err := url.Parse(o); err != nil || !strings.EqualFold(u.Host, r.Host) {
+			writeText(w, http.StatusForbidden, "cross-site sign-in refused")
+			return
+		}
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<16)
+	if err := r.ParseForm(); err != nil {
+		writeText(w, http.StatusBadRequest, "send username and password as a form")
+		return
+	}
+	user := r.PostForm.Get("username")
+	id, err := s.dir.CheckPassword(requestIP(r), user, r.PostForm.Get("password"))
+	if err != nil {
+		if errors.Is(err, ErrThrottled) {
+			writeText(w, http.StatusTooManyRequests, err.Error())
+			return
+		}
+		s.log.Warn("form sign-in failed", "user", user, "remote", requestIP(r))
+		http.Redirect(w, r, "/login?error", http.StatusFound)
+		return
+	}
+	u, _ := s.dir.User(id.Name)
+	if u.TwoFactor != "" {
+		writeText(w, http.StatusForbidden, "this account uses two-step sign-in; sign in on the dashboard")
+		return
+	}
+	s.startSession(w, r, u)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (s *Server) apiLoginVerify(w http.ResponseWriter, r *http.Request) {
