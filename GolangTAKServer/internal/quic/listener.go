@@ -105,6 +105,9 @@ func (l *Listener) readLoop() {
 			time.Sleep(time.Millisecond)
 			continue
 		}
+		if n == 0 {
+			continue
+		}
 		d := buf[:n]
 		var key []byte
 		var newConn bool

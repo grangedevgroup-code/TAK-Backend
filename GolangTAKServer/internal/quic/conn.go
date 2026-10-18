@@ -34,6 +34,8 @@ const (
 	initialCwnd      = 10 * maxDatagram
 	minCwnd          = 2 * maxDatagram
 	handshakeTimeout = 10 * time.Second
+	maxStreamGaps    = 1024
+	maxCryptoGaps    = 64
 )
 
 type rangeSet []ackRange
@@ -394,6 +396,9 @@ func (c *Conn) handleFrame(sp int, f frame) error {
 			return nil
 		}
 		if end-cs.inNext > 1<<20 {
+			return errFlowControl
+		}
+		if _, dup := cs.inParts[f.offset]; !dup && f.offset > cs.inNext && len(cs.inParts) >= maxCryptoGaps {
 			return errFlowControl
 		}
 		cs.inParts[f.offset] = append([]byte(nil), f.data...)
@@ -1068,6 +1073,9 @@ func (st *Stream) receive(off uint64, data []byte, fin bool) error {
 		st.rfin, st.rfinAt = true, end
 	}
 	if end > st.rnext && len(data) > 0 {
+		if _, dup := st.rparts[off]; !dup && off > st.rnext && len(st.rparts) >= maxStreamGaps {
+			return errFlowControl
+		}
 		st.rparts[off] = append([]byte(nil), data...)
 	}
 	for progressed := true; progressed; {

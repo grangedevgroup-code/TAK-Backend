@@ -321,3 +321,47 @@ func TestIdleTimeout(t *testing.T) {
 		t.Fatal("connection not removed after idle timeout")
 	}
 }
+
+func TestJunkDatagramsDoNotStopTheListener(t *testing.T) {
+	srvCert, cliCert, pool := testPKI(t)
+	pc, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	l := Listen(pc, &tls.Config{Certificates: []tls.Certificate{srvCert}, ClientCAs: pool, ClientAuth: tls.RequireAndVerifyClientCert}, 30*time.Second)
+	defer l.Close()
+	c, err := net.Dial("udp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range [][]byte{nil, {0x00}, {0x80}, {0xc0, 0, 0, 0, 1}, bytes.Repeat([]byte{0xff}, 1300), bytes.Repeat([]byte{0x40}, 9)} {
+		c.Write(d)
+	}
+	c.Close()
+	time.Sleep(100 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	st, err := Dial(ctx, l.Addr().String(), &tls.Config{RootCAs: pool, Certificates: []tls.Certificate{cliCert}, ServerName: "localhost"}, 30*time.Second)
+	if err != nil {
+		t.Fatalf("listener stopped after junk datagrams: %v", err)
+	}
+	st.Close()
+}
+
+func TestStreamGapFloodIsRefused(t *testing.T) {
+	c := newConn(false, nil, nil, 0)
+	st := newStream(c, 0)
+	var err error
+	for i := 0; i < 3*maxStreamGaps && err == nil; i++ {
+		err = st.receive(uint64(2+2*i), []byte{1}, false)
+	}
+	if err != errFlowControl {
+		t.Fatalf("gap flood not refused: %v", err)
+	}
+	if len(st.rparts) > maxStreamGaps {
+		t.Fatalf("%d fragments buffered", len(st.rparts))
+	}
+	ok := newStream(newConn(false, nil, nil, 0), 0)
+	for i := 0; i < 3*maxStreamGaps; i++ {
+		if err := ok.receive(uint64(i), []byte{byte(i)}, false); err != nil {
+			t.Fatalf("in-order data refused at %d: %v", i, err)
+		}
+	}
+}
