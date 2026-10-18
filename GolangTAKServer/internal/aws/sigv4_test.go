@@ -19,9 +19,8 @@ func TestSignAWSListUsersExample(t *testing.T) {
 	r, _ := http.NewRequest("GET", "https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08", nil)
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 	now := time.Date(2015, 8, 30, 12, 36, 0, 0, time.UTC)
-	cr := CanonicalRequest(r, sha256Hex(nil), []string{"content-type", "host", "x-amz-date"})
 	r.Header.Set("X-Amz-Date", "20150830T123600Z")
-	cr = CanonicalRequest(r, sha256Hex(nil), []string{"content-type", "host", "x-amz-date"})
+	cr := CanonicalRequest(r, sha256Hex(nil), []string{"content-type", "host", "x-amz-date"})
 	if got := sha256Hex([]byte(cr)); got != "f536975d06c0309214f805bb90ccff089219ecd68b2577efef23edd43b7e1a59" {
 		t.Fatalf("canonical request hash %s\n%s", got, cr)
 	}
