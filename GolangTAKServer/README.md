@@ -234,6 +234,7 @@ Every link is bidirectional: traffic from devices on GolangTAKServer reaches the
 - **Missions and retention**: who can create missions (by group), owner-only deletion, subscriber-only map items, separate retention for geo chat and data packages, keywords that are never deleted, a cron schedule for the cleanup, and archiving of inactive missions.
 - **Web and security settings**: minimum TLS version and cipher suites, HSTS, CORS origins, extra response headers, session length, access and audit logs, and JSON logs.
 - **API documentation**: an OpenAPI 3.1 description of every endpoint the server is running at `/v3/api-docs` (and `/v3/api-docs.yaml`), with an API explorer at `/swagger-ui/index.html` that works offline.
+- **Web content**: files in the `webcontent` folder of the data directory are served from the web root, like TAK Server's web content folder, so WebTAK or your own pages can be hosted on the server. Folders can be limited to signed-in people or to members of certain groups under **Settings**, **Web and security**.
 - **Operations**: one binary, service on every operating system with restart on failure, crash-safe storage, automatic housekeeping, backups, built-in self-test.
 
 ## Link servers together
