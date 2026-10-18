@@ -30,72 +30,72 @@ type Options struct {
 }
 
 type Server struct {
-	DataDir   string
-	Version   string
-	Started   time.Time
-	cfgMu     sync.RWMutex
-	cfg       Config
-	level     *slog.LevelVar
-	logs      *LogBuffer
-	log       *slog.Logger
-	dir       *Directory
-	pki       *PKI
-	hub       *Hub
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-	lmu       sync.Mutex
-	closers   []io.Closer
-	https     []*http.Server
-	stopOnce  sync.Once
-	stoppers  []func()
-	tokenKey  []byte
-	devices   *Devices
-	res       *Resources
-	history   *History
-	missions  *Missions
-	videos    *Videos
-	profiles  *Profiles
+	DataDir     string
+	Version     string
+	Started     time.Time
+	cfgMu       sync.RWMutex
+	cfg         Config
+	level       *slog.LevelVar
+	logs        *LogBuffer
+	log         *slog.Logger
+	dir         *Directory
+	pki         *PKI
+	hub         *Hub
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup
+	lmu         sync.Mutex
+	closers     []io.Closer
+	https       []*http.Server
+	stopOnce    sync.Once
+	stoppers    []func()
+	tokenKey    []byte
+	devices     *Devices
+	res         *Resources
+	history     *History
+	missions    *Missions
+	videos      *Videos
+	profiles    *Profiles
 	devProfiles *deviceProfileStore
-	chats     *Chats
-	repeated  *Repeated
-	linkMu    sync.Mutex
-	links     map[string]*downloadLink
-	apiMu     sync.Mutex
-	apiSrc    *Client
-	peers     *PeerManager
-	fed       *Federation
-	reports   *Reports
-	feeds     *feedState
-	mesh      *meshBridge
-	telegram  *telegramBridge
-	jobs      jobRegistry
-	feedKick  map[string]chan struct{}
-	perf      *perfSampler
-	plugins   *pluginManager
-	fig2      *fig2Server
-	fig2Out   sync.Map
-	dfeeds    *dataFeeds
-	uasSeen   sync.Map
-	upd       updateState
-	props     *store.Collection[uidProps]
-	seq       sequences
-	calls     *callHub
-	cluster   *clusterState
-	live      *liveVideo
-	voice     *mumble.Server
-	injectors *Injectors
-	acct      *accountSecurity
-	acme      *acmeState
-	pubCert   *publicCertState
-	mapLayers *MapLayers
-	fedFeeds  *store.Collection[dataFeedView]
-	control   string
-	lock      *flock.Lock
-	localMux  http.Handler
-	localMu   sync.Mutex
-	restart   chan struct{}
-	histStop  chan struct{}
+	chats       *Chats
+	repeated    *Repeated
+	linkMu      sync.Mutex
+	links       map[string]*downloadLink
+	apiMu       sync.Mutex
+	apiSrc      *Client
+	peers       *PeerManager
+	fed         *Federation
+	reports     *Reports
+	feeds       *feedState
+	mesh        *meshBridge
+	telegram    *telegramBridge
+	jobs        jobRegistry
+	feedKick    map[string]chan struct{}
+	perf        *perfSampler
+	plugins     *pluginManager
+	fig2        *fig2Server
+	fig2Out     sync.Map
+	dfeeds      *dataFeeds
+	uasSeen     sync.Map
+	upd         updateState
+	props       *store.Collection[uidProps]
+	seq         sequences
+	calls       *callHub
+	cluster     *clusterState
+	live        *liveVideo
+	voice       *mumble.Server
+	injectors   *Injectors
+	acct        *accountSecurity
+	acme        *acmeState
+	pubCert     *publicCertState
+	mapLayers   *MapLayers
+	fedFeeds    *store.Collection[dataFeedView]
+	control     string
+	lock        *flock.Lock
+	localMux    http.Handler
+	localMu     sync.Mutex
+	restart     chan struct{}
+	histStop    chan struct{}
 }
 
 func New(dataDir string, opts Options) (*Server, error) {
