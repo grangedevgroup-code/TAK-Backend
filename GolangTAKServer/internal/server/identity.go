@@ -213,9 +213,13 @@ type Directory struct {
 }
 
 type ExternalAuth struct {
-	Groups   []string
-	Admin    bool
-	Callsign string
+	Groups    []string
+	ReadOnly  []string
+	WriteOnly []string
+	Admin     bool
+	Callsign  string
+	Team      string
+	Role      string
 }
 
 func OpenDirectory(dir, anonGroup string) (*Directory, error) {
@@ -700,10 +704,10 @@ func (d *Directory) CheckPassword(ip, name, pw string) (*Identity, error) {
 
 func (d *Directory) externalLogin(name string, res *ExternalAuth) (*Identity, error) {
 	groups := res.Groups
-	if len(groups) == 0 {
+	if len(groups) == 0 && len(res.ReadOnly) == 0 && len(res.WriteOnly) == 0 {
 		groups = []string{d.anon}
 	}
-	if err := d.ensureGroups(groups); err != nil {
+	if err := d.ensureGroups(append(append(slices.Clone(groups), res.ReadOnly...), res.WriteOnly...)); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -715,11 +719,17 @@ func (d *Directory) externalLogin(name string, res *ExternalAuth) (*Identity, er
 			cur = User{Name: name, Created: now}
 		}
 		cur.External = true
-		cur.In = uniqueSorted(groups)
-		cur.Out = uniqueSorted(groups)
+		cur.In = uniqueSorted(append(slices.Clone(groups), res.WriteOnly...))
+		cur.Out = uniqueSorted(append(slices.Clone(groups), res.ReadOnly...))
 		cur.Admin = res.Admin
 		if res.Callsign != "" {
 			cur.Callsign = res.Callsign
+		}
+		if res.Team != "" {
+			cur.Team = res.Team
+		}
+		if res.Role != "" {
+			cur.TeamRole = res.Role
 		}
 		cur.LastLogin = now
 		return cur, true, nil

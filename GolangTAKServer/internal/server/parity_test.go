@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/ldap"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/takproto"
 )
 
@@ -393,5 +394,33 @@ func TestParityLegacyServlets(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/cot/search/"+strings.TrimSpace(string(b))), nil, a); !strings.Contains(string(b), `"status":"DONE"`) {
 		t.Fatalf("search status: %s", b)
+	}
+}
+
+func TestParityLDAPGroupRules(t *testing.T) {
+	c := LDAPConfig{GroupPrefix: "tak_", ReadGroupSuffix: "_READ", WriteGroupSuffix: "_WRITE", AdminGroup: "tak_admins", ColorAttribute: "takColor", RoleAttribute: "takRole"}
+	e := &ldap.Entry{DN: "uid=bob", Attrs: map[string][]string{"takcolor": {"Cyan"}, "takrole": {"Medic"}}, Groups: []string{"cn=tak_Blue,ou=g", "cn=tak_Red_READ,ou=g", "cn=tak_Green_WRITE,ou=g", "cn=tak_admins,ou=g", "cn=other,ou=g"}}
+	res := mapLDAPEntry(c, e)
+	if !res.Admin || !slices.Contains(res.Groups, "Blue") || !slices.Contains(res.ReadOnly, "Red") || !slices.Contains(res.WriteOnly, "Green") || slices.Contains(res.Groups, "other") {
+		t.Fatalf("mapping: %+v", res)
+	}
+	if res.Team != "Cyan" || res.Role != "Medic" {
+		t.Fatalf("color/role: %+v", res)
+	}
+	d, err := OpenDirectory(t.TempDir(), "__ANON__")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	id, err := d.externalLogin("bob", res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := d.User("bob")
+	if !slices.Contains(u.Out, "Red") || slices.Contains(u.In, "Red") || !slices.Contains(u.In, "Green") || slices.Contains(u.Out, "Green") || u.Team != "Cyan" {
+		t.Fatalf("directions: in=%v out=%v team=%s", u.In, u.Out, u.Team)
+	}
+	if !id.Admin {
+		t.Fatal("admin flag lost")
 	}
 }

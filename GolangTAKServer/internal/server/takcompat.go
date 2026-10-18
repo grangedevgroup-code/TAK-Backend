@@ -368,7 +368,9 @@ func (s *Server) martiAuthConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.envelope("com.bbn.marti.remote.AuthenticationConfigInfo", nil))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.envelope("com.bbn.marti.remote.AuthenticationConfigInfo", map[string]any{"url": ld.URL, "userString": ld.UserFilter, "updateInterval": 60, "groupPrefix": ld.GroupPrefix, "serviceAccountDN": ld.BindDN, "groupBaseRDN": ld.GroupBaseDN}))
+	out := s.ldapConfigJSON(ld)
+	out["userString"], out["updateInterval"], out["groupPrefix"] = ld.UserFilter, 60, ld.GroupPrefix
+	writeJSON(w, http.StatusOK, s.envelope("com.bbn.marti.remote.AuthenticationConfigInfo", out))
 }
 
 func (s *Server) martiVerifyConfig(w http.ResponseWriter, r *http.Request) {

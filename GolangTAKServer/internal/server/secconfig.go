@@ -128,7 +128,7 @@ func (s *Server) martiAuthConfigPut(w http.ResponseWriter, r *http.Request) {
 		ld := &c.LDAP
 		set(&ld.URL, b.URL)
 		if b.UserString != nil {
-			ld.UserDN = strings.ReplaceAll(*b.UserString, "{username}", "%s")
+			ld.UserDN = strings.ReplaceAll(*b.UserString, "{username}", "{user}")
 		}
 		set(&ld.Style, b.Style)
 		set(&ld.BindDN, b.ServiceAccountDN)

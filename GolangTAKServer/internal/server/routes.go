@@ -203,6 +203,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.iconRoutes(m, a)
 	s.signalXMPPRoutes(m)
 	s.legacyServletRoutes(m, a)
+	s.secConfigRoutes(m, a, pub)
 	s.federationAPIRoutes(a)
 	pub("GET /Marti/api/cadownload", s.fedCADownload)
 	a("POST /Marti/api/generateFederationJwtToken", s.martiGenerateFedToken)

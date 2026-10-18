@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,10 +18,15 @@ func (s *Server) ldapConfig(c LDAPConfig) (ldap.Config, error) {
 	lc := ldap.Config{
 		URL: c.URL, StartTLS: c.StartTLS, Insecure: c.Insecure, BindDN: c.BindDN, BindPassword: c.BindPassword,
 		BaseDN: c.BaseDN, UserFilter: c.UserFilter, UserDN: c.UserDN, GroupFilter: c.GroupFilter, GroupBaseDN: c.GroupBaseDN,
-		Timeout: 10 * time.Second,
+		Timeout: 10 * time.Second, NestedGroups: c.NestedGroups, NestedDepth: c.NestedMaxDepth,
 	}
-	if c.CallsignAttribute != "" {
-		lc.Attributes = []string{c.CallsignAttribute}
+	if lc.UserFilter == "" && c.LoginWithEmail {
+		lc.UserFilter = "(|(uid={user})(sAMAccountName={user})(userPrincipalName={user})(mail={user}))"
+	}
+	for _, a := range []string{c.CallsignAttribute, c.ColorAttribute, c.RoleAttribute} {
+		if a != "" {
+			lc.Attributes = append(lc.Attributes, a)
+		}
 	}
 	if c.TrustFile != "" {
 		pem, err := os.ReadFile(c.TrustFile)
@@ -51,10 +57,29 @@ func (s *Server) ldapLookup(c LDAPConfig, name, password string) (*ExternalAuth,
 func mapLDAPEntry(c LDAPConfig, e *ldap.Entry) *ExternalAuth {
 	res := &ExternalAuth{}
 	seen := map[string]bool{}
+	var re *regexp.Regexp
+	if c.GroupNameRegex != "" {
+		re, _ = regexp.Compile(c.GroupNameRegex)
+	}
+	readOnly := false
 	for _, g := range e.Groups {
 		cn := ldap.CommonName(g)
+		if re != nil {
+			m := re.FindStringSubmatch(g)
+			if m == nil {
+				continue
+			}
+			if len(m) > 1 {
+				cn = m[1]
+			} else {
+				cn = m[0]
+			}
+		}
 		if c.AdminGroup != "" && strings.EqualFold(cn, c.AdminGroup) {
 			res.Admin = true
+		}
+		if c.ReadOnlyGroup != "" && strings.EqualFold(cn, c.ReadOnlyGroup) {
+			readOnly = true
 		}
 		if c.GroupPrefix != "" {
 			if len(cn) <= len(c.GroupPrefix) || !strings.EqualFold(cn[:len(c.GroupPrefix)], c.GroupPrefix) {
@@ -62,15 +87,47 @@ func mapLDAPEntry(c LDAPConfig, e *ldap.Entry) *ExternalAuth {
 			}
 			cn = cn[len(c.GroupPrefix):]
 		}
-		if validGroup.MatchString(cn) && !seen[cn] {
-			seen[cn] = true
+		dir := ""
+		if s := c.ReadGroupSuffix; s != "" && len(cn) > len(s) && strings.EqualFold(cn[len(cn)-len(s):], s) {
+			cn, dir = cn[:len(cn)-len(s)], "read"
+		} else if s := c.WriteGroupSuffix; s != "" && len(cn) > len(s) && strings.EqualFold(cn[len(cn)-len(s):], s) {
+			cn, dir = cn[:len(cn)-len(s)], "write"
+		}
+		if !validGroup.MatchString(cn) || seen[dir+"|"+cn] {
+			continue
+		}
+		seen[dir+"|"+cn] = true
+		switch dir {
+		case "read":
+			res.ReadOnly = append(res.ReadOnly, cn)
+		case "write":
+			res.WriteOnly = append(res.WriteOnly, cn)
+		default:
 			res.Groups = append(res.Groups, cn)
 		}
+	}
+	if readOnly {
+		res.ReadOnly = append(res.ReadOnly, res.Groups...)
+		res.Groups, res.WriteOnly = nil, nil
 	}
 	if c.CallsignAttribute != "" {
 		res.Callsign = strings.TrimSpace(e.First(c.CallsignAttribute))
 	}
+	if c.ColorAttribute != "" {
+		res.Team = strings.TrimSpace(e.First(c.ColorAttribute))
+	}
+	if c.RoleAttribute != "" {
+		res.Role = strings.TrimSpace(e.First(c.RoleAttribute))
+	}
 	return res
+}
+
+func (s *Server) ldapCheckService(c LDAPConfig) error {
+	lc, err := s.ldapConfig(c)
+	if err != nil {
+		return err
+	}
+	return ldap.Check(lc)
 }
 
 func (s *Server) ldapAuth(name, password string) (*ExternalAuth, error) {

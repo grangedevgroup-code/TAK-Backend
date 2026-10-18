@@ -50,6 +50,8 @@ type Config struct {
 	GroupBaseDN  string
 	Attributes   []string
 	Timeout      time.Duration
+	NestedGroups bool
+	NestedDepth  int
 }
 
 type Entry struct {
@@ -350,7 +352,62 @@ func Authenticate(cfg Config, user, password string) (*Entry, error) {
 	} else {
 		entry.Groups = append(entry.Groups, entry.Get("memberOf")...)
 	}
+	if cfg.NestedGroups && len(entry.Groups) > 0 {
+		if cfg.BindDN != "" && cfg.UserDN == "" {
+			c.bind(cfg.BindDN, cfg.BindPassword)
+		}
+		entry.Groups = c.expandGroups(entry.Groups, cfg.NestedDepth)
+	}
 	return entry, nil
+}
+
+func (c *conn) expandGroups(groups []string, depth int) []string {
+	if depth <= 0 {
+		depth = 5
+	}
+	seen := map[string]bool{}
+	var out []string
+	frontier := groups
+	for level := 0; level <= depth && len(frontier) > 0; level++ {
+		var next []string
+		for _, g := range frontier {
+			key := strings.ToLower(g)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, g)
+			if level == depth {
+				continue
+			}
+			list, err := c.search(g, ScopeBase, "(objectClass=*)", []string{"memberOf"}, 1)
+			if err != nil || len(list) == 0 {
+				continue
+			}
+			next = append(next, list[0].Get("memberOf")...)
+		}
+		frontier = next
+	}
+	return out
+}
+
+func Check(cfg Config) error {
+	c, err := dial(cfg)
+	if err != nil {
+		return err
+	}
+	defer c.close()
+	if cfg.BindDN != "" {
+		if err := c.bind(cfg.BindDN, cfg.BindPassword); err != nil {
+			return fmt.Errorf("service account sign-in failed: %w", err)
+		}
+	}
+	if cfg.BaseDN != "" {
+		if _, err := c.search(cfg.BaseDN, ScopeBase, "(objectClass=*)", []string{"objectClass"}, 1); err != nil {
+			return fmt.Errorf("base DN %s could not be read: %w", cfg.BaseDN, err)
+		}
+	}
+	return nil
 }
 
 func CommonName(dn string) string {

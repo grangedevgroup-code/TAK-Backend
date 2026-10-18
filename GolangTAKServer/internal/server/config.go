@@ -149,6 +149,16 @@ type LDAPConfig struct {
 	GroupPrefix       string `json:"groupPrefix"`
 	AdminGroup        string `json:"adminGroup"`
 	CallsignAttribute string `json:"callsignAttribute"`
+	Style             string `json:"style,omitempty"`
+	NestedGroups      bool   `json:"nestedGroups,omitempty"`
+	NestedMaxDepth    int    `json:"nestedMaxDepth,omitempty"`
+	ReadOnlyGroup     string `json:"readOnlyGroup,omitempty"`
+	ReadGroupSuffix   string `json:"readGroupSuffix,omitempty"`
+	WriteGroupSuffix  string `json:"writeGroupSuffix,omitempty"`
+	LoginWithEmail    bool   `json:"loginWithEmail,omitempty"`
+	ColorAttribute    string `json:"colorAttribute,omitempty"`
+	RoleAttribute     string `json:"roleAttribute,omitempty"`
+	GroupNameRegex    string `json:"groupNameRegex,omitempty"`
 }
 
 type MeshtasticChannel struct {
