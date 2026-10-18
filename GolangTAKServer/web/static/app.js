@@ -3934,7 +3934,7 @@
             { title: "Name", render: (r) => h("b", null, r.name) },
             { title: "Protocol", render: (r) => h("span", { class: "pill" }, (r.protocol || "tls").toUpperCase()) },
             { title: "Port", key: "port" },
-            { title: "Authentication", render: (r) => (auths.find((a) => a[0] === (r.auth || "")) || auths[0])[1] },
+            { title: "Authentication", render: (r) => (auths.find((a) => a[0] === (r.auth || (["tls", "ssl", "quic"].includes(r.protocol || "tls") ? "x509" : "anonymous"))) || auths[0])[1] },
             { title: "Groups", render: (r) => ((r.filterGroups || []).length ? r.filterGroups.join(", ") : "-") },
             {
               title: "State",
