@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -516,4 +517,28 @@ func (s *Server) missionExternalDataChanged(w http.ResponseWriter, r *http.Reque
 	}
 	s.sendToSubscribers(m, e, "")
 	w.WriteHeader(http.StatusOK)
+}
+
+type MissionPolicy struct {
+	CreateGroupsRegex        string `json:"createGroupsRegex,omitempty"`
+	DeleteRequiresOwner      bool   `json:"deleteRequiresOwner,omitempty"`
+	AllowGroupChange         bool   `json:"allowGroupChange,omitempty"`
+	StrictUIDMembership      bool   `json:"strictUidMembership,omitempty"`
+	DisableBroadcastMapItems bool   `json:"disableBroadcastMapItems,omitempty"`
+}
+
+func (s *Server) mayCreateMission(id *Identity, pol MissionPolicy) bool {
+	if pol.CreateGroupsRegex == "" {
+		return true
+	}
+	re, err := regexp.Compile(pol.CreateGroupsRegex)
+	if err != nil {
+		return false
+	}
+	for _, g := range s.identityGroups(id) {
+		if re.MatchString(g) {
+			return true
+		}
+	}
+	return false
 }

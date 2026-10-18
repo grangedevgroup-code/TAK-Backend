@@ -445,6 +445,9 @@ func (h *Hub) Publish(m *Message) {
 		return
 	}
 	h.remember(m)
+	if h.srv != nil && h.srv.Config().MissionPolicy.DisableBroadcastMapItems && m.Source != nil && !m.Source.Relay && isMapItem(e) {
+		return
+	}
 	h.broadcast(m)
 }
 
@@ -701,4 +704,8 @@ func mayTakeUID(owner, claimant *Client) bool {
 		return false
 	}
 	return strings.EqualFold(o.Name, n.Name)
+}
+
+func isMapItem(e *cot.Event) bool {
+	return !e.IsSA() && !e.IsChat() && !e.IsControl() && !e.IsDelete() && !e.Is("b-a-") && !e.Is("b-f-t-")
 }

@@ -246,6 +246,7 @@ type Config struct {
 	Email          EmailConfig         `json:"email"`
 	OAuth          OAuthConfig         `json:"oauth"`
 	QoS            QoSConfig           `json:"qos"`
+	MissionPolicy  MissionPolicy       `json:"missionPolicy"`
 	ACME           ACMEConfig          `json:"letsEncrypt"`
 	TileURL        string              `json:"tileUrl"`
 	LogLevel       string              `json:"logLevel"`

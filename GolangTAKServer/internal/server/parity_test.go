@@ -424,3 +424,29 @@ func TestParityLDAPGroupRules(t *testing.T) {
 		t.Fatal("admin flag lost")
 	}
 }
+
+func TestParityMissionPolicy(t *testing.T) {
+	s := newTestServer(t, func(c *Config) {
+		c.MissionPolicy = MissionPolicy{CreateGroupsRegex: "^Planners$", DeleteRequiresOwner: true}
+	})
+	s.dir.AddUser("planner", "planner-pass-1", false, []string{"Planners"})
+	s.dir.AddUser("grunt", "grunt-pass-1", false, []string{"Planners", "Ops"})
+	s.dir.AddUser("nobody", "nobody-pass-1", false, []string{"Ops"})
+	tok := func(u string) map[string]string {
+		k, _, _ := s.dir.CreateToken(u, "api", "t", time.Hour, 0)
+		return map[string]string{"Authorization": "Bearer " + k}
+	}
+	if st, _ := doReq(t, http.DefaultClient, "PUT", plainURL(s, "/Marti/api/missions/ops9?creatorUid=N1"), nil, tok("nobody")); st != http.StatusForbidden {
+		t.Fatalf("user outside the create regex created a mission: %d", st)
+	}
+	if st, b := doReq(t, http.DefaultClient, "PUT", plainURL(s, "/Marti/api/missions/ops9?creatorUid=P1&group=Planners"), nil, tok("planner")); st >= 300 {
+		t.Fatalf("planner create: %d %s", st, b)
+	}
+	doReq(t, http.DefaultClient, "PUT", plainURL(s, "/Marti/api/missions/ops9/subscription?uid=G1"), nil, tok("grunt"))
+	if st, _ := doReq(t, http.DefaultClient, "DELETE", plainURL(s, "/Marti/api/missions/ops9?creatorUid=G1"), nil, tok("grunt")); st != http.StatusForbidden {
+		t.Fatalf("non-owner deleted the mission: %d", st)
+	}
+	if st, _ := doReq(t, http.DefaultClient, "DELETE", plainURL(s, "/Marti/api/missions/ops9?creatorUid=P1"), nil, tok("planner")); st != 200 {
+		t.Fatalf("owner delete: %d", st)
+	}
+}

@@ -582,6 +582,11 @@ func (s *Server) missionCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	created := false
 	var token string
+	pol := s.Config().MissionPolicy
+	if _, exists := s.missions.Get(name); !exists && !id.Admin && !s.mayCreateMission(id, pol) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "you are not in a group allowed to create missions"})
+		return
+	}
 	m, err := s.missions.db.Update(s.missions.key(name), func(m Mission, exists bool) (Mission, bool, error) {
 		if exists {
 			if !s.missionVisible(id, m) {
@@ -593,6 +598,9 @@ func (s *Server) missionCreate(w http.ResponseWriter, r *http.Request) {
 			}
 			if !id.Admin && role != RoleOwner && !(m.CreatorUser == id.Name && !id.Anon) {
 				return m, true, errors.New("forbidden")
+			}
+			if pol.AllowGroupChange && (q.Has("group") || q.Has("groups")) {
+				m.Groups = groups
 			}
 		} else {
 			created = true
@@ -685,6 +693,10 @@ func (s *Server) missionDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.requirePermission(w, r, m, "MISSION_DELETE") {
+		return
+	}
+	if s.Config().MissionPolicy.DeleteRequiresOwner && s.callerRole(r, m) != RoleOwner {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the mission owner can delete this mission"})
 		return
 	}
 	if err := s.missions.db.Delete(m.Name); err != nil {
@@ -1779,7 +1791,7 @@ func (s *Server) onMissionCoT(msg *Message, names []string) {
 			role := ""
 			if sub := m.sub(sender); sub != nil {
 				role = sub.Role
-			} else if s.missionVisible(id, m) && !m.InviteOnly && m.PasswordHash == "" {
+			} else if s.missionVisible(id, m) && !m.InviteOnly && m.PasswordHash == "" && !s.Config().MissionPolicy.StrictUIDMembership {
 				role = normalizeRole(m.DefaultRole)
 			}
 			if id != nil && id.Admin {
