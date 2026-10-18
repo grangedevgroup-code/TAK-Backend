@@ -37,6 +37,9 @@ func (s *Server) initSubsystems() error {
 	if s.devProfiles, err = openDeviceProfiles(s.DataDir); err != nil {
 		return err
 	}
+	if s.clientLogs, err = openClientLogs(s.DataDir); err != nil {
+		return err
+	}
 	if s.props, err = openProps(s.DataDir); err != nil {
 		return err
 	}
@@ -166,6 +169,9 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.devProfiles != nil {
 		s.devProfiles.Close()
+	}
+	if s.clientLogs != nil {
+		s.clientLogs.Close()
 	}
 	if s.profiles != nil {
 		s.profiles.Close()

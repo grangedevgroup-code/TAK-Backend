@@ -33,8 +33,32 @@ type ClientLog struct {
 	Time         time.Time `json:"time"`
 }
 
-func openClientLogs(dataDir string) (*store.Collection[ClientLog], error) {
-	return store.Open[ClientLog](filepath.Join(dataDir, "db", "client-logs.jsonl"), true)
+type clientLogStore struct {
+	*store.Collection[ClientLog]
+	blobs *store.Blobs
+}
+
+func openClientLogs(dataDir string) (*clientLogStore, error) {
+	c, err := store.Open[ClientLog](filepath.Join(dataDir, "db", "client-logs.jsonl"), true)
+	if err != nil {
+		return nil, err
+	}
+	b, err := store.OpenBlobs(filepath.Join(dataDir, "client-logs"))
+	if err != nil {
+		c.Close()
+		return nil, err
+	}
+	return &clientLogStore{Collection: c, blobs: b}, nil
+}
+
+func (c *clientLogStore) remove(l ClientLog) {
+	c.Delete(strconv.FormatInt(l.ID, 10))
+	for _, other := range c.All() {
+		if other.Hash == l.Hash {
+			return
+		}
+	}
+	c.blobs.Delete(l.Hash)
 }
 
 func unpackClientLogs(body []byte) map[string][]byte {
@@ -98,12 +122,12 @@ func (s *Server) clientLogPost(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		hash, err := s.res.blobs.PutBytes(files[name])
+		hash, err := s.clientLogs.blobs.PutBytes(files[name])
 		if err != nil {
 			writeText(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		l := ClientLog{ID: nextID(s.clientLogs), UID: q.Get("uid"), Callsign: q.Get("callsign"), Platform: q.Get("platform"),
+		l := ClientLog{ID: nextID(s.clientLogs.Collection), UID: q.Get("uid"), Callsign: q.Get("callsign"), Platform: q.Get("platform"),
 			MajorVersion: q.Get("majorVersion"), MinorVersion: q.Get("minorVersion"), Filename: safeFileName(name), Hash: hash,
 			Size: int64(len(files[name])), User: user, Time: time.Now().UTC()}
 		if err := s.clientLogs.Put(strconv.FormatInt(l.ID, 10), l); err != nil {
@@ -149,7 +173,7 @@ func (s *Server) trimClientLogs() {
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
 	for _, l := range all[:len(all)-maxClientLogs] {
-		s.clientLogs.Delete(strconv.FormatInt(l.ID, 10))
+		s.clientLogs.remove(l)
 	}
 }
 
@@ -192,7 +216,7 @@ func (s *Server) clientLogGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(list) == 1 && ids != "ALL" {
-		data, err := s.res.blobs.Read(list[0].Hash)
+		data, err := s.clientLogs.blobs.Read(list[0].Hash)
 		if err != nil {
 			writeText(w, http.StatusNotFound, "log content missing")
 			return
@@ -204,7 +228,7 @@ func (s *Server) clientLogGet(w http.ResponseWriter, r *http.Request) {
 	}
 	var entries []zipEntry
 	for _, l := range list {
-		if data, err := s.res.blobs.Read(l.Hash); err == nil {
+		if data, err := s.clientLogs.blobs.Read(l.Hash); err == nil {
 			entries = append(entries, zipEntry{strconv.FormatInt(l.ID, 10) + "_" + safeFileName(firstNonEmpty(l.Callsign, l.UID)) + "_" + l.Filename, data})
 		}
 	}
@@ -225,7 +249,7 @@ func (s *Server) clientLogDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, l := range list {
-		s.clientLogs.Delete(strconv.FormatInt(l.ID, 10))
+		s.clientLogs.remove(l)
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"deleted": len(list)})
 }

@@ -51,6 +51,7 @@ type DeviceProfileFile struct {
 type deviceProfileStore struct {
 	profiles *store.Collection[DeviceProfile]
 	files    *store.Collection[DeviceProfileFile]
+	blobs    *store.Blobs
 }
 
 func openDeviceProfiles(dataDir string) (*deviceProfileStore, error) {
@@ -63,7 +64,13 @@ func openDeviceProfiles(dataDir string) (*deviceProfileStore, error) {
 		p.Close()
 		return nil, err
 	}
-	return &deviceProfileStore{profiles: p, files: f}, nil
+	b, err := store.OpenBlobs(filepath.Join(dataDir, "profile-files"))
+	if err != nil {
+		p.Close()
+		f.Close()
+		return nil, err
+	}
+	return &deviceProfileStore{profiles: p, files: f, blobs: b}, nil
 }
 
 func (d *deviceProfileStore) Close() {
@@ -79,6 +86,16 @@ func nextID[T any](c *store.Collection[T]) int64 {
 		}
 	}
 	return max + 1
+}
+
+func (d *deviceProfileStore) deleteFile(f DeviceProfileFile) {
+	d.files.Delete(strconv.FormatInt(f.ID, 10))
+	for _, other := range d.files.All() {
+		if other.Hash == f.Hash {
+			return
+		}
+	}
+	d.blobs.Delete(f.Hash)
 }
 
 func (d *deviceProfileStore) byName(name string) (DeviceProfile, bool) {
@@ -203,7 +220,7 @@ func (s *Server) namedProfileFiles(enrollment bool, tool string, groups []string
 			if !cut.IsZero() && f.Updated.Before(cut) && p.Updated.Before(cut) {
 				continue
 			}
-			if data, err := s.res.blobs.Read(f.Hash); err == nil {
+			if data, err := s.devProfiles.blobs.Read(f.Hash); err == nil {
 				out = append(out, zipEntry{safeFileName(f.Name), data})
 			}
 		}
@@ -368,7 +385,7 @@ func (s *Server) devProfileDelete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, f := range s.devProfiles.filesOf(p.ID) {
-		s.devProfiles.files.Delete(strconv.FormatInt(f.ID, 10))
+		s.devProfiles.deleteFile(f)
 	}
 	s.devProfiles.profiles.Delete(strconv.FormatInt(p.ID, 10))
 	w.WriteHeader(http.StatusOK)
@@ -396,7 +413,7 @@ func (s *Server) devProfileAddFile(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, s.envelope("error", "filename is required"))
 		return
 	}
-	hash, size, err := s.res.blobs.Put(r.Body, s.uploadLimit())
+	hash, size, err := s.devProfiles.blobs.Put(r.Body, s.uploadLimit())
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, s.envelope("error", err.Error()))
 		return
@@ -433,7 +450,7 @@ func (s *Server) devProfileGetFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	fh, err := s.res.blobs.Open(f.Hash)
+	fh, err := s.devProfiles.blobs.Open(f.Hash)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, s.envelope("error", "file data missing"))
 		return
@@ -449,7 +466,7 @@ func (s *Server) devProfileDeleteFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.devProfiles.files.Delete(strconv.FormatInt(f.ID, 10))
+	s.devProfiles.deleteFile(f)
 	s.saveDeviceProfile(p)
 	w.WriteHeader(http.StatusOK)
 }
@@ -494,7 +511,7 @@ func (s *Server) profilePackage(p DeviceProfile) ([]byte, error) {
 	files := s.devProfiles.filesOf(p.ID)
 	var entries []zipEntry
 	for _, f := range files {
-		if data, err := s.res.blobs.Read(f.Hash); err == nil {
+		if data, err := s.devProfiles.blobs.Read(f.Hash); err == nil {
 			entries = append(entries, zipEntry{safeFileName(f.Name), data})
 		}
 	}
@@ -631,7 +648,7 @@ func (s *Server) martiToolProfileFile(w http.ResponseWriter, r *http.Request) {
 				if (len(want) > 0 && !want[f.Name]) || (!cut.IsZero() && f.Updated.Before(cut)) {
 					continue
 				}
-				if data, err := s.res.blobs.Read(f.Hash); err == nil {
+				if data, err := s.devProfiles.blobs.Read(f.Hash); err == nil {
 					entries = append(entries, zipEntry{safeFileName(f.Name), data})
 				}
 			}

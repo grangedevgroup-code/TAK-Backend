@@ -120,6 +120,13 @@ func (s *Server) routes() *http.ServeMux {
 	m("GET /Marti/api/tls/profile/tool/{tool}/file", s.martiToolProfileFile)
 	m("GET /api/connection", s.martiConnectionProfile)
 
+	m("POST /Marti/ErrorLog", s.clientLogPost)
+	a("GET /Marti/ErrorLog", s.clientLogGet)
+	a("DELETE /Marti/ErrorLog", s.clientLogDelete)
+	a("GET /api/client-logs", s.clientLogGet)
+	a("GET /api/client-logs/{id}", s.clientLogGet)
+	a("DELETE /api/client-logs/{id}", s.clientLogDelete)
+
 	m("POST /Marti/sync/missionupload", s.martiMissionUpload)
 	m("PUT /Marti/sync/missionupload", s.martiMissionUpload)
 	m("GET /Marti/sync/missionquery", s.martiMissionQuery)
