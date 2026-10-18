@@ -1545,5 +1545,8 @@
  "Web content folder": "Ordner für Webinhalte",
  "Files in this folder are served from the web root, for example WebTAK or your own pages. A relative path is inside the data folder.": "Dateien in diesem Ordner werden über die Web-Wurzel ausgeliefert, zum Beispiel WebTAK oder eigene Seiten. Ein relativer Pfad liegt im Datenordner.",
  "Protected folders": "Geschützte Ordner",
- "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Ein Ordner pro Zeile. Nur angemeldete Personen können ihn öffnen, und nur Mitglieder der Gruppen nach dem Doppelpunkt, falls welche angegeben sind."
+ "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Ein Ordner pro Zeile. Nur angemeldete Personen können ihn öffnen, und nur Mitglieder der Gruppen nach dem Doppelpunkt, falls welche angegeben sind.",
+ "Device identity": "Geräteidentität",
+ "Disconnect devices whose position report uses another uid than their certificate was enrolled for": "Geräte trennen, deren Positionsmeldung eine andere UID verwendet als die, für die ihr Zertifikat registriert wurde",
+ "Stops one device's certificate from being used to impersonate another device.": "Verhindert, dass das Zertifikat eines Geräts verwendet wird, um sich als anderes Gerät auszugeben."
 }

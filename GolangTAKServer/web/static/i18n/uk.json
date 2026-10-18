@@ -1583,5 +1583,8 @@
  "Web content folder": "Папка вебвмісту",
  "Files in this folder are served from the web root, for example WebTAK or your own pages. A relative path is inside the data folder.": "Файли з цієї папки віддаються з кореня вебсервера, наприклад WebTAK або ваші сторінки. Відносний шлях — усередині папки даних.",
  "Protected folders": "Захищені папки",
- "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Одна папка на рядок. Відкрити її можуть лише ті, хто увійшов, і лише учасники груп після двокрапки, якщо їх указано."
+ "One folder per line. Only signed-in people can open it, and only members of the groups after the colon when there are any.": "Одна папка на рядок. Відкрити її можуть лише ті, хто увійшов, і лише учасники груп після двокрапки, якщо їх указано.",
+ "Device identity": "Ідентичність пристрою",
+ "Disconnect devices whose position report uses another uid than their certificate was enrolled for": "Від'єднувати пристрої, чий звіт про позицію використовує інший uid, ніж той, для якого зареєстровано їхній сертифікат",
+ "Stops one device's certificate from being used to impersonate another device.": "Не дає використати сертифікат одного пристрою, щоб видати себе за інший пристрій."
 }

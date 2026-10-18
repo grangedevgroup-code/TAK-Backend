@@ -91,6 +91,8 @@ type ClientInfo struct {
 }
 
 type Client struct {
+	enrollOnce sync.Once
+	enrollUID  string
 	ID         uint64
 	Kind       string
 	Remote     string

@@ -41,7 +41,9 @@ func TestValidateClientUIDAgainstEnrollment(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 	a.send(ownSA("ANDROID-1"))
 	b.expect(uidIs("ANDROID-1"), "position report from the enrolled device")
-	a.send(saXML("MARKER-1", "MARKER", 1, 1))
+	now := time.Now().UTC()
+	a.send(fmt.Sprintf(`<event version="2.0" uid="MARKER-1" type="a-h-G" how="h-g-i-g-o" time="%s" start="%s" stale="%s"><point lat="2" lon="2" hae="0" ce="9" le="9"/><detail><contact callsign="Enemy 1"/></detail></event>`,
+		now.Format(time.RFC3339), now.Format(time.RFC3339), now.Add(time.Minute).Format(time.RFC3339)))
 	b.expect(uidIs("MARKER-1"), "a marker with another uid")
 	b.send(ownSA("ANY-UID"))
 	time.Sleep(200 * time.Millisecond)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/pki"
 )
 
 type MessageFilters struct {
@@ -21,6 +22,38 @@ type MessageFilters struct {
 	FlowTagText    string       `json:"flowTagText,omitempty"`
 	IgnoreStale    bool         `json:"ignoreStaleMessages,omitempty"`
 	ValidateCoT    bool         `json:"validateXml,omitempty"`
+	ValidateUID    bool         `json:"validateClientUid,omitempty"`
+}
+
+func isOwnSA(e *cot.Event) bool {
+	if !strings.HasPrefix(e.Type, "a-") || e.Detail == nil {
+		return false
+	}
+	if e.Detail.Child("takv") != nil {
+		return true
+	}
+	c := e.Detail.Child("contact")
+	return c != nil && c.Attr("endpoint") != "" && e.Detail.Child("__group") != nil
+}
+
+func (s *Server) enrolledUID(c *Client) string {
+	c.enrollOnce.Do(func() {
+		id := c.Identity()
+		if id == nil || id.Cert == nil {
+			return
+		}
+		u, ok := s.dir.User(id.Name)
+		if !ok {
+			return
+		}
+		serial := pki.SerialHex(id.Cert)
+		for _, r := range u.Certs {
+			if strings.EqualFold(r.Serial, serial) {
+				c.enrollUID = r.ClientUID
+			}
+		}
+	})
+	return c.enrollUID
 }
 
 func validCoT(e *cot.Event) bool {
@@ -108,6 +141,13 @@ func (s *Server) messageFilter(m *Message) bool {
 	}
 	if f.ValidateCoT && !e.IsControl() && !validCoT(e) {
 		return false
+	}
+	if f.ValidateUID && !m.Source.Relay && isOwnSA(e) {
+		if want := s.enrolledUID(m.Source); want != "" && want != e.UID {
+			s.log.Warn("connection closed: position report with a uid that does not match the certificate's enrollment", "user", m.Source.User(), "uid", e.UID, "enrolled", want, "remote", m.Source.Remote)
+			m.Source.Close()
+			return false
+		}
 	}
 	if len(f.DropTypes) > 0 && !e.IsControl() && !e.IsDelete() && typeMatches(e.Type, f.DropTypes) {
 		return false
