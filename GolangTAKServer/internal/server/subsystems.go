@@ -55,6 +55,12 @@ func (s *Server) initSubsystems() error {
 	if s.icons, err = openIconsets(s.DataDir); err != nil {
 		return err
 	}
+	if s.signal, err = openSignal(s.DataDir); err != nil {
+		return err
+	}
+	if s.xmpp, err = openXMPP(s.DataDir); err != nil {
+		return err
+	}
 	if s.props, err = openProps(s.DataDir); err != nil {
 		return err
 	}
@@ -209,6 +215,12 @@ func (s *Server) closeSubsystems() {
 	}
 	if s.icons != nil {
 		s.icons.sets.Close()
+	}
+	if s.signal != nil {
+		s.signal.db.Close()
+	}
+	if s.xmpp != nil {
+		s.xmpp.db.Close()
 	}
 	if s.profiles != nil {
 		s.profiles.Close()

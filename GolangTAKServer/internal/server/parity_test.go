@@ -313,3 +313,25 @@ func TestParityIconsets(t *testing.T) {
 		t.Fatalf("iconurl: %s", b)
 	}
 }
+
+func TestParitySignalAndXMPP(t *testing.T) {
+	s := newTestServer(t, nil)
+	a := adminHeaders(t, s)
+	bundle := `{"deviceId":1,"registrationId":42,"identityKey":"IK","signedPreKey":{"keyId":1,"publicKey":"SPK","signature":"SIG","timestamp":1},"preKeys":[{"keyId":1,"publicKey":"P1"},{"keyId":2,"publicKey":"P2"}],"kyberPreKeys":[{"keyId":9,"publicKey":"K9","lastResort":true}]}`
+	if st, _ := doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/api/signal/identity?clientUid=ANDROID-z"), strings.NewReader(bundle), a); st != 200 {
+		t.Fatalf("post bundle: %d", st)
+	}
+	_, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/signal/identity?clientUid=ANDROID-z"), nil, a)
+	if !strings.Contains(string(b), `"P1"`) || strings.Contains(string(b), `"P2"`) || !strings.Contains(string(b), `"K9"`) {
+		t.Fatalf("bundle: %s", b)
+	}
+	if _, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/signal/identity/preKeyCount?clientUid=ANDROID-z"), nil, a); strings.TrimSpace(string(b)) != "1" {
+		t.Fatalf("prekey count after claim: %s", b)
+	}
+	if st, _ := doReq(t, http.DefaultClient, "PUT", plainURL(s, "/Marti/api/xmpp/transfer/u1/photo.jpg"), strings.NewReader("JPEGDATA"), a); st != 200 {
+		t.Fatalf("xmpp put: %d", st)
+	}
+	if st, b := doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/xmpp/transfer/u1/photo.jpg"), nil, a); st != 200 || string(b) != "JPEGDATA" {
+		t.Fatalf("xmpp get: %d %s", st, b)
+	}
+}

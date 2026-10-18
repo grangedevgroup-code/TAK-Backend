@@ -69,6 +69,8 @@ type Server struct {
 	chatPurged  map[string]bool
 	fedSeen     *store.Collection[seenFederate]
 	icons       *iconStore
+	signal      *signalStore
+	xmpp        *xmppStore
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
