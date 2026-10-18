@@ -3940,7 +3940,7 @@
     if (!box) return;
     try {
       const st = await api("GET", "/api/certs/revocation");
-      const rows = (st.crls || []).map((c) => h("li", null, c.loaded ? c.issuer + ": " + c.revoked + " " + "revoked" + (c.nextUpdate ? ", " + "next update" + " " + fmtTime(c.nextUpdate) : "") : c.file + ": " + "could not be loaded"));
+      const rows = (st.crls || []).map((c) => (c.loaded ? h("li", null, c.issuer, ": ", c.revoked + " revoked", c.nextUpdate ? h("span", null, ", ", "next update", " ", fmtTime(c.nextUpdate)) : null) : h("li", null, c.file, ": ", "could not be loaded")));
       clear(box).append(rows.length ? h("ul", { class: "small muted" }, rows) : h("p", { class: "small muted" }, "No revocation lists loaded."));
     } catch (e) {
       clear(box);
