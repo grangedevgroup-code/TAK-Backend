@@ -1102,7 +1102,7 @@ func (s *Server) citrapDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) citrapAttachment(w http.ResponseWriter, r *http.Request) {
 	id := identityOf(r)
 	q := r.URL.Query()
-	reportID := firstNonEmpty(q.Get("id"), q.Get("reportId"), q.Get("missionName"))
+	reportID := firstNonEmpty(r.PathValue("id"), q.Get("id"), q.Get("reportId"), q.Get("missionName"))
 	if reportID != "" {
 		m, ok := s.missions.Get(reportID)
 		if !ok || !s.missionVisible(id, m) {
