@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -57,29 +58,33 @@ func (s *Server) webContent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	dir := s.webContentDir()
-	full := filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(p, "/")))
-	if rel, err := filepath.Rel(dir, full); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	root, err := os.OpenRoot(s.webContentDir())
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	st, err := os.Stat(full)
+	defer root.Close()
+	name := "."
+	if p != "/" {
+		name = filepath.FromSlash(strings.TrimPrefix(p, "/"))
+	}
+	st, err := root.Stat(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	if st.IsDir() {
 		if !strings.HasSuffix(r.URL.Path, "/") {
-			http.Redirect(w, r, path.Base(p)+"/", http.StatusMovedPermanently)
+			redirectLocal(w, r, (&url.URL{Path: strings.TrimSuffix(p, "/") + "/"}).EscapedPath(), http.StatusMovedPermanently)
 			return
 		}
-		full = filepath.Join(full, "index.html")
-		if st, err = os.Stat(full); err != nil || st.IsDir() {
+		name = filepath.Join(name, "index.html")
+		if st, err = root.Stat(name); err != nil || st.IsDir() {
 			http.NotFound(w, r)
 			return
 		}
 	}
-	f, err := os.Open(full)
+	f, err := root.Open(name)
 	if err != nil {
 		http.NotFound(w, r)
 		return

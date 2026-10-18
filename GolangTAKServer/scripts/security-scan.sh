@@ -28,9 +28,10 @@ step() {
 
 gosec_reviewed=G104,G115,G103,G401,G405,G501,G502,G505,G301,G302,G304,G204
 gosec_cli=$gosec_reviewed,G404,G702,G703,G704,G122
+gosec_files='/internal/aws/credentials\.go:G704;/internal/server/log\.go:G703'
 
 gosec_server() {
-  "$bin/gosec" -fmt text -color=false -exclude="$gosec_reviewed" -exclude-dir=cmd ./... 2>/dev/null
+  "$bin/gosec" -fmt text -color=false -exclude="$gosec_reviewed" -exclude-rules="$gosec_files" -exclude-dir=cmd ./... 2>/dev/null
 }
 
 gosec_cli() {

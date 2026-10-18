@@ -539,6 +539,7 @@ Reviewed findings are marked where they occur with `#nosec` or `nosemgrep` and a
 - Paths and commands held in variables (G304, G204, dangerous-exec-command, dangerous-syscall-exec): fixed names under the data directory, validated plugin names and commands set by an administrator. gosec's taint rules for request data reaching a path, a command or a response (G703, G702, G705) stay on for the server, so no-direct-write-to-responsewriter is skipped too.
 - Loop variable pointers (exported_loop_pointer): since Go 1.22 each iteration has its own variable. hidden-goroutine is a style rule.
 - The CLI in `cmd/golangtakserver` also skips G404, G702, G703, G704 and G122: it runs as the operator, on paths, commands and URLs the operator gives it.
+- Two files skip one rule each. `internal/aws/credentials.go` skips G704: it reads the container credential address from the AWS environment variables, as the AWS SDKs do, and accepts only https, loopback and the ECS and EKS credential addresses. `internal/server/log.go` skips G703: the log files are fixed names in the data directory, and gosec reaches them through every `io.Writer` call in the package.
 - staticcheck's ST1005: some error messages start with a product name, such as Tailscale.
 
 Trivy is not used: its releases, images and GitHub Action were compromised in March 2026 (GHSA-69fq-xp46-6x23).

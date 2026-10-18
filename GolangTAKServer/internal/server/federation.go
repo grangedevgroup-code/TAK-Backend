@@ -150,7 +150,11 @@ func (s *Server) startFederation() error {
 				tc := tls.Server(conn, fresh)
 				tc.SetDeadline(time.Now().Add(20 * time.Second))
 				if err := tc.Handshake(); err != nil {
-					s.log.Warn("federate handshake failed", "remote", conn.RemoteAddr(), "err", err)
+					if errors.Is(err, io.EOF) {
+						s.log.Debug("federate handshake failed", "remote", conn.RemoteAddr(), "err", err)
+					} else {
+						s.log.Warn("federate handshake failed", "remote", conn.RemoteAddr(), "err", err)
+					}
 					conn.Close()
 					return
 				}

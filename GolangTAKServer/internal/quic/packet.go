@@ -167,9 +167,10 @@ func unprotect(k *keys, pkt []byte, h header, largest int64) (pn uint64, payload
 	}
 	pnLen := int(pkt[0]&0x3) + 1
 	var trunc uint64
-	for i := 0; i < pnLen; i++ {
-		pkt[h.pnOffset+i] ^= m[1+i]
-		trunc = trunc<<8 | uint64(pkt[h.pnOffset+i])
+	pnb := pkt[h.pnOffset : h.pnOffset+pnLen]
+	for i, mb := range m[1 : 1+pnLen] {
+		pnb[i] ^= mb
+		trunc = trunc<<8 | uint64(pnb[i])
 	}
 	pn = decodePN(largest, trunc, pnLen)
 	hdr := pkt[:h.pnOffset+pnLen]

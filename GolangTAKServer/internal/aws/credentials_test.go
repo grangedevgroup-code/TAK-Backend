@@ -72,6 +72,21 @@ func TestContainerCredentials(t *testing.T) {
 	if err != nil || c.AccessKeyID != "ECSKEY" || c.SessionToken != "ECSTOKEN" || c.Expires.IsZero() {
 		t.Fatalf("ecs %+v %v", c, err)
 	}
+	t.Setenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "")
+	t.Setenv("AWS_CONTAINER_CREDENTIALS_FULL_URI", srv.URL+"/v2/credentials/abc")
+	if c, err := NewProvider(Credentials{}).Get(context.Background()); err != nil || c.AccessKeyID != "ECSKEY" {
+		t.Fatalf("full uri on loopback %+v %v", c, err)
+	}
+	for _, bad := range []string{"http://10.0.0.5/creds", "http://metadata.example.org/creds", "file:///etc/passwd", "http:///creds"} {
+		if containerHostAllowed(bad) {
+			t.Errorf("%s allowed", bad)
+		}
+	}
+	for _, good := range []string{"http://169.254.170.2/v2/credentials", "http://169.254.170.23/v1/credentials", "http://[fd00:ec2::23]/v1/credentials", "http://localhost:8080/c", "https://creds.example.org/c"} {
+		if !containerHostAllowed(good) {
+			t.Errorf("%s refused", good)
+		}
+	}
 }
 
 func TestInstanceRoleCredentialsAndRegion(t *testing.T) {

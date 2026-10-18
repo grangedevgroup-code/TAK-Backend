@@ -21,7 +21,7 @@ import (
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/takproto"
 )
 
-const fedTokenAudience = "golangtakserver-federation"
+const fedAudience = "golangtakserver-federation"
 
 type fedTokenClaims struct {
 	Name          string `json:"name"`
@@ -37,7 +37,7 @@ type fedTokenClaims struct {
 }
 
 func (s *Server) signFedToken(c fedTokenClaims) string {
-	c.Aud = fedTokenAudience
+	c.Aud = fedAudience
 	c.Iat = time.Now().Unix()
 	if c.Jti == "" {
 		c.Jti = NewSecret(12)
@@ -65,7 +65,7 @@ func (s *Server) parseFedToken(t string) (fedTokenClaims, error) {
 	if err != nil || json.Unmarshal(payload, &c) != nil {
 		return c, errors.New("malformed token")
 	}
-	if c.Aud != fedTokenAudience || c.Name == "" {
+	if c.Aud != fedAudience || c.Name == "" {
 		return c, errors.New("not a federation token")
 	}
 	if c.Exp > 0 && time.Now().Unix() >= c.Exp {

@@ -331,9 +331,9 @@ func writeYAML(buf *bytes.Buffer, v any, indent int, inList bool) {
 		}
 		for _, e := range x {
 			buf.WriteString(pad + "- ")
-			switch e.(type) {
+			switch e := e.(type) {
 			case map[string]any:
-				if len(e.(map[string]any)) == 0 {
+				if len(e) == 0 {
 					buf.WriteString("{}\n")
 					continue
 				}

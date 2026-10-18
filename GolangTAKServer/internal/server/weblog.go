@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -29,8 +30,8 @@ type WebConfig struct {
 }
 
 type webLogs struct {
-	access *LogBuffer
-	audit  *LogBuffer
+	access io.WriteCloser
+	audit  io.WriteCloser
 }
 
 func (s *Server) openWebLogs() {

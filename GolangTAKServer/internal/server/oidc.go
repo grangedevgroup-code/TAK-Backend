@@ -16,6 +16,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"math/big"
 	"net/http"
@@ -791,10 +792,15 @@ func (s *Server) loginRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 	s.startSession(w, r, u)
 	s.log.Info("dashboard sign-in with identity provider", "user", u.Name, "remote", requestIP(r))
-	next := localPath(st.Next)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=%s"><title>Signing in</title><a href="%s">Continue</a>`, htmlEscape(next), htmlEscape(next))
+	continuePage.Execute(w, localPath(st.Next))
+}
+
+var continuePage = template.Must(template.New("continue").Parse(`<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={{.}}"><title>Signing in</title><a href="{{.}}">Continue</a>`))
+
+func redirectLocal(w http.ResponseWriter, r *http.Request, target string, code int) {
+	http.Redirect(w, r, localPath(target), code)
 }
 
 func localPath(next string) string {
@@ -804,12 +810,8 @@ func localPath(next string) string {
 	return next
 }
 
-func htmlEscape(v string) string {
-	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&#39;").Replace(v)
-}
-
 func (s *Server) loginRefresh(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/login/auth?next="+url.QueryEscape(localPath(r.URL.Query().Get("next"))), http.StatusFound)
+	redirectLocal(w, r, "/login/auth?next="+url.QueryEscape(localPath(r.URL.Query().Get("next"))), http.StatusFound)
 }
 
 func (s *Server) loginAuthServer(w http.ResponseWriter, r *http.Request) {

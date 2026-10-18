@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -157,6 +159,9 @@ func (p *Provider) fromECS(ctx context.Context) (Credentials, error) {
 	if rel := os.Getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"); rel != "" {
 		url = ECSEndpoint + rel
 	} else if full := os.Getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI"); full != "" {
+		if !containerHostAllowed(full) {
+			return Credentials{}, errors.New("AWS_CONTAINER_CREDENTIALS_FULL_URI must use https, a loopback address or the ECS or EKS credential address")
+		}
 		url = full
 		if tok := os.Getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN"); tok != "" {
 			hdr["Authorization"] = tok
@@ -170,6 +175,28 @@ func (p *Provider) fromECS(ctx context.Context) (Credentials, error) {
 		return Credentials{}, err
 	}
 	return Credentials{AccessKeyID: rc.AccessKeyID, SecretAccessKey: rc.SecretAccessKey, SessionToken: rc.Token, Expires: rc.Expiration}, nil
+}
+
+func containerHostAllowed(raw string) bool {
+	u, err := neturl.Parse(raw)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	if u.Scheme != "http" {
+		return false
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.Equal(net.ParseIP("169.254.170.2")) || ip.Equal(net.ParseIP("169.254.170.23")) || ip.Equal(net.ParseIP("fd00:ec2::23"))
 }
 
 func (p *Provider) imdsToken(ctx context.Context) (string, error) {

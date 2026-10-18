@@ -307,11 +307,6 @@ func (s *Server) applyActiveGroups(w http.ResponseWriter, r *http.Request, user 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) martiOK(w http.ResponseWriter, r *http.Request) {
-	io.Copy(io.Discard, io.LimitReader(r.Body, 1<<20))
-	w.WriteHeader(http.StatusOK)
-}
-
 func (s *Server) martiGroupsBulkUpdate(w http.ResponseWriter, r *http.Request) {
 	var users []string
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&users); err != nil {
@@ -432,10 +427,4 @@ func (s *Server) martiCotSA(w http.ResponseWriter, r *http.Request) {
 	}
 	b.WriteString("</events>")
 	writeXML(w, http.StatusOK, b.String())
-}
-
-func (s *Server) martiEmpty(typ string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, s.envelope(typ, []any{}))
-	}
 }

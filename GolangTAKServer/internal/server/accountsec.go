@@ -217,7 +217,8 @@ func (s *Server) sendMail(to, subject, body string) error {
 	if !ec.Enabled || ec.Host == "" || ec.From == "" {
 		return errEmailOff
 	}
-	if _, err := mail.ParseAddress(to); err != nil {
+	rcpt, err := mail.ParseAddress(to)
+	if err != nil {
 		return fmt.Errorf("bad email address: %w", err)
 	}
 	from, err := mail.ParseAddress(ec.From)
@@ -274,7 +275,7 @@ func (s *Server) sendMail(to, subject, body string) error {
 	if err := c.Mail(from.Address); err != nil {
 		return err
 	}
-	if err := c.Rcpt(to); err != nil {
+	if err := c.Rcpt(rcpt.Address); err != nil {
 		return err
 	}
 	w, err := c.Data()

@@ -4059,7 +4059,7 @@
   }
 
   function hubGraphPanel(initial) {
-    let hub = JSON.parse(JSON.stringify(initial || {}));
+    let hub = structuredClone(initial || {});
     const box = h("div", null);
     const types = [["ca", "CA group"], ["token", "Token group"], ["outgoing", "Outgoing connection"], ["federate", "Single federate"]];
     const filters = [["", "Allow all messages"], ["allowed", "Allowed groups"], ["disallowed", "Disallowed groups"], ["both", "Allowed and disallowed groups"]];
@@ -4097,11 +4097,11 @@
           label: "Save",
           primary: true,
           run: async () => {
-            const next = Object.assign({}, n, { type: val(f, "hn_type"), name: val(f, "hn_name"), caFingerprint: val(f, "hn_ca"), federate: val(f, "hn_fed"), interconnected: val(f, "hn_inter"), allowTokenAuth: val(f, "hn_tok"), tokenAuthDuration: num(f, "hn_dur") });
+            const next = { ...n, type: val(f, "hn_type"), name: val(f, "hn_name"), caFingerprint: val(f, "hn_ca"), federate: val(f, "hn_fed"), interconnected: val(f, "hn_inter"), allowTokenAuth: val(f, "hn_tok"), tokenAuthDuration: num(f, "hn_dur") };
             const nodes = (hub.nodes || []).slice();
             if (idx >= 0) nodes[idx] = next;
             else nodes.push(next);
-            await save(Object.assign({}, hub, { nodes }));
+            await save({ ...hub, nodes });
           },
         },
       ]);
@@ -4132,7 +4132,7 @@
             const edges = (hub.edges || []).slice();
             if (idx >= 0) edges[idx] = next;
             else edges.push(next);
-            await save(Object.assign({}, hub, { edges }));
+            await save({ ...hub, edges });
           },
         },
       ]);
@@ -4153,7 +4153,7 @@
               const i = line.indexOf(":");
               if (i > 0) sets[line.slice(0, i).trim()] = splitList(line.slice(i + 1));
             }
-            await save(Object.assign({}, hub, { groupSets: sets }));
+            await save({ ...hub, groupSets: sets });
           },
         },
       ]);
@@ -4207,7 +4207,7 @@
       } catch (e) {}
       const live = (id) => conns.filter((c) => (c.nodes || []).includes(id)).length;
       const deny = checkbox("hub_deny", hub.denyUnlisted, "Refuse federates that do not match a node");
-      deny.querySelector("input").addEventListener("change", (ev) => save(Object.assign({}, hub, { denyUnlisted: ev.target.checked })).catch(fail));
+      deny.querySelector("input").addEventListener("change", (ev) => save({ ...hub, denyUnlisted: ev.target.checked }).catch(fail));
       clear(box).append(
         h("h3", null, "Hub policy"),
         h("p", { class: "muted" }, "Nodes describe who connects: every federate of a CA, holders of hub tokens, an outgoing connection or one federate. Rules send traffic from one node to another, optionally only messages in certain groups. With nodes defined, the hub follows the policy; the simple rules above still apply too."),
@@ -4224,7 +4224,7 @@
               render: (n) => [
                 n.type === "token" ? btn("Tokens", () => tokens(n)) : null,
                 btn("Edit", () => editNode(hub.nodes.indexOf(n)).catch(fail)),
-                btn("Delete", () => confirmAction("Delete node", "Delete " + (n.name || n.id) + " and its rules?", "Delete", () => save(Object.assign({}, hub, { nodes: hub.nodes.filter((x) => x !== n), edges: (hub.edges || []).filter((e) => e.from !== n.id && e.to !== n.id) })))),
+                btn("Delete", () => confirmAction("Delete node", "Delete " + (n.name || n.id) + " and its rules?", "Delete", () => save({ ...hub, nodes: hub.nodes.filter((x) => x !== n), edges: (hub.edges || []).filter((e) => e.from !== n.id && e.to !== n.id) }))),
               ],
             },
           ],
@@ -4240,7 +4240,7 @@
             {
               title: "",
               cls: "actions",
-              render: (e) => [btn("Edit", () => editEdge(hub.edges.indexOf(e))), btn("Delete", () => save(Object.assign({}, hub, { edges: hub.edges.filter((x) => x !== e) })).catch(fail))],
+              render: (e) => [btn("Edit", () => editEdge(hub.edges.indexOf(e))), btn("Delete", () => save({ ...hub, edges: hub.edges.filter((x) => x !== e) }).catch(fail))],
             },
           ],
           hub.edges || [],

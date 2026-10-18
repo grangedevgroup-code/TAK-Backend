@@ -110,6 +110,17 @@ func TestFirewallRules(t *testing.T) {
 	if !strings.Contains(strings.Join(ruleStrings(firewallRules(cfg)), " "), "9000/tcp") {
 		t.Fatal("federation port not opened")
 	}
+	cfg.Federation.Token.Enabled = true
+	cfg.Inputs = []server.InputConfig{{Name: "quic", Protocol: "quic", Port: 8091}, {Name: "extra", Protocol: "tls", Port: 8092}, {Name: "off", Protocol: "tcp", Port: 8093, Disabled: true}}
+	got = strings.Join(ruleStrings(firewallRules(cfg)), " ")
+	for _, want := range []string{"8444/tcp", "9002/tcp", "8091/udp", "8092/tcp"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %s in %s", want, got)
+		}
+	}
+	if strings.Contains(got, "8093/") {
+		t.Fatal("port of a disabled input opened")
+	}
 	if r := parseRules(ruleStrings(firewallRules(cfg))); len(r) != len(firewallRules(cfg)) {
 		t.Fatal("rules do not round trip")
 	}

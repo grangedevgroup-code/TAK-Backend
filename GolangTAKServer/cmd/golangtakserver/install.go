@@ -163,7 +163,19 @@ func firewallRules(cfg server.Config) []firewall.Rule {
 		rules = append(rules, firewall.Rule{Port: port, Proto: "tcp"})
 	}
 	if cfg.Federation.Enabled {
-		rules = append(rules, firewall.Rule{Port: p.Federation, Proto: "tcp"}, firewall.Rule{Port: p.FederationV2, Proto: "tcp"})
+		rules = append(rules, firewall.Rule{Port: p.Federation, Proto: "tcp"}, firewall.Rule{Port: p.FederationV2, Proto: "tcp"},
+			firewall.Rule{Port: cfg.FederationHTTPSPort(), Proto: "tcp"}, firewall.Rule{Port: cfg.FederationTokenPort(), Proto: "tcp"})
+	}
+	for _, in := range cfg.Inputs {
+		if in.Disabled || in.Port <= 0 {
+			continue
+		}
+		proto := "tcp"
+		switch strings.ToLower(in.Protocol) {
+		case "quic", "udp", "mcast", "multicast":
+			proto = "udp"
+		}
+		rules = append(rules, firewall.Rule{Port: in.Port, Proto: proto})
 	}
 	if v := cfg.Video; v.Enabled {
 		rules = append(rules, firewall.Rule{Port: v.RTSPPort, Proto: "tcp"}, firewall.Rule{Port: v.RTSPSPort, Proto: "tcp"}, firewall.Rule{Port: v.RTMPPort, Proto: "tcp"})

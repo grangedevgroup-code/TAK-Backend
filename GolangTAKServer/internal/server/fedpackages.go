@@ -25,17 +25,30 @@ import (
 )
 
 func (s *Server) fedHTTPSPort() int {
-	cfg := s.Config()
-	switch p := cfg.Federation.HTTPSPort; {
+	return s.Config().FederationHTTPSPort()
+}
+
+func (c Config) FederationHTTPSPort() int {
+	switch p := c.Federation.HTTPSPort; {
 	case p > 0:
 		return p
 	case p < 0:
 		return 0
 	}
-	if cfg.Federation.Enabled && cfg.Ports.Federation > 0 {
+	if c.Federation.Enabled && c.Ports.Federation > 0 {
 		return 8444
 	}
 	return 0
+}
+
+func (c Config) FederationTokenPort() int {
+	if !c.Federation.Enabled || !c.Federation.Token.Enabled {
+		return 0
+	}
+	if c.Federation.Token.Port > 0 {
+		return c.Federation.Token.Port
+	}
+	return 9002
 }
 
 func (s *Server) clientContentURL(hash string) string {

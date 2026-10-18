@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/mail"
@@ -269,32 +270,31 @@ func userNameFromEmail(addr string) string {
 
 func (s *Server) registerConfirm(w http.ResponseWriter, r *http.Request) {
 	raw, ok := s.acct.redeem(inviteKind, r.PathValue("token"))
-	page := func(status int, title, msg string) {
+	page := func(status int, title, msg, user, password string) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(status)
-		fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>%s</title><body style="font-family:sans-serif;max-width:36em;margin:3em auto;padding:0 1em"><h1>%s</h1><p>%s</p><p><a href="/">Open %s</a></p>`,
-			htmlEscape(title), htmlEscape(title), msg, htmlEscape(s.Config().Name))
+		confirmPage.Execute(w, map[string]string{"Title": title, "Message": msg, "User": user, "Password": password, "Server": s.Config().Name})
 	}
 	if !ok {
-		page(http.StatusBadRequest, "Link expired", "This link was already used or has expired. Ask an administrator for a new invitation.")
+		page(http.StatusBadRequest, "Link expired", "This link was already used or has expired. Ask an administrator for a new invitation.", "", "")
 		return
 	}
 	var inv inviteData
 	if json.Unmarshal([]byte(raw), &inv) != nil || inv.Email == "" {
-		page(http.StatusBadRequest, "Invalid link", "This invitation could not be read.")
+		page(http.StatusBadRequest, "Invalid link", "This invitation could not be read.", "", "")
 		return
 	}
 	for _, u := range s.dir.Users() {
 		if strings.EqualFold(u.Email, inv.Email) {
-			page(http.StatusConflict, "Account exists", "An account already uses this email address. Sign in or reset your password.")
+			page(http.StatusConflict, "Account exists", "An account already uses this email address. Sign in or reset your password.", "", "")
 			return
 		}
 	}
 	name := userNameFromEmail(inv.Email)
 	password := FriendlySecret()
 	if _, err := s.dir.AddUser(name, password, false, inv.Groups); err != nil {
-		page(http.StatusBadRequest, "Account not created", htmlEscape(err.Error()))
+		page(http.StatusBadRequest, "Account not created", err.Error(), "", "")
 		return
 	}
 	s.dir.UpdateUser(name, func(u *User) error {
@@ -306,7 +306,7 @@ func (s *Server) registerConfirm(w http.ResponseWriter, r *http.Request) {
 	})
 	go s.sendMail(inv.Email, "Your "+s.Config().Name+" account", "User name: "+name+"\nPassword: "+password+"\n\nChange the password after you sign in.")
 	s.log.Info("account created from invitation", "user", name)
-	page(http.StatusOK, "Account created", "User name: <b>"+htmlEscape(name)+"</b><br>Password: <b>"+htmlEscape(password)+"</b><br><br>The details were also emailed to you. Change the password after you sign in.")
+	page(http.StatusOK, "Account created", "The details were also emailed to you. Change the password after you sign in.", name, password)
 }
 
 func (s *Server) registerUsers(w http.ResponseWriter, r *http.Request) {
@@ -353,3 +353,5 @@ func (s *Server) secConfigRoutes(m, a, pub func(string, http.HandlerFunc)) {
 		writeText(w, http.StatusOK, s.Config().VBM.NetworkClassification)
 	})
 }
+
+var confirmPage = template.Must(template.New("confirm").Parse(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>{{.Title}}</title><body style="font-family:sans-serif;max-width:36em;margin:3em auto;padding:0 1em"><h1>{{.Title}}</h1>{{if .User}}<p>User name: <b>{{.User}}</b><br>Password: <b>{{.Password}}</b></p>{{end}}<p>{{.Message}}</p><p><a href="/">Open {{.Server}}</a></p>`))
