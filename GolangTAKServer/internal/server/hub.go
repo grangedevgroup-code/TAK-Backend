@@ -596,6 +596,9 @@ func (h *Hub) Replay(c *Client, mode string, limit int) int {
 		if limit > 0 && sent >= limit {
 			break
 		}
+		if !h.qosAllowDelivery(c, m) {
+			continue
+		}
 		if c.Send(m) {
 			sent++
 		}
