@@ -48,10 +48,11 @@ func (c CloudWatchConfig) step() time.Duration {
 }
 
 func cloudWatchUnit(name, kind string) string {
+	base := strings.TrimSuffix(name, "_total")
 	switch {
-	case strings.HasSuffix(name, "_bytes"):
+	case strings.HasSuffix(base, "_bytes") || strings.Contains(base, "_bytes_"):
 		return "Bytes"
-	case strings.HasSuffix(name, "_seconds") || strings.HasSuffix(name, "_seconds_total"):
+	case strings.HasSuffix(base, "_seconds"):
 		return "Seconds"
 	case kind == "counter":
 		return "Count"
