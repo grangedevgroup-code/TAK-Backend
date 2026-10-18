@@ -361,6 +361,7 @@ func (s *Server) routes() *http.ServeMux {
 	a("PUT /api/server-plugins/{name}", s.apiServerPluginPut)
 	a("PUT /api/server-plugins/{name}/settings", s.apiServerPluginSettings)
 	u("GET /api/plugin-pages", s.apiPluginPages)
+	u("GET /api/plugins/intercept", s.apiPluginIntercept)
 	pub("/plugins/{name}/{rest...}", s.pluginProxy)
 	a("DELETE /api/server-plugins/{name}", s.apiServerPluginDelete)
 	a("GET /api/meshtastic", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, s.meshStatus()) })

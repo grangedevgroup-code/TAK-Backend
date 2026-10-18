@@ -266,6 +266,74 @@ func (p *Plugin) listen(ctx context.Context, u string, fn func(Event)) error {
 	}
 }
 
+type Intercepted struct {
+	ID     uint64 `json:"id"`
+	XML    string `json:"xml"`
+	Type   string `json:"type"`
+	UID    string `json:"uid"`
+	Source string `json:"source"`
+}
+
+type Verdict struct {
+	Drop bool
+	XML  string
+}
+
+func (p *Plugin) Intercept(ctx context.Context, types []string, timeout time.Duration, fn func(Intercepted) Verdict) error {
+	if p.StreamURL == "" {
+		return errors.New("the server has no HTTP port for interceptors")
+	}
+	u := strings.Replace(p.StreamURL, "/api/stream", "/api/plugins/intercept", 1) + "?types=" + url.QueryEscape(strings.Join(types, ",")) + "&timeoutMs=" + strconv.Itoa(int(timeout/time.Millisecond))
+	delay := time.Second
+	for {
+		err := p.intercept(ctx, u, fn)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		p.Log.Printf("interceptor closed (%v); reconnecting in %s", err, delay)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, 30*time.Second)
+	}
+}
+
+func (p *Plugin) intercept(ctx context.Context, u string, fn func(Intercepted) Verdict) error {
+	dctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	conn, _, err := websocket.Dial(dctx, u, &websocket.DialOptions{TLS: p.tls, Header: http.Header{"Authorization": {"Bearer " + p.Token}}})
+	cancel()
+	if err != nil {
+		return err
+	}
+	defer conn.CloseNow()
+	stop := context.AfterFunc(ctx, func() { conn.CloseNow() })
+	defer stop()
+	for {
+		_, data, err := conn.ReadMessage()
+		if err != nil {
+			return err
+		}
+		var m Intercepted
+		if json.Unmarshal(data, &m) != nil {
+			continue
+		}
+		v := fn(m)
+		reply := map[string]any{"id": m.ID, "action": "pass"}
+		switch {
+		case v.Drop:
+			reply["action"] = "drop"
+		case v.XML != "" && v.XML != m.XML:
+			reply["action"], reply["xml"] = "replace", v.XML
+		}
+		b, _ := json.Marshal(reply)
+		if err := conn.WriteText(string(b)); err != nil {
+			return err
+		}
+	}
+}
+
 // User is the signed-in dashboard user making a request to the plugin's pages.
 type User struct {
 	Name   string

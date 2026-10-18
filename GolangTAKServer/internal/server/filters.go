@@ -74,6 +74,9 @@ func (s *Server) messageFilter(m *Message) bool {
 	if m == nil || m.Event == nil || m.Source == nil || m.Source.Kind == KindCluster {
 		return true
 	}
+	if !s.runInterceptors(m) {
+		return false
+	}
 	e := m.Event
 	if g := m.Source.inArea; g != nil && !g.passes(m) {
 		return false

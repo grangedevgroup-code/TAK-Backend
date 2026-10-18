@@ -73,6 +73,7 @@ type Server struct {
 	xmpp        *xmppStore
 	cotSearch   cotSearches
 	drops       dropCounter
+	intercept   interceptorSet
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
