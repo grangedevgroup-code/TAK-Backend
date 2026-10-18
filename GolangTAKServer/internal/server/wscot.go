@@ -33,12 +33,32 @@ func (s *Server) wsIdentity(r *http.Request) (*Identity, error) {
 	return nil, nil
 }
 
+func (s *Server) serveWebSocketPort(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/takproto/1" {
+		s.serveTakProtoWebSocket(w, r)
+		return
+	}
+	s.serveCoTWebSocket(w, r)
+}
+
 func (s *Server) serveCoTWebSocket(w http.ResponseWriter, r *http.Request) {
 	if !websocket.IsUpgrade(r) {
 		cfg := s.Config()
 		writeText(w, http.StatusOK, "GolangTAKServer CoT WebSocket endpoint. Connect a WebSocket client to ws://"+HostForURL(s.hostOf(r))+":"+itoa(cfg.Ports.WebSocket)+"/ and exchange CoT XML, one event per message.\n")
 		return
 	}
+	s.serveWebSocket(w, r, false)
+}
+
+func (s *Server) serveTakProtoWebSocket(w http.ResponseWriter, r *http.Request) {
+	if !websocket.IsUpgrade(r) {
+		writeText(w, http.StatusUpgradeRequired, "TAK protocol WebSocket endpoint: upgrade to a WebSocket and exchange binary TAK protobuf messages.\n")
+		return
+	}
+	s.serveWebSocket(w, r, true)
+}
+
+func (s *Server) serveWebSocket(w http.ResponseWriter, r *http.Request, proto bool) {
 	id, err := s.wsIdentity(r)
 	if err != nil {
 		challenge(w, "invalid credentials")
@@ -59,28 +79,43 @@ func (s *Server) serveCoTWebSocket(w http.ResponseWriter, r *http.Request) {
 		writeText(w, http.StatusTooManyRequests, "too many connections from your address")
 		return
 	}
-	conn, err := websocket.Accept(w, r, []string{"cot", "tak"})
+	var subprotocols []string
+	if !proto {
+		subprotocols = []string{"cot", "tak"}
+	}
+	conn, err := websocket.Accept(w, r, subprotocols)
 	if err != nil {
 		return
 	}
 	conn.MaxMessage = int64(s.Config().Limits.MaxMessageBytes)
 	c := s.hub.NewClient(KindWebSocket, remote, id)
 	c.authed.Store(true)
+	c.SetProto(proto)
 	c.onClose = func() { conn.CloseNow() }
 	if !s.hub.Add(c) {
 		conn.Close(websocket.CloseTryAgainLater, "server at capacity")
 		return
 	}
-	s.log.Info("client connected", "kind", KindWebSocket, "remote", remote, "user", c.User())
-	go s.wsWriter(c, conn)
+	s.log.Info("client connected", "kind", KindWebSocket, "remote", remote, "user", c.User(), "takproto", proto)
+	go s.wsWriter(c, conn, proto)
 	s.afterAuth(c)
 	st := &clientState{}
 	idle := time.Duration(s.Config().Limits.IdleTimeoutSec) * time.Second
 	for {
 		conn.SetReadDeadline(time.Now().Add(idle))
-		_, data, err := conn.ReadMessage()
+		op, data, err := conn.ReadMessage()
 		if err != nil {
 			break
+		}
+		if proto && op == websocket.OpText {
+			conn.Close(websocket.CloseUnsupportedData, "Text messages not supported")
+			break
+		}
+		if proto && len(data) > 0 && data[0] != takproto.Magic && data[0] != '<' {
+			if err := s.handleFrame(c, st, takproto.Frame{Proto: true, Data: data}); err != nil {
+				break
+			}
+			continue
 		}
 		fr := takproto.NewReader(bytes.NewReader(data), s.Config().Limits.MaxMessageBytes)
 		failed := false
@@ -105,7 +140,7 @@ func (s *Server) serveCoTWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.log.Info("client disconnected", "kind", KindWebSocket, "remote", remote, "user", c.User(), "callsign", c.Callsign())
 }
 
-func (s *Server) wsWriter(c *Client, conn *websocket.Conn) {
+func (s *Server) wsWriter(c *Client, conn *websocket.Conn, proto bool) {
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
 	for {
@@ -119,11 +154,14 @@ func (s *Server) wsWriter(c *Client, conn *websocket.Conn) {
 				return
 			}
 		case m := <-c.out:
-			if m.SwitchProto {
+			if m.SwitchProto || (proto && m.ForceXML) {
 				continue
 			}
 			conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 			b := m.XML()
+			if proto {
+				b = m.StreamFrame()
+			}
 			if err := conn.WriteBinary(b); err != nil {
 				c.Close()
 				return
