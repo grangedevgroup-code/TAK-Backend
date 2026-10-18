@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
@@ -44,6 +45,7 @@ type Server struct {
 	revoc       *revocation.Checker
 	revocMu     sync.Mutex
 	revocSig    string
+	apiRoutes   atomic.Pointer[[]routeDoc]
 	hub         *Hub
 	ctx         context.Context
 	cancel      context.CancelFunc

@@ -12,10 +12,20 @@ import (
 
 func (s *Server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	m := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.guard(accessMarti, h)) }
-	u := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.guard(accessUser, h)) }
-	a := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, s.guard(accessAdmin, h)) }
-	pub := func(p string, h http.HandlerFunc) { mux.HandleFunc(p, h) }
+	var docs []routeDoc
+	m := func(p string, h http.HandlerFunc) {
+		recordRoute(&docs, p, accessMarti, h)
+		mux.HandleFunc(p, s.guard(accessMarti, h))
+	}
+	u := func(p string, h http.HandlerFunc) {
+		recordRoute(&docs, p, accessUser, h)
+		mux.HandleFunc(p, s.guard(accessUser, h))
+	}
+	a := func(p string, h http.HandlerFunc) {
+		recordRoute(&docs, p, accessAdmin, h)
+		mux.HandleFunc(p, s.guard(accessAdmin, h))
+	}
+	pub := func(p string, h http.HandlerFunc) { recordRoute(&docs, p, accessAny, h); mux.HandleFunc(p, h) }
 
 	pub("GET /metrics", s.metricsHandler)
 	pub("GET /api/cluster/ws", s.apiClusterSocket)
@@ -376,6 +386,12 @@ func (s *Server) routes() *http.ServeMux {
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", noCache(assets)))
 	mux.HandleFunc("GET /{$}", s.dashboardIndex)
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	u("GET /v3/api-docs", s.apiOpenAPIJSON)
+	u("GET /v3/api-docs.yaml", s.apiOpenAPIYAML)
+	u("GET /swagger-ui/index.html", s.apiExplorer)
+	u("GET /swagger-ui.html", s.apiExplorer)
+	docs = append(docs, subRouteDocs()...)
+	s.apiRoutes.Store(&docs)
 	return mux
 }
 

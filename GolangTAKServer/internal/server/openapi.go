@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -122,32 +123,26 @@ func openAPIPath(p string) (string, []string) {
 
 func routeTag(p string) string {
 	segs := strings.Split(strings.Trim(p, "/"), "/")
-	if len(segs) == 0 || segs[0] == "" {
+	if segs[0] == "" {
 		return "dashboard"
 	}
+	marti := strings.EqualFold(segs[0], "Marti")
 	i := 0
-	if strings.EqualFold(segs[0], "Marti") {
+	switch {
+	case marti && len(segs) > 2 && segs[1] == "api":
+		i = 2
+	case marti && len(segs) > 1:
 		i = 1
-		if len(segs) > 1 && segs[1] == "api" {
-			i = 2
-		}
-	} else if segs[0] == "api" {
+	case segs[0] == "api" && len(segs) > 1:
 		i = 1
 	}
-	if i >= len(segs) || strings.HasPrefix(segs[i], "{") {
-		i = min(i, len(segs)-1)
-		if i > 0 {
-			i--
-		}
+	for i > 0 && strings.HasPrefix(segs[i], "{") {
+		i--
 	}
-	tag := segs[i]
-	if strings.EqualFold(segs[0], "Marti") && i == 1 {
-		return "Marti " + tag
+	if marti && i > 0 {
+		return "Marti " + segs[i]
 	}
-	if strings.EqualFold(segs[0], "Marti") {
-		return "Marti " + tag
-	}
-	return tag
+	return segs[i]
 }
 
 func humanize(name string) string {
@@ -177,7 +172,7 @@ func humanize(name string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
-func (s *Server) recordRoute(docs *[]routeDoc, pattern string, level access, h http.HandlerFunc) {
+func recordRoute(docs *[]routeDoc, pattern string, level access, h http.HandlerFunc) {
 	m, p := splitPattern(pattern)
 	*docs = append(*docs, routeDoc{Method: m, Path: p, Access: level, Handler: handlerName(h)})
 }
@@ -377,12 +372,13 @@ func writeYAMLValue(buf *bytes.Buffer, v any, indent int) {
 }
 
 func (s *Server) apiExplorer(w http.ResponseWriter, r *http.Request) {
-	b, err := fsReadFile(web.Assets(), "api.html")
+	b, err := fs.ReadFile(web.Assets(), "api.html")
 	if err != nil {
 		writeText(w, http.StatusNotFound, "API explorer missing")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'")
 	w.Write(b)
 }
