@@ -3392,10 +3392,36 @@
         field("Deletes", checkbox("fdel", f.allowFederatedDelete, "Let federates delete shared missions and mission content")),
         field("Groups", input("fgroups", (f.groups || []).join(", ")), "Traffic from these groups is shared with federates."),
         field("Trusted CAs", h("textarea", { id: "fcas" }, (f.trustedCAs || []).join("\n")), "PEM certificates of the federates' certificate authorities."),
+        field("Data feeds", checkbox("ffeeds", !f.disableDataFeedFederation, "Share data feeds with federates")),
+        field("CA download", checkbox("fcad", f.caDownload, "Let federates download this server's CA certificate")),
+        field("Package port", input("fhttps", f.httpsPort || "", { type: "number", min: 0, max: 65535, placeholder: "8444" }), "Federation v1 servers send data packages to this HTTPS port."),
+        field("Token sign-in", checkbox("ftok", (f.tokenAuth || {}).enabled, "Accept federates that sign in with a token instead of mutual TLS")),
+        field("Token port", input("ftokport", (f.tokenAuth || {}).port || "", { type: "number", min: 0, max: 65535, placeholder: "9002" })),
+        field("Tokens without certificates", checkbox("ftoknc", (f.tokenAuth || {}).allowWithoutTlsCertificate, "Issue tokens for a certificate sent in the request, without a TLS client certificate"), "For networks that inspect TLS traffic."),
+        field("File filter", checkbox("fff", (f.fileFilter || {}).enabled, "Do not share files with the extensions below")),
+        field("Blocked extensions", input("ffext", ((f.fileFilter || {}).extensions || []).join(", "), { placeholder: "pref" }), "Comma separated, without the dot."),
+        field("Reconnect catch-up", checkbox("fdis", (f.disruptionTolerance || {}).enabled, "Send missions' recent changes to federates that reconnect")),
+        field("Catch-up window (seconds)", input("fdisrec", (f.disruptionTolerance || {}).recencySeconds || "", { type: "number", min: 0, placeholder: "43200" })),
+        field("Unlimited catch-up", checkbox("fdisun", (f.disruptionTolerance || {}).unlimited, "Send everything that changed while the federate was away")),
         h("div", { class: "full" }, btn("Save federation settings", async () => {
           try {
             const pems = (val(form, "fcas").match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || []);
-            const r = await api("PUT", "/api/settings", { federation: Object.assign({}, f, { enabled: val(form, "fen"), groups: splitList(val(form, "fgroups")), trustedCAs: pems, disableMissionFederation: !val(form, "fmis"), allowFederatedDelete: val(form, "fdel") }), ports: Object.assign({}, cfg.ports, { federation: num(form, "fport"), federationV2: num(form, "fport2") }) });
+            const r = await api("PUT", "/api/settings", {
+              federation: Object.assign({}, f, {
+                enabled: val(form, "fen"),
+                groups: splitList(val(form, "fgroups")),
+                trustedCAs: pems,
+                disableMissionFederation: !val(form, "fmis"),
+                allowFederatedDelete: val(form, "fdel"),
+                disableDataFeedFederation: !val(form, "ffeeds"),
+                caDownload: val(form, "fcad"),
+                httpsPort: num(form, "fhttps"),
+                tokenAuth: Object.assign({}, f.tokenAuth, { enabled: val(form, "ftok"), port: num(form, "ftokport"), allowWithoutTlsCertificate: val(form, "ftoknc") }),
+                fileFilter: { enabled: val(form, "fff"), extensions: splitList(val(form, "ffext")).map((x) => x.replace(/^\./, "")) },
+                disruptionTolerance: Object.assign({}, f.disruptionTolerance, { enabled: val(form, "fdis"), recencySeconds: num(form, "fdisrec"), unlimited: val(form, "fdisun") }),
+              }),
+              ports: Object.assign({}, cfg.ports, { federation: num(form, "fport"), federationV2: num(form, "fport2") }),
+            });
             toast(r.restartRequired ? "Saved. Restart the server under Settings to apply." : "Saved");
           } catch (e) {
             fail(e);
@@ -3406,7 +3432,9 @@
         h("p", null, "Federation shares traffic with TAK Server instances that connect with mutual TLS. Give the other side this server's CA certificate (", h("a", { href: "/api/ca.pem" }, "download"), ") and add theirs below. To connect out to a federation server, add a link with a fed:// URL for version 1 or fed2:// for version 2."),
         table([{ title: "Federate", key: "name" }, { title: "Address", key: "remote" }, { title: "Protocol", render: (r) => h("span", { class: "pill" }, r.version || "v1") }, { title: "Direction", key: "direction" }, { title: "Contacts", key: "contacts" }, { title: "Since", render: (r) => fmtAgo(r.since) }], (fed && fed.federates) || [], "No federates connected."),
         form,
-        hubPanel(cfg.federationHub || {}, [...peers.map((p) => p.name), ...((fed && fed.federates) || []).map((f) => f.name)])
+        fedCAPanel(cfg),
+        hubPanel(cfg.federationHub || {}, [...peers.map((p) => p.name), ...((fed && fed.federates) || []).map((f) => f.name)]),
+        hubGraphPanel(cfg.federationHub || {})
       );
     };
     const hubPanel = (hub, names) => {
@@ -3809,12 +3837,388 @@
     return () => clearInterval(spTimer);
   }
 
+  function inputsEditor(initial) {
+    let list = (initial || []).slice();
+    const box = h("div", { class: "full" });
+    const protos = [["tls", "TLS (SSL)"], ["quic", "QUIC"], ["tcp", "TCP"], ["stcp", "Streaming TCP"], ["udp", "UDP"], ["mcast", "Multicast UDP"]];
+    const auths = [["", "Default for the protocol"], ["x509", "Client certificate"], ["file", "User name and password"], ["ldap", "Directory (LDAP)"], ["oauth", "Single sign-on token"], ["anonymous", "Anonymous"]];
+    const save = async (next) => {
+      await api("PUT", "/api/settings", { inputs: next });
+      list = next;
+      toast("Saved");
+      render();
+    };
+    const edit = (idx) => {
+      const r = idx >= 0 ? list[idx] : { name: "", protocol: "tls", port: "", auth: "", filterGroups: [] };
+      const f = h(
+        "form",
+        { class: "grid" },
+        field("Name", input("in_name", r.name, { required: true, placeholder: "stdquic" })),
+        field("Protocol", select("in_proto", protos, r.protocol || "tls")),
+        field("Port", input("in_port", r.port, { type: "number", min: 1, max: 65535, required: true })),
+        field("Authentication", select("in_auth", auths, r.auth || "")),
+        field("Groups", input("in_groups", (r.filterGroups || []).join(", ")), "Traffic on this input goes to these groups, comma separated. Empty uses each user's own groups."),
+        field("Multicast group", input("in_group", r.group || "", { placeholder: "239.2.3.1" }), "Only for multicast inputs."),
+        field("Interface", input("in_iface", r.iface || "", { placeholder: "all" }), "Only for multicast inputs."),
+        field("QUIC idle timeout (seconds)", input("in_quic", r.quicConnectionTimeoutSeconds || "", { type: "number", min: 0, placeholder: "30" }), "Only for QUIC inputs."),
+        field("Area", input("in_area", r.area || "", { placeholder: "south, west, north, east" }), "Optional. Only accept map items inside this box."),
+        field("History", checkbox("in_arch", !r.noArchive, "Keep this input's traffic in history")),
+        field("Archive only", checkbox("in_archonly", r.archiveOnly, "Record traffic without sharing it")),
+        field("Enabled", checkbox("in_on", !r.disabled, "Listen on this input"))
+      );
+      modal(idx >= 0 ? "Edit input" : "Add input", f, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const next = {
+              name: val(f, "in_name"),
+              protocol: val(f, "in_proto"),
+              port: num(f, "in_port"),
+              auth: val(f, "in_auth"),
+              filterGroups: splitList(val(f, "in_groups")),
+              group: val(f, "in_group"),
+              iface: val(f, "in_iface"),
+              quicConnectionTimeoutSeconds: num(f, "in_quic"),
+              area: val(f, "in_area"),
+              noArchive: !val(f, "in_arch"),
+              archiveOnly: val(f, "in_archonly"),
+              disabled: !val(f, "in_on"),
+            };
+            const copy = list.slice();
+            if (idx >= 0) copy[idx] = next;
+            else copy.push(next);
+            await save(copy);
+          },
+        },
+      ]);
+    };
+    const render = async () => {
+      let metrics = [];
+      try {
+        metrics = (await api("GET", "/Marti/api/inputs?excludeDataFeeds=true")).data || [];
+      } catch (e) {}
+      const stat = (name) => metrics.find((m) => m.id === name) || {};
+      clear(box).append(
+        table(
+          [
+            { title: "Name", render: (r) => h("b", null, r.name) },
+            { title: "Protocol", render: (r) => h("span", { class: "pill" }, (r.protocol || "tls").toUpperCase()) },
+            { title: "Port", key: "port" },
+            { title: "Authentication", render: (r) => (auths.find((a) => a[0] === (r.auth || "")) || auths[0])[1] },
+            { title: "Groups", render: (r) => ((r.filterGroups || []).length ? r.filterGroups.join(", ") : "-") },
+            {
+              title: "State",
+              render: (r) => {
+                if (r.disabled) return h("span", { class: "pill" }, "disabled");
+                const m = stat(r.name);
+                return m.running ? h("span", null, pill("running"), " ", m.numClients || 0, " ", "clients") : pill("problem");
+              },
+            },
+            {
+              title: "",
+              cls: "actions",
+              render: (r) => [
+                btn("Edit", () => edit(list.indexOf(r))),
+                btn("Delete", () => confirmAction("Delete input", "Delete the input " + r.name + "?", "Delete", () => save(list.filter((x) => x !== r)))),
+              ],
+            },
+          ],
+          list,
+          "No extra inputs. The ports under Ports are always on."
+        ),
+        h("div", { class: "cluster-actions" }, btn("Add input", () => edit(-1), "primary", "plus"))
+      );
+    };
+    render();
+    return box;
+  }
+
+  async function loadRevStatus() {
+    const box = document.getElementById("rev_status");
+    if (!box) return;
+    try {
+      const st = await api("GET", "/api/certs/revocation");
+      const rows = (st.crls || []).map((c) => h("li", null, c.loaded ? c.issuer + ": " + c.revoked + " " + "revoked" + (c.nextUpdate ? ", " + "next update" + " " + fmtTime(c.nextUpdate) : "") : c.file + ": " + "could not be loaded"));
+      clear(box).append(rows.length ? h("ul", { class: "small muted" }, rows) : h("p", { class: "small muted" }, "No revocation lists loaded."));
+    } catch (e) {
+      clear(box);
+    }
+  }
+
+  function parseRules(s, a, b) {
+    return splitList(s)
+      .map((p) => p.split("=").map((x) => Number(x.trim())))
+      .filter((p) => p.length === 2 && p.every(Number.isFinite))
+      .map((p) => ({ [a]: p[0], [b]: p[1] }));
+  }
+
+  function fmtRules(list, a, b) {
+    return (list || []).map((r) => r[a] + "=" + r[b]).join(", ");
+  }
+
+  function fedCAPanel(cfg) {
+    const box = h("div", null);
+    const load = async () => {
+      let certs = [];
+      try {
+        certs = (await api("GET", "/Marti/api/federatecertificates")).data || [];
+      } catch (e) {}
+      const cas = ((cfg.federation || {}).federateCAs || []).slice();
+      const norm = (fp) => String(fp || "").replace(/:/g, "").toLowerCase();
+      const conf = (fp) => cas.find((c) => norm(c.fingerprint) === norm(fp)) || {};
+      const edit = (cert) => {
+        const c = conf(cert.fingerprint);
+        const f = h(
+          "form",
+          { class: "grid" },
+          h("p", { class: "full small muted" }, cert.subjectDn),
+          field("Name", input("ca_name", c.name || "")),
+          field("Inbound groups", input("ca_in", (c.inboundGroups || []).join(", ")), "Traffic from federates with this CA goes to these groups. Empty uses the federation groups."),
+          field("Outbound groups", input("ca_out", (c.outboundGroups || []).join(", ")), "Traffic from these groups is shared with federates with this CA."),
+          field("Maximum hops", input("ca_hops", c.maxHops || "", { type: "number", min: 0, placeholder: "default" })),
+          field("Token sign-in", checkbox("ca_tok", c.allowTokenAuth, "Federates with this CA may get a token and connect without mutual TLS")),
+          field("Token valid for (days)", input("ca_days", c.tokenAuthDays || "", { type: "number", min: 0, placeholder: "never expires" }))
+        );
+        modal("Federation CA", f, [
+          { label: "Cancel" },
+          {
+            label: "Save",
+            primary: true,
+            run: async () => {
+              const next = cas.filter((x) => norm(x.fingerprint) !== norm(cert.fingerprint));
+              next.push({ fingerprint: norm(cert.fingerprint), name: val(f, "ca_name"), inboundGroups: splitList(val(f, "ca_in")), outboundGroups: splitList(val(f, "ca_out")), maxHops: num(f, "ca_hops"), allowTokenAuth: val(f, "ca_tok"), tokenAuthDays: num(f, "ca_days") });
+              await api("PUT", "/api/settings", { federation: { federateCAs: next } });
+              cfg.federation = Object.assign({}, cfg.federation, { federateCAs: next });
+              toast("Saved");
+              load().catch(fail);
+            },
+          },
+        ]);
+      };
+      clear(box).append(
+        h("h3", null, "Federation certificate authorities"),
+        table(
+          [
+            { title: "Name", render: (r) => h("b", null, conf(r.fingerprint).name || r.subjectDn) },
+            { title: "Fingerprint", render: (r) => h("span", { class: "mono small" }, String(r.fingerprint).slice(0, 23) + "...") },
+            { title: "Groups", render: (r) => (conf(r.fingerprint).inboundGroups || []).join(", ") || "-" },
+            { title: "Token sign-in", render: (r) => (conf(r.fingerprint).allowTokenAuth ? "Yes" : "No") },
+            { title: "", cls: "actions", render: (r) => btn("Edit", () => edit(r)) },
+          ],
+          certs,
+          "No trusted federation CAs. Add their certificates above."
+        )
+      );
+    };
+    load().catch(fail);
+    return box;
+  }
+
+  function hubGraphPanel(initial) {
+    let hub = JSON.parse(JSON.stringify(initial || {}));
+    const box = h("div", null);
+    const types = [["ca", "CA group"], ["token", "Token group"], ["outgoing", "Outgoing connection"], ["federate", "Single federate"]];
+    const filters = [["", "Allow all messages"], ["allowed", "Allowed groups"], ["disallowed", "Disallowed groups"], ["both", "Allowed and disallowed groups"]];
+    const typeName = (t) => (types.find((x) => x[0] === t) || [t, t])[1];
+    const nodeName = (id) => {
+      const n = (hub.nodes || []).find((x) => x.id === id);
+      return n ? n.name || n.id : id;
+    };
+    const save = async (next) => {
+      hub = await api("PUT", "/api/fedhub/policy", next);
+      toast("Saved");
+      render().catch(fail);
+    };
+    const editNode = async (idx) => {
+      const n = idx >= 0 ? hub.nodes[idx] : { id: "", type: "ca", name: "" };
+      let certs = [];
+      try {
+        certs = (await api("GET", "/Marti/api/federatecertificates")).data || [];
+      } catch (e) {}
+      const caOpts = [["", "Choose a CA"], ...certs.map((c) => [String(c.fingerprint).replace(/:/g, "").toLowerCase(), c.subjectDn])];
+      const f = h(
+        "form",
+        { class: "grid" },
+        field("Type", select("hn_type", types, n.type)),
+        field("Name", input("hn_name", n.name || "", { required: true })),
+        field("Certificate authority", select("hn_ca", caOpts, String(n.caFingerprint || "").replace(/:/g, "").toLowerCase()), "For CA groups: federates whose certificates this CA issued."),
+        field("Federate", input("hn_fed", n.federate || "", { placeholder: "partner-a, partner-* or a certificate fingerprint" }), "For outgoing connections and single federates."),
+        field("Interconnected", checkbox("hn_inter", n.interconnected, "Federates with this CA share everything with each other")),
+        field("Token sign-in", checkbox("hn_tok", n.allowTokenAuth, "Federates with this CA may get a token and connect without mutual TLS")),
+        field("Token valid for (seconds)", input("hn_dur", n.tokenAuthDuration || "", { type: "number", min: -1, placeholder: "never expires" }))
+      );
+      modal(idx >= 0 ? "Edit node" : "Add node", f, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const next = Object.assign({}, n, { type: val(f, "hn_type"), name: val(f, "hn_name"), caFingerprint: val(f, "hn_ca"), federate: val(f, "hn_fed"), interconnected: val(f, "hn_inter"), allowTokenAuth: val(f, "hn_tok"), tokenAuthDuration: num(f, "hn_dur") });
+            const nodes = (hub.nodes || []).slice();
+            if (idx >= 0) nodes[idx] = next;
+            else nodes.push(next);
+            await save(Object.assign({}, hub, { nodes }));
+          },
+        },
+      ]);
+    };
+    const editEdge = (idx) => {
+      const e = idx >= 0 ? hub.edges[idx] : { from: "", to: "", filter: "" };
+      const opts = (hub.nodes || []).map((n) => [n.id, n.name || n.id]);
+      const sets = Object.keys(hub.groupSets || {});
+      const f = h(
+        "form",
+        { class: "grid" },
+        field("From", select("he_from", opts, e.from)),
+        field("To", select("he_to", opts, e.to)),
+        field("Filter", select("he_filter", filters, e.filter || "")),
+        field("Allowed groups", input("he_allow", (e.allowedGroups || []).join(", "))),
+        field("Disallowed groups", input("he_deny", (e.disallowedGroups || []).join(", "))),
+        field("Allowed group sets", input("he_allows", (e.allowedGroupSets || []).join(", "), { placeholder: sets.join(", ") })),
+        field("Disallowed group sets", input("he_denys", (e.disallowedGroupSets || []).join(", "), { placeholder: sets.join(", ") })),
+        field("Only these types", input("he_types", (e.types || []).join(", "), { placeholder: "a-f-*, b-t-f" }), "Optional CoT types, comma separated.")
+      );
+      modal(idx >= 0 ? "Edit rule" : "Add rule", f, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const next = { from: val(f, "he_from"), to: val(f, "he_to"), filter: val(f, "he_filter"), allowedGroups: splitList(val(f, "he_allow")), disallowedGroups: splitList(val(f, "he_deny")), allowedGroupSets: splitList(val(f, "he_allows")), disallowedGroupSets: splitList(val(f, "he_denys")), types: splitList(val(f, "he_types")) };
+            const edges = (hub.edges || []).slice();
+            if (idx >= 0) edges[idx] = next;
+            else edges.push(next);
+            await save(Object.assign({}, hub, { edges }));
+          },
+        },
+      ]);
+    };
+    const editSets = () => {
+      const txt = Object.entries(hub.groupSets || {})
+        .map(([k, v]) => k + ": " + v.join(", "))
+        .join("\n");
+      const f = h("form", { class: "grid" }, field("Group sets", h("textarea", { id: "hs_sets", rows: 6 }, txt), "One set per line: name: group, group"));
+      modal("Group sets", f, [
+        { label: "Cancel" },
+        {
+          label: "Save",
+          primary: true,
+          run: async () => {
+            const sets = {};
+            for (const line of val(f, "hs_sets").split("\n")) {
+              const i = line.indexOf(":");
+              if (i > 0) sets[line.slice(0, i).trim()] = splitList(line.slice(i + 1));
+            }
+            await save(Object.assign({}, hub, { groupSets: sets }));
+          },
+        },
+      ]);
+    };
+    const tokens = (node) => {
+      const list = h("div", null);
+      const draw = () =>
+        clear(list).append(
+          table(
+            [
+              { title: "Name", key: "name" },
+              { title: "Created", render: (t) => fmtTime(t.created) },
+              { title: "Expires", render: (t) => (t.expires ? fmtTime(t.expires * 1000) : "Never") },
+              {
+                title: "",
+                cls: "actions",
+                render: (t) =>
+                  btn("Revoke", async () => {
+                    await api("DELETE", "/api/fedhub/nodes/" + enc(node.id) + "/tokens/" + enc(t.id));
+                    node.tokens = (node.tokens || []).filter((x) => x.id !== t.id);
+                    draw();
+                    toast("Revoked");
+                  }),
+              },
+            ],
+            node.tokens || [],
+            "No tokens yet."
+          )
+        );
+      draw();
+      const f = h("form", { class: "grid" }, field("Token name", input("ht_name", "", { placeholder: "partner-west" })), field("Valid for (seconds)", input("ht_exp", "", { type: "number", min: 0, placeholder: "never expires" })));
+      modal("Tokens for " + (node.name || node.id), h("div", null, list, f), [
+        { label: "Close" },
+        {
+          label: "Generate token",
+          primary: true,
+          run: async () => {
+            const r = await api("POST", "/api/fedhub/nodes/" + enc(node.id) + "/tokens", { name: val(f, "ht_name"), expiration: num(f, "ht_exp") });
+            node.tokens = (node.tokens || []).concat([{ id: r.id, name: r.name, created: new Date().toISOString(), expires: r.expires }]);
+            draw();
+            modal("New token", h("div", null, h("p", null, "Give this token to the other server's administrator. It is shown only once."), h("textarea", { readOnly: true, rows: 5, style: "font-size:12px" }, r.token), copyButton(r.token, "Copy token")));
+            return true;
+          },
+        },
+      ]);
+    };
+    const render = async () => {
+      let conns = [];
+      try {
+        conns = await api("GET", "/api/fedhub/connections");
+      } catch (e) {}
+      const live = (id) => conns.filter((c) => (c.nodes || []).includes(id)).length;
+      const deny = checkbox("hub_deny", hub.denyUnlisted, "Refuse federates that do not match a node");
+      deny.querySelector("input").addEventListener("change", (ev) => save(Object.assign({}, hub, { denyUnlisted: ev.target.checked })).catch(fail));
+      clear(box).append(
+        h("h3", null, "Hub policy"),
+        h("p", { class: "muted" }, "Nodes describe who connects: every federate of a CA, holders of hub tokens, an outgoing connection or one federate. Rules send traffic from one node to another, optionally only messages in certain groups. With nodes defined, the hub follows the policy; the simple rules above still apply too."),
+        h("form", { class: "grid" }, field("Unlisted federates", deny)),
+        table(
+          [
+            { title: "Node", render: (n) => h("b", null, n.name || n.id) },
+            { title: "Type", render: (n) => typeName(n.type) },
+            { title: "Matches", render: (n) => (n.type === "ca" ? h("span", { class: "mono small" }, String(n.caFingerprint || "").slice(0, 16) + "...") : n.type === "token" ? (n.tokens || []).length + " " + "tokens" : n.federate || "-") },
+            { title: "Connected", render: (n) => (live(n.id) ? pill("running") : "-") },
+            {
+              title: "",
+              cls: "actions",
+              render: (n) => [
+                n.type === "token" ? btn("Tokens", () => tokens(n)) : null,
+                btn("Edit", () => editNode(hub.nodes.indexOf(n)).catch(fail)),
+                btn("Delete", () => confirmAction("Delete node", "Delete " + (n.name || n.id) + " and its rules?", "Delete", () => save(Object.assign({}, hub, { nodes: hub.nodes.filter((x) => x !== n), edges: (hub.edges || []).filter((e) => e.from !== n.id && e.to !== n.id) })))),
+              ],
+            },
+          ],
+          hub.nodes || [],
+          "No nodes yet."
+        ),
+        table(
+          [
+            { title: "From", render: (e) => h("b", null, nodeName(e.from)) },
+            { title: "To", render: (e) => h("b", null, nodeName(e.to)) },
+            { title: "Filter", render: (e) => (filters.find((x) => x[0] === (e.filter || "")) || filters[0])[1] },
+            { title: "Groups", render: (e) => [...(e.allowedGroups || []), ...(e.allowedGroupSets || [])].join(", ") || "-" },
+            {
+              title: "",
+              cls: "actions",
+              render: (e) => [btn("Edit", () => editEdge(hub.edges.indexOf(e))), btn("Delete", () => save(Object.assign({}, hub, { edges: hub.edges.filter((x) => x !== e) })).catch(fail))],
+            },
+          ],
+          hub.edges || [],
+          "No policy rules yet."
+        ),
+        h("div", { class: "cluster-actions" }, btn("Add node", () => editNode(-1).catch(fail), "primary", "plus"), (hub.nodes || []).length ? btn("Add rule", () => editEdge(-1), "", "plus") : null, btn("Group sets", editSets))
+      );
+    };
+    render().catch(fail);
+    return box;
+  }
+
   const SETTINGS_SECTIONS = [
     { id: "general", title: "General", keys: "name address dns bind listen map tiles log level" },
     { id: "access", title: "Access and groups", keys: "anonymous unsigned default group strict channels protobuf replay" },
     { id: "ports", title: "Ports", keys: "tcp ssl tls udp http https enrollment websocket" },
+    { id: "inputs", title: "Inputs", keys: "input listener quic tls tcp udp multicast port protocol" },
     { id: "mesh", title: "Mesh and alerts", keys: "multicast sa emergency repeater ttl" },
     { id: "filters", title: "Message filters", keys: "filter drop block strip scrub remove detail type" },
+    { id: "missions", title: "Missions", keys: "mission policy create delete owner groups broadcast map items data sync" },
     { id: "meshtastic", title: "Meshtastic", keys: "lora mqtt broker radio" },
     { id: "feeds", title: "Data feeds", keys: "ads-b adsb aircraft ais ships aishub" },
     { id: "video", title: "Video server", keys: "rtsp rtsps rtp hls streaming camera drone uas" },
@@ -3824,9 +4228,12 @@
     { id: "locate", title: "Locate", keys: "location sharing search rescue lost person link" },
     { id: "letsencrypt", title: "Let's Encrypt", keys: "acme certificate https browser trusted domain ssl tls" },
     { id: "email", title: "Email and accounts", keys: "smtp mail registration sign up password reset two factor 2fa domains" },
-    { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad" },
-    { id: "certs", title: "Certificates", keys: "organization validity p12 password" },
-    { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload rate limit throttle flood qos" },
+    { id: "directory", title: "Directory sign-in", keys: "ldap active directory ad nested groups" },
+    { id: "signon", title: "Single sign-on", keys: "oauth oidc openid connect keycloak entra azure okta sso jwt token" },
+    { id: "certs", title: "Certificates", keys: "organization validity p12 password crl ocsp revocation revoked" },
+    { id: "websec", title: "Web and security", keys: "cors hsts tls version cipher headers session audit access log json dashboard" },
+    { id: "storage", title: "Storage and limits", keys: "retention history days limits clients upload rate limit throttle flood archive geochat packages schedule cron" },
+    { id: "qos", title: "Quality of service", keys: "qos delivery reporting rate dos flood clients" },
     { id: "updates", title: "Updates", keys: "update upgrade version release automatic" },
     { id: "monitoring", title: "Monitoring", keys: "metrics prometheus grafana monitoring alerting" },
     { id: "maintenance", title: "Maintenance", keys: "restart renew backup" },
@@ -3923,12 +4330,14 @@
   async function pageSettings(main, params) {
     setTimeout(loadLEStatus, 200);
     setTimeout(loadTGStatus, 200);
+    setTimeout(loadRevStatus, 300);
     setTimeout(() => loadUpdStatus(false), 200);
     setTimeout(loadJobs, 250);
     const cfg = await api("GET", "/api/settings");
     pageHead(main, "Settings", "Changes to ports, the listen address, mesh or federation take effect after a restart, which is offered when you save.");
     const p = cfg.ports, m = cfg.mesh, c = cfg.certificates, r = cfg.retention, l = cfg.limits, rl = cfg.rateLimits || {}, met = cfg.metrics || {}, up = cfg.updates || {}, flt = cfg.filters || {}, vbm = cfg.vbm || {}, cl = cfg.calls || {}, xca = (cfg.certificates && cfg.certificates.external) || {};
     const fa = (cfg.feeds && cfg.feeds.adsb) || {}, fs = (cfg.feeds && cfg.feeds.ais) || {}, ld = cfg.ldap || {}, mt = cfg.meshtastic || {}, vs = cfg.videoServer || {}, vo = cfg.voice || {}, lo = cfg.locate || {}, em = cfg.email || {}, le = cfg.letsEncrypt || {}, tg = cfg.telegram || {};
+    const oa = cfg.oauth || {}, wb = cfg.web || {}, qos = cfg.qos || {}, mp = cfg.missionPolicy || {}, rv = (c && c.revocation) || {}, ar = (r && r.missionArchive) || {};
     const n = (id, v) => input(id, v, { type: "number", min: 0 });
     const sub = (title) => h("h3", { class: "full", style: "margin-top:12px" }, title);
     const content = {
@@ -3961,6 +4370,71 @@
         field("HTTP", n("p_http", p.http)),
         field("WebSocket", n("p_ws", p.websocket)),
         field("FreeTAKServer API", n("p_api", p.api)),
+      ],
+      inputs: [
+        "More listeners, like the inputs of TAK Server: extra streaming ports with their own groups and sign-in, QUIC for newer ATAK versions, and UDP or multicast.",
+        inputsEditor(cfg.inputs || []),
+      ],
+      missions: [
+        "Rules for creating and changing missions (data sync).",
+        field("Who can create missions", input("mp_regex", mp.createGroupsRegex || "", { placeholder: "everyone" }), "A regular expression. Only members of a matching group can create missions. Empty lets everyone create them."),
+        field("Deleting", checkbox("mp_owner", mp.deleteRequiresOwner, "Only a mission's owner or an administrator can delete it")),
+        field("Changing groups", checkbox("mp_groups", mp.allowGroupChange, "Let a mission's groups be changed after it is created")),
+        field("Adding map items", checkbox("mp_uid", mp.strictUidMembership, "Only subscribers can add map items to a mission")),
+        field("Sharing map items", checkbox("mp_bcast", mp.disableBroadcastMapItems, "Share map items from devices only through missions, not with everyone")),
+      ],
+      signon: [
+        "Let people sign in with an OpenID Connect provider such as Keycloak, Microsoft Entra ID or Okta, and accept the provider's tokens from TAK clients and the API.",
+        field("Enabled", checkbox("oa_on", oa.enabled, "Accept sign-in through the provider")),
+        field("Sign-in button", checkbox("oa_btn", oa.loginButton, "Show a sign-in button on the dashboard sign-in page")),
+        field("Button label", input("oa_name", oa.name || "", { placeholder: "Keycloak" })),
+        field("Issuer", input("oa_iss", oa.issuer || "", { placeholder: "https://sso.example.org/realms/tak" }), "The other settings are read from the issuer's discovery document."),
+        field("Discovery URL", input("oa_disc", oa.discoveryUrl || ""), "Optional. Defaults to the issuer's /.well-known/openid-configuration."),
+        field("Authorization endpoint", input("oa_auth", oa.authEndpoint || ""), "Only needed without discovery."),
+        field("Token endpoint", input("oa_tokep", oa.tokenEndpoint || ""), "Only needed without discovery."),
+        field("Key set URL", input("oa_jwks", oa.jwksUrl || ""), "Only needed without discovery."),
+        field("Client ID", input("oa_cid", oa.clientId || "")),
+        field("Client secret", input("oa_csec", oa.clientSecret || "", { type: "password", autocomplete: "new-password" })),
+        field("Redirect URL", input("oa_redir", oa.redirectUri || "", { placeholder: location.origin + "/login/redirect" }), "Register this URL with the provider. Empty uses the address the request came to."),
+        field("Scope", input("oa_scope", oa.scope || "", { placeholder: "openid profile email" })),
+        field("Audience", input("oa_aud", oa.audience || ""), "Tokens must be issued for this audience. Empty accepts tokens issued for the client ID."),
+        field("User name claim", input("oa_ucl", oa.usernameClaim || "", { placeholder: "preferred_username" })),
+        field("Groups claim", input("oa_gcl", oa.groupsClaim || "", { placeholder: "groups" })),
+        field("Callsign claim", input("oa_ccl", oa.callsignClaim || "")),
+        field("Group prefix", input("oa_gpre", oa.groupPrefix || ""), "Only groups starting with this become TAK groups, with the prefix removed."),
+        field("Group name pattern", input("oa_grx", oa.groupNameRegex || ""), "Optional regular expression that group names must match."),
+        field("Administrator group", input("oa_admin", oa.adminGroup || "")),
+        field("Administrator claim", input("oa_acn", oa.adminClaimName || "", { placeholder: "roles" })),
+        field("Administrator claim value", input("oa_acv", oa.adminClaimValue || "", { placeholder: "tak-admin" })),
+        field("Default group", checkbox("oa_anon", oa.addAnonymous, "Also put people who sign in this way in the default group")),
+        field("Signing keys", h("textarea", { id: "oa_keys", rows: 3, style: "font-size:12px", placeholder: "-----BEGIN PUBLIC KEY-----" }, (oa.publicKeys || []).join("\n")), "Optional PEM public keys, for providers without a key set URL."),
+        field("Trusted CA file", input("oa_trust", oa.trustFile || ""), "Path on this server to the provider's CA certificate (PEM), if it uses a private CA."),
+        field("Skip certificate check", checkbox("oa_ins", oa.insecure, "Do not verify the provider's HTTPS certificate")),
+      ],
+      websec: [
+        "Web server, TLS and logging options.",
+        field("Minimum TLS version", select("wb_tls", [["", "TLS 1.2 (default)"], ["1.3", "TLS 1.3"]], wb.tlsMinVersion || ""), "For TAK streaming, the dashboard and the API."),
+        field("TLS 1.2 cipher suites", input("wb_ciphers", (wb.tlsCiphers || []).join(", "), { placeholder: "default" }), "Cipher suite names, comma separated, for example TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384."),
+        field("HSTS", checkbox("wb_hsts", wb.hsts, "Tell browsers to always use HTTPS for this server")),
+        field("Allowed origins (CORS)", input("wb_cors", (wb.corsOrigins || []).join(", "), { placeholder: "https://webtak.example.org" }), "Web apps on these origins may call the API, comma separated. * allows any."),
+        field("CORS credentials", checkbox("wb_corsc", wb.corsCredentials, "Let those origins send cookies")),
+        field("Extra headers", h("textarea", { id: "wb_headers", rows: 3, style: "font-size:12px", placeholder: "X-Frame-Options: DENY" }, (wb.customHeaders || []).join("\n")), "One header per line, added to every web response."),
+        field("Largest request header (KB)", n("wb_hdr", wb.maxHttpHeaderKb || ""), "Empty means 1024 KB."),
+        field("Session length (minutes)", n("wb_sess", wb.sessionMinutes || ""), "How long a dashboard sign-in lasts. Empty keeps the default."),
+        field("Logs as JSON", checkbox("wb_json", wb.jsonLogs, "Write the server log as JSON lines")),
+        field("Access log", checkbox("wb_access", wb.accessLog, "Log every web request")),
+        field("Audit log", checkbox("wb_audit", wb.auditLog, "Log every change made through the API")),
+        field("Dashboard", checkbox("wb_nodash", wb.disableDashboard, "Turn the dashboard off; the API and TAK services keep running"), "Turn it back on in the config file or with the command line."),
+      ],
+      qos: [
+        "Slow down position reports when many devices are connected, like the quality of service rules of TAK Server. Each rule is clients=value, and the rule with the highest client count at or below the number of connected devices applies.",
+        field("Delivery limits", checkbox("qos_del", qos.deliveryEnabled, "Limit how often each device receives position reports from the same sender")),
+        field("Delivery rules", input("qos_delr", fmtRules(qos.deliveryRules, "clientThresholdCount", "reportingRateLimitSeconds"), { placeholder: "500=1, 1000=2, 2000=5" }), "clients=seconds between reports."),
+        field("Read limits", checkbox("qos_read", qos.readEnabled, "Limit how often each device's position reports are accepted")),
+        field("Read rules", input("qos_readr", fmtRules(qos.readRules, "clientThresholdCount", "reportingRateLimitSeconds"), { placeholder: "500=1, 1000=2" }), "clients=seconds between accepted reports."),
+        field("Flood protection", checkbox("qos_dos", qos.dosEnabled, "Drop messages from devices that send too many")),
+        field("Interval (seconds)", n("qos_dosi", qos.dosIntervalSeconds || ""), "Messages are counted over this interval."),
+        field("Flood rules", input("qos_dosr", fmtRules(qos.dosRules, "clientThresholdCount", "messageLimitPerInterval"), { placeholder: "0=1000, 1000=500" }), "clients=messages allowed per interval."),
       ],
       filters: [
         "Rules applied to every message from devices, feeds and server links before it is shared. To limit a server link to a map area, edit the link under Server links.",
@@ -4119,6 +4593,17 @@
         field("Group prefix", input("ld_gprefix", ld.groupPrefix, { placeholder: "tak_" }), "Only directory groups starting with this become TAK groups, with the prefix removed."),
         field("Administrator group", input("ld_admin", ld.adminGroup)),
         field("Callsign attribute", input("ld_cs", ld.callsignAttribute)),
+        field("Directory type", select("ld_style", [["", "Generic LDAP"], ["DS", "Directory server (OpenLDAP, 389)"], ["AD", "Active Directory"]], ld.style || "")),
+        field("Nested groups", checkbox("ld_nest", ld.nestedGroups, "Include groups that are members of other groups")),
+        field("Nesting depth", n("ld_depth", ld.nestedMaxDepth || "")),
+        field("Sign in with email", checkbox("ld_mail", ld.loginWithEmail, "Let people sign in with their email address")),
+        field("Read-only group", input("ld_ro", ld.readOnlyGroup || ""), "Members of this group can only receive, not send."),
+        field("Read group suffix", input("ld_rs", ld.readGroupSuffix || "", { placeholder: "_READ" }), "Directory groups ending with this give receive-only access to the group without the suffix."),
+        field("Write group suffix", input("ld_ws", ld.writeGroupSuffix || "", { placeholder: "_WRITE" }), "Directory groups ending with this give send-only access to the group without the suffix."),
+        field("Color attribute", input("ld_color", ld.colorAttribute || "", { placeholder: "takColor" })),
+        field("Role attribute", input("ld_role", ld.roleAttribute || "", { placeholder: "takRole" })),
+        field("Group name pattern", input("ld_grx", ld.groupNameRegex || ""), "Optional regular expression that group names must match."),
+        field("User management", checkbox("ld_bulk", ld.bulkImport, "Allow creating and importing directory users from this server")),
         h("div", { class: "full" }, btn("Test directory sign-in", () => testLdap())),
       ],
       certs: [
@@ -4137,6 +4622,12 @@
         field("Skip certificate check", checkbox("xca_ins", xca.insecure, "Do not verify the certsrv HTTPS certificate")),
         field("Signing command", input("xca_cmd", [xca.command || "", ...(xca.args || [])].filter(Boolean).join(" "), { placeholder: "/usr/local/bin/sign-csr --profile tak" }), "Gets the request (PEM) on standard input and GOLANGTAKSERVER_CN, and prints the certificate and its chain as PEM."),
         field("CA chain to trust", h("textarea", { id: "xca_chain", rows: 4, style: "font-size:12px", placeholder: "-----BEGIN CERTIFICATE-----" }, xca.chainPem || ""), "Optional. Fetched from certsrv or taken from the command output when empty."),
+        sub("Certificate revocation"),
+        field("Revocation lists", input("rv_crl", (rv.crlFiles || []).join(", "), { placeholder: "certs/ca.crl" }), "CRL files (PEM or DER), comma separated. Relative paths are in the data folder. Listed certificates are refused on every TLS port and on federation."),
+        field("OCSP", checkbox("rv_ocsp", rv.ocsp, "Ask each certificate's OCSP responder whether it is revoked")),
+        field("OCSP responder", input("rv_resp", rv.ocspResponder || "", { placeholder: "from the certificate" }), "Optional. Ask this responder instead."),
+        field("Strict", checkbox("rv_strict", rv.strict, "Refuse certificates whose status cannot be determined"), "Certificates from this server's own CA are always checked against its own list."),
+        h("div", { class: "full", id: "rev_status" }),
       ],
       updates: [
         "New releases are published on GitHub. Installing one keeps all settings and data.",
@@ -4170,6 +4661,15 @@
         field("Offline chat", n("rchat", r.chatDays)),
         field("Files", n("rfile", r.fileDays)),
         field("Missions", n("rmis", r.missionDays)),
+        field("Geo chat", n("rgeo", r.geochatDays || ""), "Chat messages in the history. Empty keeps them as long as the history."),
+        field("Data packages", n("rpkg", r.packageDays || ""), "Mission packages sent to devices. Empty keeps them as long as files."),
+        field("Never delete", input("rkeep", (r.exemptKeywords || []).join(", ")), "Files and missions with one of these keywords are kept, comma separated."),
+        field("Cleanup schedule", input("rsched", r.schedule || "", { placeholder: "0 3 * * *" }), "Cron schedule (minute hour day month weekday). Empty runs the cleanup every hour."),
+        sub("Mission archive"),
+        field("Archive schedule", input("rarch", ar.schedule || "", { placeholder: "off" }), "Cron schedule for archiving inactive missions. Empty turns archiving off."),
+        field("Archive after (days without activity)", input("rarchd", ar.afterNoActivityDays || "", { type: "number", min: 0, step: "any" })),
+        field("Delete archives after (days)", input("rarchx", ar.removeAfterDays || "", { type: "number", min: 0, step: "any" }), "Empty keeps archives forever."),
+        field("Activity means", h("div", null, checkbox("rarchc", ar.byNoContentActivity, "Changes to the mission's content"), h("br"), checkbox("rarchs", ar.byNoSubscriptionActivity, "New subscriptions to the mission"))),
         sub("Limits"),
         field("Clients", n("lmax", l.maxClients)),
         field("Clients per address", n("lip", l.maxPerIP)),
@@ -4311,6 +4811,17 @@
         groupPrefix: val(form, "ld_gprefix"),
         adminGroup: val(form, "ld_admin"),
         callsignAttribute: val(form, "ld_cs"),
+        style: val(form, "ld_style"),
+        nestedGroups: val(form, "ld_nest"),
+        nestedMaxDepth: num(form, "ld_depth"),
+        loginWithEmail: val(form, "ld_mail"),
+        readOnlyGroup: val(form, "ld_ro"),
+        readGroupSuffix: val(form, "ld_rs"),
+        writeGroupSuffix: val(form, "ld_ws"),
+        colorAttribute: val(form, "ld_color"),
+        roleAttribute: val(form, "ld_role"),
+        groupNameRegex: val(form, "ld_grx"),
+        bulkImport: val(form, "ld_bulk"),
       });
     const testLdap = () => {
       const f = h("form", { class: "grid" }, field("User name", input("tu", "", { autocomplete: "off" })), field("Password", input("tp", "", { type: "password", autocomplete: "off" })));
@@ -4345,7 +4856,68 @@
         ports: Object.assign({}, p, { tcp: num(form, "p_tcp"), tcpAlt: num(form, "p_tcpalt"), tls: num(form, "p_tls"), udp: num(form, "p_udp"), http: num(form, "p_http"), https: num(form, "p_https"), enroll: num(form, "p_enroll"), websocket: num(form, "p_ws"), api: num(form, "p_api") }),
         mesh: Object.assign({}, m, { enabled: val(form, "mesh"), send: val(form, "meshsend"), groups: splitList(val(form, "meshgroups")), interface: val(form, "meshif"), ttl: num(form, "meshttl") }),
         repeater: { enabled: val(form, "rep"), intervalSec: num(form, "repint") },
-        retention: { historyDays: num(form, "rhist"), chatDays: num(form, "rchat"), fileDays: num(form, "rfile"), missionDays: num(form, "rmis") },
+        retention: {
+          historyDays: num(form, "rhist"),
+          chatDays: num(form, "rchat"),
+          fileDays: num(form, "rfile"),
+          missionDays: num(form, "rmis"),
+          geochatDays: num(form, "rgeo"),
+          packageDays: num(form, "rpkg"),
+          exemptKeywords: splitList(val(form, "rkeep")),
+          schedule: val(form, "rsched"),
+          missionArchive: { schedule: val(form, "rarch"), afterNoActivityDays: num(form, "rarchd"), removeAfterDays: num(form, "rarchx"), byNoContentActivity: val(form, "rarchc"), byNoSubscriptionActivity: val(form, "rarchs") },
+        },
+        missionPolicy: { createGroupsRegex: val(form, "mp_regex"), deleteRequiresOwner: val(form, "mp_owner"), allowGroupChange: val(form, "mp_groups"), strictUidMembership: val(form, "mp_uid"), disableBroadcastMapItems: val(form, "mp_bcast") },
+        oauth: Object.assign({}, oa, {
+          enabled: val(form, "oa_on"),
+          loginButton: val(form, "oa_btn"),
+          name: val(form, "oa_name"),
+          issuer: val(form, "oa_iss"),
+          discoveryUrl: val(form, "oa_disc"),
+          authEndpoint: val(form, "oa_auth"),
+          tokenEndpoint: val(form, "oa_tokep"),
+          jwksUrl: val(form, "oa_jwks"),
+          clientId: val(form, "oa_cid"),
+          clientSecret: form.querySelector("#oa_csec").value,
+          redirectUri: val(form, "oa_redir"),
+          scope: val(form, "oa_scope"),
+          audience: val(form, "oa_aud"),
+          usernameClaim: val(form, "oa_ucl"),
+          groupsClaim: val(form, "oa_gcl"),
+          callsignClaim: val(form, "oa_ccl"),
+          groupPrefix: val(form, "oa_gpre"),
+          groupNameRegex: val(form, "oa_grx"),
+          adminGroup: val(form, "oa_admin"),
+          adminClaimName: val(form, "oa_acn"),
+          adminClaimValue: val(form, "oa_acv"),
+          addAnonymous: val(form, "oa_anon"),
+          publicKeys: val(form, "oa_keys").match(/-----BEGIN [A-Z ]+-----[\s\S]+?-----END [A-Z ]+-----/g) || [],
+          trustFile: val(form, "oa_trust"),
+          insecure: val(form, "oa_ins"),
+        }),
+        web: Object.assign({}, wb, {
+          tlsMinVersion: val(form, "wb_tls"),
+          tlsCiphers: splitList(val(form, "wb_ciphers")),
+          hsts: val(form, "wb_hsts"),
+          corsOrigins: splitList(val(form, "wb_cors")),
+          corsCredentials: val(form, "wb_corsc"),
+          customHeaders: val(form, "wb_headers").split("\n").map((x) => x.trim()).filter(Boolean),
+          maxHttpHeaderKb: num(form, "wb_hdr"),
+          sessionMinutes: num(form, "wb_sess"),
+          jsonLogs: val(form, "wb_json"),
+          accessLog: val(form, "wb_access"),
+          auditLog: val(form, "wb_audit"),
+          disableDashboard: val(form, "wb_nodash"),
+        }),
+        qos: Object.assign({}, qos, {
+          deliveryEnabled: val(form, "qos_del"),
+          deliveryRules: parseRules(val(form, "qos_delr"), "clientThresholdCount", "reportingRateLimitSeconds"),
+          readEnabled: val(form, "qos_read"),
+          readRules: parseRules(val(form, "qos_readr"), "clientThresholdCount", "reportingRateLimitSeconds"),
+          dosEnabled: val(form, "qos_dos"),
+          dosIntervalSeconds: num(form, "qos_dosi"),
+          dosRules: parseRules(val(form, "qos_dosr"), "clientThresholdCount", "messageLimitPerInterval"),
+        }),
         limits: Object.assign({}, l, { maxClients: num(form, "lmax"), maxPerIP: num(form, "lip"), maxMessageBytes: num(form, "lmsg"), maxUploadMB: num(form, "lup"), idleTimeoutSec: num(form, "lidle"), replayLimit: num(form, "lrep") }),
         metrics: { enabled: val(form, "met_on"), token: val(form, "met_tok") },
         filters: { dropTypes: splitList(val(form, "flt_drop")), stripDetails: splitList(val(form, "flt_strip")) },
@@ -4359,6 +4931,7 @@
           password: val(form, "cpw"),
           clientDays: num(form, "cdays"),
           serverDays: num(form, "sdays"),
+          revocation: { crlFiles: splitList(val(form, "rv_crl")), ocsp: val(form, "rv_ocsp"), ocspResponder: val(form, "rv_resp"), strict: val(form, "rv_strict") },
           external: (() => {
             const parts = val(form, "xca_cmd").split(/\s+/).filter(Boolean);
             return { mode: val(form, "xca_mode"), url: val(form, "xca_url"), template: val(form, "xca_tpl"), username: val(form, "xca_user"), password: val(form, "xca_pw"), insecure: val(form, "xca_ins"), command: parts[0] || "", args: parts.slice(1), chainPem: form.querySelector("#xca_chain").value.trim() };
