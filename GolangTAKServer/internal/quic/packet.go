@@ -194,7 +194,8 @@ func longHeader(t packetType, dcid, scid, token []byte, pn uint64, payloadLen in
 		b = appendVarint(b, uint64(len(token)))
 		b = append(b, token...)
 	}
-	b = appendVarint(b, uint64(4+payloadLen+16))
+	l := 4 + payloadLen + 16
+	b = append(b, byte(0x40|(l>>8)), byte(l))
 	return binary.BigEndian.AppendUint32(b, uint32(pn))
 }
 
