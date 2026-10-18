@@ -190,6 +190,7 @@ type PeerConfig struct {
 	Protocol   string   `json:"protocol,omitempty"`
 	NoPresence bool     `json:"noPresence,omitempty"`
 	Area       string   `json:"area,omitempty"`
+	Token      string   `json:"token,omitempty"`
 }
 
 type Config struct {

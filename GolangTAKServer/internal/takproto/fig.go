@@ -346,3 +346,14 @@ func UnmarshalROL(b []byte) (ROL, error) {
 func MarshalToken(token string) []byte {
 	return appendString(nil, 1, token)
 }
+
+func UnmarshalToken(b []byte) (string, error) {
+	tok := ""
+	err := eachField(b, func(f field) error {
+		if f.num == 1 {
+			tok = f.str()
+		}
+		return nil
+	})
+	return tok, err
+}

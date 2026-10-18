@@ -99,6 +99,9 @@ func (s *Server) startFederationV2() error {
 }
 
 func (f *fig2Server) acquire(r *http.Request) (*fig2Session, error) {
+	if listenerName(r) == "fedtoken" && bearerOf(r) != "" {
+		return f.tokenSession(r)
+	}
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		return nil, grpcx.Errorf(grpcx.Unauthenticated, "a client certificate is required")
 	}
@@ -180,7 +183,7 @@ func (f *fig2Server) serve(w http.ResponseWriter, r *http.Request) {
 		st.Finish(st.Send(takproto.MarshalBlob(takproto.Blob{Type: takproto.BlobOther, Data: der})))
 		return
 	case "GetAuthTokenByX509":
-		st.Finish(grpcx.Errorf(grpcx.Unimplemented, "token federation is not used by this server; connect with a client certificate"))
+		f.issueTokenByX509(st, r)
 		return
 	}
 	ss, err := f.acquire(r)
@@ -375,6 +378,8 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 		if cert != nil {
 			tcfg.Certificates = []tls.Certificate{*cert}
 		}
+	} else if l.cfg.Token != "" && l.cfg.Token != "auto" {
+		tcfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &tls.Certificate{}, nil }
 	} else {
 		tcfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return s.pki.ServerCert(), nil }
 	}
@@ -407,8 +412,30 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	var hdr http.Header
+	if tok := l.cfg.Token; tok != "" {
+		if tok == "auto" {
+			cert := s.pki.ServerCert()
+			if l.cfg.CertFile != "" && len(tcfg.Certificates) > 0 {
+				cert = &tcfg.Certificates[0]
+			}
+			if cert == nil || len(cert.Certificate) == 0 {
+				return errors.New("no certificate to request a federation token with")
+			}
+			tctx, tcancel := context.WithTimeout(ctx, 20*time.Second)
+			msg, err := grpcx.Unary(tctx, hc, base, figService+"GetAuthTokenByX509", nil, takproto.MarshalBlob(takproto.Blob{Type: takproto.BlobOther, Data: cert.Certificate[0]}), max)
+			tcancel()
+			if err != nil {
+				return fmt.Errorf("the federation server did not issue a token: %w", err)
+			}
+			if tok, err = takproto.UnmarshalToken(msg); err != nil || tok == "" {
+				return errors.New("the federation server returned an empty token")
+			}
+		}
+		hdr = http.Header{"Authorization": {"Bearer " + tok}}
+	}
 	hctx, hcancel := context.WithTimeout(ctx, 20*time.Second)
-	healthMsg, err := grpcx.Unary(hctx, hc, base, figService+"HealthCheck", nil, takproto.MarshalHealth(takproto.HealthServing), max)
+	healthMsg, err := grpcx.Unary(hctx, hc, base, figService+"HealthCheck", hdr, takproto.MarshalHealth(takproto.HealthServing), max)
 	hcancel()
 	if err != nil {
 		return fmt.Errorf("federation v2 handshake failed: %w", err)
@@ -419,7 +446,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 
 	remoteNode := ""
 	ictx, icancel := context.WithTimeout(ctx, 20*time.Second)
-	if msg, err := grpcx.Unary(ictx, hc, base, figService+"getIdentity", nil, nil, max); err == nil {
+	if msg, err := grpcx.Unary(ictx, hc, base, figService+"getIdentity", hdr, nil, max); err == nil {
 		if id, err := takproto.UnmarshalIdentity(msg); err == nil {
 			remoteNode = id.ServerID
 		}
@@ -476,7 +503,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 		}
 	}
 	open := func(method string) (*grpcx.ClientStream, error) {
-		return grpcx.Open(ctx, hc, base, figService+method, nil, max)
+		return grpcx.Open(ctx, hc, base, figService+method, hdr, max)
 	}
 	serverStream := func(method string, handle func([]byte)) error {
 		cs, err := open(method)
@@ -587,7 +614,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 				return
 			case <-t.C:
 				hctx, hcancel := context.WithTimeout(ctx, 20*time.Second)
-				_, err := grpcx.Unary(hctx, hc, base, figService+"HealthCheck", nil, takproto.MarshalHealth(takproto.HealthServing), max)
+				_, err := grpcx.Unary(hctx, hc, base, figService+"HealthCheck", hdr, takproto.MarshalHealth(takproto.HealthServing), max)
 				hcancel()
 				if err != nil {
 					fail(fmt.Errorf("health check failed: %w", err))

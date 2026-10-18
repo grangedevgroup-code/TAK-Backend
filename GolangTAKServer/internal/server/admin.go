@@ -945,6 +945,15 @@ func validateConfig(c *Config) error {
 	if err := validSchedule(c.Retention.Archive.Schedule); err != nil {
 		return fmt.Errorf("mission archive schedule: %w", err)
 	}
+	if t := c.Federation.Token; c.Federation.Enabled && t.Enabled {
+		port := t.Port
+		if port <= 0 {
+			port = 9002
+		}
+		if err := check("federation token port", port, "tcp"); err != nil {
+			return err
+		}
+	}
 	names := map[string]bool{}
 	for _, in := range c.Inputs {
 		if err := validateInput(in); err != nil {
