@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/quic"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/takproto"
 	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/xmltree"
 )
@@ -127,6 +128,7 @@ func (s *Server) serveStreamInput(conn net.Conn, kind string, in *InputConfig, i
 		return
 	}
 	var id *Identity
+	var peer []*x509.Certificate
 	if tc, ok := conn.(*tls.Conn); ok {
 		tc.SetDeadline(time.Now().Add(20 * time.Second))
 		if err := tc.Handshake(); err != nil {
@@ -135,14 +137,17 @@ func (s *Server) serveStreamInput(conn net.Conn, kind string, in *InputConfig, i
 			return
 		}
 		tc.SetDeadline(time.Time{})
-		if pc := tc.ConnectionState().PeerCertificates; len(pc) > 0 {
-			var err error
-			id, err = s.identityFromCert(pc[0])
-			if err != nil {
-				s.log.Warn("certificate rejected", "remote", remote, "cn", pc[0].Subject.CommonName, "err", err)
-				conn.Close()
-				return
-			}
+		peer = tc.ConnectionState().PeerCertificates
+	} else if qs, ok := conn.(*quic.Stream); ok {
+		peer = qs.ConnectionState().PeerCertificates
+	}
+	if len(peer) > 0 {
+		var err error
+		id, err = s.identityFromCert(peer[0])
+		if err != nil {
+			s.log.Warn("certificate rejected", "remote", remote, "cn", peer[0].Subject.CommonName, "err", err)
+			conn.Close()
+			return
 		}
 	}
 	if id != nil && id.Link && id.Cert != nil {

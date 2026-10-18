@@ -12,6 +12,7 @@ import (
 const (
 	KindTCP        = "tcp"
 	KindTLS        = "tls"
+	KindQUIC       = "quic"
 	KindWebSocket  = "websocket"
 	KindUDP        = "udp"
 	KindMesh       = "mesh"

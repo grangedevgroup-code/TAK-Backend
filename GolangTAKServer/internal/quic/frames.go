@@ -249,21 +249,21 @@ func appendConnClose(b []byte, code uint64, reason string) []byte {
 }
 
 type transportParams struct {
-	origDCID          []byte
-	initialSCID       []byte
-	maxIdleTimeoutMs  uint64
-	maxUDPPayload     uint64
-	initialMaxData    uint64
-	maxStreamDataBL   uint64
-	maxStreamDataBR   uint64
-	maxStreamDataUni  uint64
-	maxStreamsBidi    uint64
-	maxStreamsUni     uint64
-	activeCIDLimit    uint64
-	disableMigration  bool
-	statelessReset    []byte
-	ackDelayExponent  uint64
-	maxAckDelay       uint64
+	origDCID         []byte
+	initialSCID      []byte
+	maxIdleTimeoutMs uint64
+	maxUDPPayload    uint64
+	initialMaxData   uint64
+	maxStreamDataBL  uint64
+	maxStreamDataBR  uint64
+	maxStreamDataUni uint64
+	maxStreamsBidi   uint64
+	maxStreamsUni    uint64
+	activeCIDLimit   uint64
+	disableMigration bool
+	statelessReset   []byte
+	ackDelayExponent uint64
+	maxAckDelay      uint64
 }
 
 func appendParam(b []byte, id uint64, v []byte) []byte {

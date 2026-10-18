@@ -231,7 +231,7 @@ func (s *Server) apiUserRevoke(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	n, err := s.dir.RevokeAll(name)
 	for _, c := range s.hub.Clients() {
-		if c.User() == name && c.Kind == KindTLS {
+		if c.User() == name && (c.Kind == KindTLS || c.Kind == KindQUIC) {
 			c.Close()
 		}
 	}

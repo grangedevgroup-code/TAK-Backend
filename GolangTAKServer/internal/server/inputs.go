@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/quic"
 )
 
 type InputConfig struct {
@@ -365,7 +367,7 @@ func (s *Server) inputJSON(in InputConfig) map[string]any {
 	}
 	return map[string]any{"name": in.Name, "protocol": in.proto(), "port": in.Port, "group": in.Group, "iface": in.Iface, "auth": strings.ToUpper(in.auth()),
 		"archive": !in.NoArchive, "archiveOnly": in.ArchiveOnly, "anongroup": len(groups) == 0 && in.auth() == "anonymous", "coreVersion": firstNonZero(in.CoreVersion, 2),
-		"filtergroup": groups, "area": in.Area, "enabled": !in.Disabled}
+		"filtergroup": groups, "area": in.Area, "enabled": !in.Disabled, "quicConnectionTimeoutSeconds": firstNonZero(in.QUICTimeout, 30)}
 }
 
 func firstNonZero(vals ...int) int {
@@ -391,6 +393,7 @@ type takInputBody struct {
 	Archive     *bool    `json:"archive"`
 	ArchiveOnly *bool    `json:"archiveOnly"`
 	CoreVersion int      `json:"coreVersion"`
+	QUICTimeout int      `json:"quicConnectionTimeoutSeconds"`
 	Enabled     *bool    `json:"enabled"`
 }
 
@@ -427,6 +430,9 @@ func (b takInputBody) apply(in *InputConfig) {
 	}
 	if b.CoreVersion != 0 {
 		in.CoreVersion = b.CoreVersion
+	}
+	if b.QUICTimeout != 0 {
+		in.QUICTimeout = b.QUICTimeout
 	}
 	if b.Enabled != nil {
 		in.Disabled = !*b.Enabled
