@@ -99,7 +99,7 @@ func TestWebContentFolderRedirectStaysLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusMovedPermanently || resp.Header.Get("Location") != "evil.example/" {
+	if resp.StatusCode != http.StatusMovedPermanently || resp.Header.Get("Location") != "/evil.example/" {
 		t.Fatalf("folder redirect %d %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	req, _ := http.NewRequest("GET", plainURL(s, "/x"), nil)
