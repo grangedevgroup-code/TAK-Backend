@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/fips140"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -359,7 +360,7 @@ func (s *Server) Start(ctx context.Context) error {
 	go s.perfLoop()
 	s.startPlugins()
 	s.log.Info("GolangTAKServer started", "version", s.Version, "address", cfg.Address, "data", s.DataDir,
-		"tcp", cfg.Ports.TCP, "tls", cfg.Ports.TLS, "http", cfg.Ports.HTTP, "https", cfg.Ports.HTTPS, "enroll", cfg.Ports.Enroll)
+		"tcp", cfg.Ports.TCP, "tls", cfg.Ports.TLS, "http", cfg.Ports.HTTP, "https", cfg.Ports.HTTPS, "enroll", cfg.Ports.Enroll, "fips", fips140.Enabled())
 	return nil
 }
 

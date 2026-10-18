@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"crypto/fips140"
 	"encoding/json"
 	"errors"
 	"io"
@@ -122,7 +123,7 @@ func (s *Server) apiStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name": cfg.Name, "version": s.Version, "address": cfg.Address, "hostname": host,
-		"os": runtime.GOOS, "arch": runtime.GOARCH, "go": runtime.Version(), "cpus": runtime.NumCPU(),
+		"os": runtime.GOOS, "arch": runtime.GOARCH, "go": runtime.Version(), "cpus": runtime.NumCPU(), "fips": fips140.Enabled(),
 		"started": s.Started.UTC(), "uptimeSeconds": int64(time.Since(s.Started).Seconds()),
 		"clients": s.hub.Count(), "clientsByKind": kinds, "users": s.dir.UserCount(), "devices": len(s.devices.All()),
 		"missions": len(s.missions.All()), "files": filesCount, "filesBytes": filesBytes, "videos": len(s.videos.All()),
