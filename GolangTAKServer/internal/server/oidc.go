@@ -694,10 +694,7 @@ func (s *Server) loginAuth(w http.ResponseWriter, r *http.Request) {
 		writeText(w, http.StatusBadGateway, "the identity provider is unavailable")
 		return
 	}
-	next := r.URL.Query().Get("next")
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
-		next = "/"
-	}
+	next := localPath(r.URL.Query().Get("next"))
 	st := map[string]any{"state": NewSecret(16), "verifier": NewSecret(32), "next": next, "exp": time.Now().Add(10 * time.Minute).Unix()}
 	raw, _ := json.Marshal(st)
 	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: s.signBlob(raw), Path: "/login", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: 600}) // #nosec G124 nosemgrep -- Secure whenever the request arrived over TLS
@@ -792,16 +789,19 @@ func (s *Server) loginRedirect(w http.ResponseWriter, r *http.Request) {
 		writeText(w, http.StatusUnauthorized, "no account")
 		return
 	}
-	sess := s.dir.NewSession(u, 12*time.Hour)
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sess.ID, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode, Secure: r.TLS != nil, MaxAge: 12 * 3600}) // #nosec G124 nosemgrep -- Secure whenever the request arrived over TLS
+	s.startSession(w, r, u)
 	s.log.Info("dashboard sign-in with identity provider", "user", u.Name, "remote", requestIP(r))
-	next := st.Next
-	if next == "" {
-		next = "/"
-	}
+	next := localPath(st.Next)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=%s"><title>Signing in</title><a href="%s">Continue</a>`, htmlEscape(next), htmlEscape(next))
+}
+
+func localPath(next string) string {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.ContainsAny(next, "\\\r\n\t") {
+		return "/"
+	}
+	return next
 }
 
 func htmlEscape(v string) string {
@@ -809,7 +809,7 @@ func htmlEscape(v string) string {
 }
 
 func (s *Server) loginRefresh(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/login/auth?next="+url.QueryEscape(firstNonEmpty(r.URL.Query().Get("next"), "/")), http.StatusFound)
+	http.Redirect(w, r, "/login/auth?next="+url.QueryEscape(localPath(r.URL.Query().Get("next"))), http.StatusFound)
 }
 
 func (s *Server) loginAuthServer(w http.ResponseWriter, r *http.Request) {
