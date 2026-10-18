@@ -41,6 +41,10 @@ func (s *Server) webContent(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if strings.ContainsAny(r.URL.Path, "\\\x00") {
+		http.NotFound(w, r)
+		return
+	}
 	p := path.Clean("/" + r.URL.Path)
 	if rule, ok := contentRule(s.Config().Web.ContentAccess, p); ok {
 		id, _, err := s.resolveIdentity(r)
@@ -66,7 +70,7 @@ func (s *Server) webContent(w http.ResponseWriter, r *http.Request) {
 	}
 	if st.IsDir() {
 		if !strings.HasSuffix(r.URL.Path, "/") {
-			http.Redirect(w, r, r.URL.Path+"/", http.StatusMovedPermanently)
+			http.Redirect(w, r, path.Base(p)+"/", http.StatusMovedPermanently)
 			return
 		}
 		full = filepath.Join(full, "index.html")
