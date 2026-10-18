@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/takproto"
 )
 
 func adminHeaders(t *testing.T, s *Server) map[string]string {
@@ -235,5 +238,46 @@ func TestParityDataFeedCRUD(t *testing.T) {
 	}
 	if st, _ := do("DELETE", "/Marti/api/datafeeds/predicate/p1", ""); st != 200 {
 		t.Fatalf("predicate delete: %d", st)
+	}
+}
+
+func dialPort(t *testing.T, port int) *testClient {
+	t.Helper()
+	c, err := net.DialTimeout("tcp", "127.0.0.1:"+itoa(port), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return &testClient{t: t, conn: c, r: takproto.NewReader(c, 1<<22)}
+}
+
+func TestParityInputsWithFilterGroups(t *testing.T) {
+	s := newTestServer(t, nil)
+	a := adminHeaders(t, s)
+	port := freePort(t)
+	st, b := doReq(t, http.DefaultClient, "POST", plainURL(s, "/Marti/api/inputs"), strings.NewReader(`{"name":"bravo","protocol":"stcp","port":`+itoa(port)+`,"auth":"anonymous","filtergroup":["Bravo"]}`), a)
+	if st != 200 {
+		t.Fatalf("create input: %d %s", st, b)
+	}
+	b1 := dialPort(t, port)
+	b2 := dialPort(t, port)
+	main := dialTCP(t, s)
+	b1.send(saXML("B-1", "BRAVO1", 1, 1))
+	b2.send(saXML("B-2", "BRAVO2", 1, 1))
+	main.send(saXML("M-1", "MAIN1", 1, 1))
+	b2.expect(func(e *cot.Event) bool { return e.UID == "B-1" }, "bravo member sees bravo traffic")
+	main.expectNone(func(e *cot.Event) bool { return e.UID == "B-1" || e.UID == "B-2" }, "anonymous group must not see bravo traffic", 700*time.Millisecond)
+	b1.expectNone(func(e *cot.Event) bool { return e.UID == "M-1" }, "bravo must not see anonymous traffic", 300*time.Millisecond)
+	st, b = doReq(t, http.DefaultClient, "GET", plainURL(s, "/Marti/api/inputs/bravo"), nil, a)
+	if st != 200 || !strings.Contains(string(b), `"numClients":2`) || !strings.Contains(string(b), `"Bravo"`) {
+		t.Fatalf("input metrics: %d %s", st, b)
+	}
+	if st, _ := doReq(t, http.DefaultClient, "DELETE", plainURL(s, "/Marti/api/inputs/bravo"), nil, a); st != 200 {
+		t.Fatalf("delete input: %d", st)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if c, err := net.DialTimeout("tcp", "127.0.0.1:"+itoa(port), time.Second); err == nil {
+		c.Close()
+		t.Fatal("input still listening after delete")
 	}
 }

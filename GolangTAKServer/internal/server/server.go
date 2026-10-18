@@ -62,6 +62,8 @@ type Server struct {
 	feedRunMu   sync.Mutex
 	feedRuns    map[string]feedRun
 	predFeeds   *store.Collection[PredicateFeed]
+	inputMu     sync.Mutex
+	inputRuns   map[string]*inputRun
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex

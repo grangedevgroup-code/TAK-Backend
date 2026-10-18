@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -59,6 +58,11 @@ type inputRun struct {
 
 func inputSig(in InputConfig) string {
 	b, _ := json.Marshal(in)
+	return string(b)
+}
+
+func inputSigs(list []InputConfig) string {
+	b, _ := json.Marshal(list)
 	return string(b)
 }
 
@@ -521,13 +525,4 @@ func (s *Server) martiInputsConfig(w http.ResponseWriter, r *http.Request) {
 	cfg := s.Config()
 	writeJSON(w, http.StatusOK, map[string]any{"latestSA": cfg.Replay != "none", "archive": cfg.Retention.HistoryDays != 0, "numDbConnections": 0,
 		"numAutoDbConnections": 0, "connectionPoolAutoSize": true, "dbUsername": "", "dbPassword": "", "dbUrl": "embedded", "sslEnabled": false})
-}
-
-func (s *Server) inputNames() []string {
-	var out []string
-	for _, in := range s.Config().Inputs {
-		out = append(out, in.Name)
-	}
-	sort.Strings(out)
-	return out
 }

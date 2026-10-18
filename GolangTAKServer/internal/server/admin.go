@@ -901,6 +901,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	if string(fb) != string(fn) {
 		s.syncDataFeeds()
 	}
+	if ib, in := inputSigs(before.Inputs), inputSigs(next.Inputs); ib != in {
+		s.syncInputs()
+	}
 	s.reloadPeers()
 	s.log.Info("settings changed", "by", identityOf(r).Name, "restartRequired", restart)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "restartRequired": restart})
@@ -934,6 +937,25 @@ func validateConfig(c *Config) error {
 		}
 		if err := check(x.n, x.v, x.proto); err != nil {
 			return err
+		}
+	}
+	names := map[string]bool{}
+	for _, in := range c.Inputs {
+		if err := validateInput(in); err != nil {
+			return err
+		}
+		if names[in.Name] {
+			return fmt.Errorf("two inputs are named %s", in.Name)
+		}
+		names[in.Name] = true
+		proto := "tcp"
+		if p := in.proto(); p == "udp" || p == "mcast" || p == "multicast" {
+			proto = "udp"
+		}
+		if proto == "tcp" || in.proto() == "udp" {
+			if err := check("input "+in.Name, in.Port, proto); err != nil {
+				return err
+			}
 		}
 	}
 	if c.ACME.Enabled && c.ACME.ChallengePort != 0 && c.ACME.ChallengePort != c.Ports.HTTP {

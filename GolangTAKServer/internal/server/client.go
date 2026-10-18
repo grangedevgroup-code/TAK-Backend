@@ -117,6 +117,8 @@ type Client struct {
 	rateDrops  atomic.Uint64
 	inArea     *geoFilter
 	incognito  atomic.Bool
+	input      *InputConfig
+	istats     *inputStats
 }
 
 type bbox struct{ minLat, minLon, maxLat, maxLon float64 }

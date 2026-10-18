@@ -103,6 +103,10 @@ func (s *Server) acceptLoop(ln net.Listener, kind string, tlsCfg *tls.Config) {
 }
 
 func (s *Server) serveStream(conn net.Conn, kind string) {
+	s.serveStreamInput(conn, kind, nil, nil)
+}
+
+func (s *Server) serveStreamInput(conn net.Conn, kind string, in *InputConfig, ist *inputStats) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.log.Error("stream handler panic", "err", r, "stack", string(debug.Stack()))
@@ -145,6 +149,12 @@ func (s *Server) serveStream(conn net.Conn, kind string) {
 		kind = KindPeer
 	}
 	c := s.hub.NewClient(kind, remote, id)
+	if in != nil {
+		c.input, c.istats = in, ist
+		c.Name = in.Name
+		s.applyLinkArea(c, in.Area)
+		conn = countingConn{Conn: conn, st: ist}
+	}
 	if kind == KindPeer {
 		c.Name = strings.TrimPrefix(id.Name, "link-")
 	}
@@ -152,6 +162,14 @@ func (s *Server) serveStream(conn net.Conn, kind string) {
 	st := &clientState{}
 	if id != nil {
 		c.authed.Store(true)
+	} else if in != nil {
+		if in.auth() == "anonymous" {
+			for _, g := range in.FilterGroups {
+				s.dir.EnsureGroup(g, "Input "+in.Name, false)
+			}
+			c.SetIdentity(s.inputIdentity(in))
+			c.authed.Store(true)
+		}
 	} else if cfg.AllowAnonymous {
 		c.SetIdentity(s.dir.Anonymous())
 		c.authed.Store(true)
@@ -428,6 +446,16 @@ func (s *Server) handleEvent(c *Client, st *clientState, e *cot.Event) error {
 	s.hub.Identify(c, m)
 	if !s.hub.allowRead(c, m) {
 		return nil
+	}
+	if c.input != nil {
+		if c.istats != nil {
+			c.istats.messages.Add(1)
+		}
+		m.NoHistory = c.input.NoArchive
+		if c.input.ArchiveOnly {
+			s.archiveOnly(c, m)
+			return nil
+		}
 	}
 	s.hub.Publish(m)
 	return nil

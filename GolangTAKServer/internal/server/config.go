@@ -33,12 +33,13 @@ type Ports struct {
 }
 
 type MeshConfig struct {
-	Enabled   bool     `json:"enabled"`
-	Send      bool     `json:"send"`
-	Groups    []string `json:"groups"`
-	Interface string   `json:"interface"`
-	TTL       int      `json:"ttl"`
-	Protobuf  bool     `json:"protobuf"`
+	Enabled      bool     `json:"enabled"`
+	Send         bool     `json:"send"`
+	Groups       []string `json:"groups"`
+	Interface    string   `json:"interface"`
+	TTL          int      `json:"ttl"`
+	Protobuf     bool     `json:"protobuf"`
+	FilterGroups []string `json:"filterGroups,omitempty"`
 }
 
 type CertConfig struct {
@@ -203,6 +204,8 @@ type Config struct {
 	Telegram       TelegramConfig      `json:"telegram"`
 	Plugins        []PluginConfig      `json:"plugins"`
 	DataFeeds      []DataFeedConfig    `json:"dataFeeds"`
+	Inputs         []InputConfig       `json:"inputs,omitempty"`
+	UDPGroups      []string            `json:"udpGroups,omitempty"`
 	Video          VideoServerConfig   `json:"videoServer"`
 	Voice          VoiceConfig         `json:"voice"`
 	Locate         LocateConfig        `json:"locate"`

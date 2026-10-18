@@ -133,6 +133,7 @@ func (s *Server) startSubsystems() error {
 	}
 	s.rebuildFeedIndex()
 	s.startDataFeeds()
+	s.syncInputs()
 	if err := s.startLiveVideo(); err != nil {
 		return err
 	}

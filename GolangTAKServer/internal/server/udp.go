@@ -95,7 +95,7 @@ func (s *Server) startUDP() error {
 		return portError("udp", addr, err)
 	}
 	s.track(pc)
-	c := s.relayClient(KindUDP, "UDP input", addr, nil)
+	c := s.relayClient(KindUDP, "UDP input", addr, cfg.UDPGroups)
 	c.filter = func(*Message) bool { return false }
 	s.hub.Add(c)
 	s.wg.Add(1)
@@ -184,7 +184,7 @@ func (s *Server) startMesh() error {
 		return nil
 	}
 	dd := newDedupe()
-	c := s.relayClient(KindMesh, "Mesh (multicast)", "multicast", nil)
+	c := s.relayClient(KindMesh, "Mesh (multicast)", "multicast", s.Config().Mesh.FilterGroups)
 	if !cfg.Mesh.Send {
 		c.filter = func(*Message) bool { return false }
 	} else {
