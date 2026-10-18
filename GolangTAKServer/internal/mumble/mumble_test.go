@@ -88,6 +88,32 @@ func TestCryptOrderingAndReplay(t *testing.T) {
 	}
 }
 
+func TestCryptLatePacketAfterSecondByteWraps(t *testing.T) {
+	for start := 0; start < 256; start++ {
+		server, client := pairedStates()
+		client.encryptIV[0], client.encryptIV[1] = byte(start), 255
+		server.decryptIV = client.encryptIV
+		var pkts [][]byte
+		for i := 0; i < 300; i++ {
+			pkts = append(pkts, client.encrypt([]byte{byte(i), 1, 2, 3}))
+		}
+		for i := 0; i < 250; i++ {
+			if _, err := server.decrypt(pkts[i]); err != nil {
+				t.Fatalf("start %d packet %d: %v", start, i, err)
+			}
+		}
+		if _, err := server.decrypt(pkts[260]); err != nil {
+			t.Fatalf("start %d: %v", start, err)
+		}
+		if p, err := server.decrypt(pkts[255]); err != nil || p[0] != 255 {
+			t.Fatalf("start %d: late packet: %v", start, err)
+		}
+		if _, err := server.decrypt(pkts[255]); err == nil {
+			t.Fatalf("start %d: replayed late packet accepted", start)
+		}
+	}
+}
+
 func testTLS(t *testing.T) *tls.Config {
 	k, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	tmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}

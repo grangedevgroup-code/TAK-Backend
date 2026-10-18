@@ -20,6 +20,7 @@ type cryptState struct {
 	encryptIV [16]byte
 	decryptIV [16]byte
 	history   [256]byte
+	seen      [256]bool
 	block     cipher.Block
 	good      atomic.Uint32
 	late      atomic.Uint32
@@ -213,7 +214,7 @@ func (c *cryptState) decrypt(src []byte) ([]byte, error) {
 		default:
 			return nil, errDecrypt
 		}
-		if c.history[c.decryptIV[0]] == c.decryptIV[1] {
+		if c.seen[c.decryptIV[0]] && c.history[c.decryptIV[0]] == c.decryptIV[1] {
 			c.decryptIV = save
 			return nil, errDecrypt
 		}
@@ -225,6 +226,7 @@ func (c *cryptState) decrypt(src []byte) ([]byte, error) {
 		return nil, errDecrypt
 	}
 	c.history[c.decryptIV[0]] = c.decryptIV[1]
+	c.seen[c.decryptIV[0]] = true
 	if restore {
 		c.decryptIV = save
 	}
