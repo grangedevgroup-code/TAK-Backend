@@ -128,9 +128,6 @@ func TestFederationHubPolicyGraph(t *testing.T) {
 	keep := s.Config().FederationHub
 	keep.DenyUnlisted = false
 	body, _ := json.Marshal(keep)
-	for i := range keep.Nodes {
-		keep.Nodes[i].Tokens = nil
-	}
 	if st, b := doReq(t, http.DefaultClient, "PUT", plainURL(s, "/api/fedhub/policy"), strings.NewReader(string(body)), admin); st != http.StatusOK {
 		t.Fatalf("policy update %d %s", st, b)
 	}

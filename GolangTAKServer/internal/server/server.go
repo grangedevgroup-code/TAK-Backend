@@ -223,6 +223,7 @@ func (s *Server) UpdateConfig(fn func(c *Config) error) (Config, error) {
 	next.QoS.ReadRules = append([]QoSRule(nil), s.cfg.QoS.ReadRules...)
 	next.QoS.DOSRules = append([]DOSRule(nil), s.cfg.QoS.DOSRules...)
 	next.Certificates.Revocation.CRLFiles = append([]string(nil), s.cfg.Certificates.Revocation.CRLFiles...)
+	next.FederationHub = cloneHubConfig(s.cfg.FederationHub)
 	if err := fn(&next); err != nil {
 		s.cfgMu.Unlock()
 		return s.cfg, err

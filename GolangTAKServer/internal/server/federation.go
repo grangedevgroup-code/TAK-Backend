@@ -246,7 +246,8 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 	if l != nil {
 		pol.name = l.cfg.Name
 	}
-	if pol.disabled {
+	pol.outbound = dir == "outbound"
+	if pol.disabled || (!pol.outbound && s.hubDenies(pol, name)) {
 		return errors.New("this federate is disabled")
 	}
 	allowed := pol.out

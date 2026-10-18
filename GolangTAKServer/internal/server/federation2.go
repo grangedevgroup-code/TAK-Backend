@@ -120,7 +120,7 @@ func (f *fig2Server) acquire(r *http.Request) (*fig2Session, error) {
 		return ss, nil
 	}
 	pol := f.s.fedPolicyFor(certFingerprint(cert), name, chainCAFingerprint(r.TLS.VerifiedChains), nil)
-	if pol.disabled {
+	if pol.disabled || f.s.hubDenies(pol, name) {
 		return nil, grpcx.Errorf(grpcx.PermissionDenied, "this federate is disabled")
 	}
 	allowed := pol.out
@@ -476,6 +476,7 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 	}
 	pol := s.fedPolicyFor(certFingerprint(peerCert), l.cfg.Name, caFP, l.cfg.Groups)
 	pol.name = l.cfg.Name
+	pol.outbound = true
 	if pol.disabled {
 		return errors.New("this federate is disabled")
 	}

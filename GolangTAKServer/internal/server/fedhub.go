@@ -12,9 +12,13 @@ type HubRule struct {
 }
 
 type FederationHubConfig struct {
-	Enabled    bool      `json:"enabled"`
-	BrokerOnly bool      `json:"brokerOnly,omitempty"`
-	Rules      []HubRule `json:"rules,omitempty"`
+	Enabled      bool                `json:"enabled"`
+	BrokerOnly   bool                `json:"brokerOnly,omitempty"`
+	DenyUnlisted bool                `json:"denyUnlisted,omitempty"`
+	Rules        []HubRule           `json:"rules,omitempty"`
+	Nodes        []HubNode           `json:"nodes,omitempty"`
+	Edges        []HubEdge           `json:"edges,omitempty"`
+	GroupSets    map[string][]string `json:"groupSets,omitempty"`
 }
 
 func isLinkKind(kind string) bool { return kind == KindFederation || kind == KindPeer }
@@ -42,6 +46,9 @@ func (h *Hub) fedHubAllows(m *Message, target *Client) bool {
 	}
 	if !isLinkKind(target.Kind) {
 		return !cfg.BrokerOnly
+	}
+	if cfg.graph() && h.hubGraphAllows(cfg, m, target) {
+		return true
 	}
 	for _, r := range cfg.Rules {
 		if !linkNameMatches(r.From, m.Source.Name) || !linkNameMatches(r.To, target.Name) {

@@ -44,6 +44,8 @@ type Message struct {
 	pb          []byte
 	frameOnce   sync.Once
 	frame       []byte
+	hubOnce     sync.Once
+	hubGroups   []string
 }
 
 func NewMessage(e *cot.Event, src *Client, groups GroupMask) *Message {

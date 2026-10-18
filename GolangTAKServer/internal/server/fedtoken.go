@@ -33,6 +33,7 @@ type fedTokenClaims struct {
 	Iat           int64  `json:"iat"`
 	Exp           int64  `json:"exp,omitempty"`
 	Jti           string `json:"jti"`
+	Group         string `json:"grp,omitempty"`
 }
 
 func (s *Server) signFedToken(c fedTokenClaims) string {
@@ -74,6 +75,15 @@ func (s *Server) parseFedToken(t string) (fedTokenClaims, error) {
 }
 
 func (s *Server) fedTokenAllowed(c fedTokenClaims) error {
+	if c.Group != "" {
+		if s.hubTokenAllowed(c) {
+			return nil
+		}
+		return errors.New("this federation hub token has been revoked or has expired")
+	}
+	if s.hubTokenAllowed(c) {
+		return nil
+	}
 	cfg := s.Config().Federation
 	if f, ok := cfg.federate(c.Fingerprint, c.Name); ok && f.TokenFederate && !f.Disabled {
 		return nil
@@ -175,14 +185,17 @@ func (f *fig2Server) issueTokenByX509(st *grpcx.ServerStream, r *http.Request) {
 		caFP = certFingerprint(chains[0][len(chains[0])-1])
 	}
 	ca, ok := cfg.federateCA(caFP)
-	if !ok || !ca.AllowTokenAuth {
+	hn, hubOK := f.s.hubCANode(caFP)
+	if (!ok || !ca.AllowTokenAuth) && !hubOK {
 		st.Finish(grpcx.Errorf(grpcx.PermissionDenied, "token authentication is not enabled for this certificate authority"))
 		return
 	}
 	claims := fedTokenClaims{Name: cert.Subject.CommonName + " (" + cert.Issuer.CommonName + ")", Fingerprint: certFingerprint(cert), CAFingerprint: caFP,
 		PrincipalDN: cert.Subject.String(), IssuerDN: cert.Issuer.String()}
-	if ca.TokenAuthDays > 0 {
+	if ok && ca.AllowTokenAuth && ca.TokenAuthDays > 0 {
 		claims.Exp = time.Now().Add(time.Duration(ca.TokenAuthDays) * 24 * time.Hour).Unix()
+	} else if hubOK && hn.TokenAuthDuration > 0 {
+		claims.Exp = time.Now().Add(time.Duration(hn.TokenAuthDuration) * time.Second).Unix()
 	}
 	f.s.log.Info("federation token issued", "federate", claims.Name)
 	st.Finish(st.Send(takproto.MarshalToken(f.s.signFedToken(claims))))
@@ -208,7 +221,8 @@ func (f *fig2Server) tokenSession(r *http.Request) (*fig2Session, error) {
 		return ss, nil
 	}
 	pol := f.s.fedPolicyFor(claims.Fingerprint, claims.Name, claims.CAFingerprint, nil)
-	if pol.disabled {
+	pol.tokenGroup, pol.tokenID = claims.Group, claims.Jti
+	if pol.disabled || f.s.hubDenies(pol, claims.Name) {
 		return nil, grpcx.Errorf(grpcx.PermissionDenied, "this federate is disabled")
 	}
 	c := f.s.fedClient(KindFederation, claims.Name, r.RemoteAddr, pol)

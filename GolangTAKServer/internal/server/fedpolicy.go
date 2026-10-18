@@ -132,6 +132,10 @@ type fedPolicy struct {
 	missions  map[string]bool
 	missionOn bool
 	disabled  bool
+	outbound  bool
+
+	tokenGroup string
+	tokenID    string
 }
 
 func (c FederationConfig) federate(id, name string) (FederateConfig, bool) {

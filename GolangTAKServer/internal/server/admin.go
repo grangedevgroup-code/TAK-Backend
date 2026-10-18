@@ -867,6 +867,9 @@ func (s *Server) apiSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if err := validateHubPolicy(&c.FederationHub); err != nil {
+			return err
+		}
 		rb, _ := json.Marshal(before.Certificates.Revocation)
 		rn, _ := json.Marshal(c.Certificates.Revocation)
 		if string(rb) != string(rn) {
