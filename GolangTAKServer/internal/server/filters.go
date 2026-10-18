@@ -4,11 +4,18 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type MessageFilters struct {
-	DropTypes    []string `json:"dropTypes,omitempty"`
-	StripDetails []string `json:"stripDetails,omitempty"`
+	DropTypes      []string     `json:"dropTypes,omitempty"`
+	StripDetails   []string     `json:"stripDetails,omitempty"`
+	DropRules      []DropRule   `json:"dropRules,omitempty"`
+	Images         ImageFilters `json:"images"`
+	Scrubber       bool         `json:"scrubber,omitempty"`
+	ScrubberAction string       `json:"scrubberAction,omitempty"`
+	FlowTag        bool         `json:"flowTag,omitempty"`
+	FlowTagText    string       `json:"flowTagText,omitempty"`
 }
 
 func parseArea(v string) (*geoFilter, error) {
@@ -74,6 +81,18 @@ func (s *Server) messageFilter(m *Message) bool {
 	f := s.Config().Filters
 	if len(f.DropTypes) > 0 && !e.IsControl() && !e.IsDelete() && typeMatches(e.Type, f.DropTypes) {
 		return false
+	}
+	if len(f.DropRules) > 0 && s.dropByRules(m, f.DropRules) {
+		return false
+	}
+	if f.Scrubber && !scrubEvent(e, f.ScrubberAction) {
+		return false
+	}
+	if (f.Images.Thumbnail || f.Images.URLAdd) && e.Detail != nil {
+		s.processImages(e, f.Images)
+	}
+	if f.FlowTag && !e.IsControl() {
+		e.AddFlowTag(firstNonEmpty(f.FlowTagText, s.Config().Name), time.Now())
 	}
 	if len(f.StripDetails) > 0 && e.Detail != nil {
 		for _, name := range f.StripDetails {

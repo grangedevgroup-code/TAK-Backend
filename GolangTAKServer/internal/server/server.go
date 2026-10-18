@@ -72,6 +72,7 @@ type Server struct {
 	signal      *signalStore
 	xmpp        *xmppStore
 	cotSearch   cotSearches
+	drops       dropCounter
 	chats       *Chats
 	repeated    *Repeated
 	linkMu      sync.Mutex
