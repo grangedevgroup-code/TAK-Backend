@@ -218,7 +218,10 @@ func (c *Checker) ocspStatus(ctx context.Context, cert, issuer *x509.Certificate
 	if err == nil {
 		until = now.Add(time.Hour)
 		if !res.NextUpdate.IsZero() && res.NextUpdate.After(now) {
-			until = min(res.NextUpdate, now.Add(24*time.Hour))
+			until = res.NextUpdate
+			if cap := now.Add(24 * time.Hour); until.After(cap) {
+				until = cap
+			}
 		}
 	}
 	c.mu.Lock()
