@@ -56,6 +56,7 @@ type Server struct {
 	missions  *Missions
 	videos    *Videos
 	profiles  *Profiles
+	devProfiles *deviceProfileStore
 	chats     *Chats
 	repeated  *Repeated
 	linkMu    sync.Mutex
