@@ -395,6 +395,8 @@ scrape_configs:
       credentials: YOUR_TOKEN
 ```
 
+**Amazon CloudWatch.** Under **Settings**, **Monitoring**, **Amazon CloudWatch**, the same metrics are sent to CloudWatch every minute (namespace `takserver` by default, like TAK Server), with counters sent as the change since the last send. Credentials come from the access key in the settings, the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, the shared credentials file (`AWS_PROFILE`), an ECS task role or the EC2 instance role; the region from the settings, `AWS_REGION` or the instance. The role needs `cloudwatch:PutMetricData`. The last send and any error are shown there and at `/api/metrics/cloudwatch`.
+
 ## Ports
 
 | Port | Protocol | Use |
