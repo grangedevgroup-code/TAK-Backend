@@ -665,23 +665,70 @@ func (s *Server) clientGroups(r *http.Request, clientUID string) []string {
 	return nil
 }
 
-func (s *Server) deviceProfileRoutes(m, a func(string, http.HandlerFunc)) {
-	a("GET /Marti/api/device/profile", s.devProfileList)
-	a("GET /Marti/api/device/profile/directories", s.devProfileValidDirectories)
-	a("GET /Marti/api/device/profile/{name}", s.devProfileGet)
-	a("POST /Marti/api/device/profile/{name}", s.devProfileCreate)
-	a("PUT /Marti/api/device/profile/{name}", s.devProfileUpdate)
-	a("DELETE /Marti/api/device/profile/{name}", s.devProfileDelete)
-	a("GET /Marti/api/device/profile/{name}/files", s.devProfileFiles)
-	a("PUT /Marti/api/device/profile/{name}/file", s.devProfileAddFile)
-	a("GET /Marti/api/device/profile/{name}/file/{id}", s.devProfileGetFile)
-	a("DELETE /Marti/api/device/profile/{name}/file/{id}", s.devProfileDeleteFile)
-	a("GET /Marti/api/device/profile/{name}/directories", s.devProfileDirectories)
-	a("DELETE /Marti/api/device/profile/{name}/directories", s.devProfileDirectories)
-	a("PUT /Marti/api/device/profile/{name}/directories/{dirs}", s.devProfileDirectories)
-	a("POST /Marti/api/device/profile/{name}/send", s.devProfileSend)
-	m("GET /Marti/api/device/profile/{name}/missionpackage", s.devProfileMissionPackage)
-	m("HEAD /Marti/api/device/profile/{name}/missionpackage", s.devProfileMissionPackage)
-	m("GET /Marti/api/device/profile/tool/{tool}/file", s.martiToolProfileFile)
-	m("GET /Marti/api/tls/profile/tool/{tool}/file", s.martiToolProfileFile)
+func (s *Server) deviceProfileRouter(w http.ResponseWriter, r *http.Request) {
+	seg := pathSegments(r, "/Marti/api/device/profile")
+	method := r.Method
+	admin := func(h http.HandlerFunc) {
+		if id := identityOf(r); id == nil || !id.Admin {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrator access required"})
+			return
+		}
+		h(w, r)
+	}
+	get := method == http.MethodGet || method == http.MethodHead
+	switch {
+	case len(seg) == 0 && get:
+		admin(s.devProfileList)
+	case len(seg) == 1 && seg[0] == "connection" && get:
+		s.martiConnectionProfile(w, r)
+	case len(seg) == 1 && seg[0] == "directories" && get:
+		admin(s.devProfileValidDirectories)
+	case len(seg) == 2 && seg[0] == "tool" && get:
+		r.SetPathValue("tool", seg[1])
+		s.martiToolProfile(w, r)
+	case len(seg) == 3 && seg[0] == "tool" && seg[2] == "file" && get:
+		r.SetPathValue("tool", seg[1])
+		s.martiToolProfileFile(w, r)
+	case len(seg) == 1:
+		r.SetPathValue("name", seg[0])
+		switch method {
+		case http.MethodGet:
+			admin(s.devProfileGet)
+		case http.MethodPost:
+			admin(s.devProfileCreate)
+		case http.MethodPut:
+			admin(s.devProfileUpdate)
+		case http.MethodDelete:
+			admin(s.devProfileDelete)
+		default:
+			s.martiUnknown(w, r)
+		}
+	case len(seg) >= 2:
+		r.SetPathValue("name", seg[0])
+		switch {
+		case seg[1] == "files" && len(seg) == 2 && get:
+			admin(s.devProfileFiles)
+		case seg[1] == "file" && len(seg) == 2 && method == http.MethodPut:
+			admin(s.devProfileAddFile)
+		case seg[1] == "file" && len(seg) == 3 && get:
+			r.SetPathValue("id", seg[2])
+			admin(s.devProfileGetFile)
+		case seg[1] == "file" && len(seg) == 3 && method == http.MethodDelete:
+			r.SetPathValue("id", seg[2])
+			admin(s.devProfileDeleteFile)
+		case seg[1] == "directories" && len(seg) == 2 && (get || method == http.MethodDelete):
+			admin(s.devProfileDirectories)
+		case seg[1] == "directories" && len(seg) == 3 && method == http.MethodPut:
+			r.SetPathValue("dirs", seg[2])
+			admin(s.devProfileDirectories)
+		case seg[1] == "send" && len(seg) == 2 && method == http.MethodPost:
+			admin(s.devProfileSend)
+		case seg[1] == "missionpackage" && len(seg) == 2 && get:
+			s.devProfileMissionPackage(w, r)
+		default:
+			s.martiUnknown(w, r)
+		}
+	default:
+		s.martiUnknown(w, r)
+	}
 }
