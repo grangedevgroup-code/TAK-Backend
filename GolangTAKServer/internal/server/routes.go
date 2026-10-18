@@ -151,6 +151,7 @@ func (s *Server) routes() *http.ServeMux {
 
 	m("GET /Marti/ExportMissionKML", s.martiExportKML)
 	m("GET /Marti/TracksKML", s.martiExportKML)
+	m("POST /Marti/TracksKML", s.martiExportKML)
 
 	s.excheckRoutes(m)
 	s.citrapRoutes(m)
