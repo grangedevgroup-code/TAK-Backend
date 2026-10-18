@@ -335,7 +335,7 @@ func (s *Server) rolPermitted(c *Client, rol takproto.ROL) bool {
 			return false
 		}
 	}
-	if resource == "resource" && cfg.Federation.FileFilter.Enabled {
+	if (resource == "resource" || resource == "package") && cfg.Federation.FileFilter.Enabled {
 		var rr rolResource
 		json.Unmarshal(params, &rr)
 		var data []byte
@@ -503,6 +503,8 @@ func (s *Server) handleROL(src *Client, rol takproto.ROL, allowed []string, node
 		applied = s.rolResource(src, op, params, rol.Payload, groups)
 	case "data_feed":
 		applied = s.rolDataFeed(op, params, groups)
+	case "package":
+		s.rolPackageAnnounce(src, op, params, rol.Payload, groups)
 	default:
 		s.log.Debug("federated ROL not handled", "from", src.Name, "op", op, "resource", resource)
 	}

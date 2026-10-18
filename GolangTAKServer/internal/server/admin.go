@@ -945,6 +945,11 @@ func validateConfig(c *Config) error {
 	if err := validSchedule(c.Retention.Archive.Schedule); err != nil {
 		return fmt.Errorf("mission archive schedule: %w", err)
 	}
+	if p := c.Federation.HTTPSPort; c.Federation.Enabled && p > 0 {
+		if err := check("federation file transfer port", p, "tcp"); err != nil {
+			return err
+		}
+	}
 	if t := c.Federation.Token; c.Federation.Enabled && t.Enabled {
 		port := t.Port
 		if port <= 0 {

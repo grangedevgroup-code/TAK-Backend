@@ -345,6 +345,17 @@ func (f *fig2Server) streamEvents(st *grpcx.ServerStream, ss *fig2Session) error
 		case <-ss.c.closed:
 			return grpcx.Errorf(grpcx.Unavailable, "federate closed")
 		case m := <-ss.c.out:
+			if isFileShare(m.Event) && !m.fedReady {
+				if rol, ok, fallback := f.s.packageAnnounceROL(ss.c, m); ok {
+					select {
+					case ss.rolOut <- rol:
+					default:
+					}
+					continue
+				} else if !fallback {
+					continue
+				}
+			}
 			ev, ok := f.s.fedOutEvent(ss.c, m)
 			if !ok {
 				continue
@@ -588,6 +599,17 @@ func (s *Server) connectFederationV2(ctx context.Context, l *peerLink, u *url.UR
 				fail(errors.New("federation link closed"))
 				return
 			case m := <-c.out:
+				if isFileShare(m.Event) && !m.fedReady && !link.inOnly {
+					if rol, ok, fallback := s.packageAnnounceROL(c, m); ok {
+						if err := rolStream.Send(takproto.MarshalROL(rol)); err != nil {
+							fail(err)
+							return
+						}
+						continue
+					} else if !fallback {
+						continue
+					}
+				}
 				ev, ok := s.fedOutEvent(c, m)
 				if !ok {
 					continue

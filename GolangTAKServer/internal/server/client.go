@@ -36,6 +36,7 @@ type Message struct {
 	Announce    string
 	Hops        int64
 	Feed        string
+	fedReady    bool
 	xmlOnce     sync.Once
 	xml         []byte
 	pbOnce      sync.Once

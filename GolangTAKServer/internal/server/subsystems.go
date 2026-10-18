@@ -140,6 +140,9 @@ func (s *Server) startSubsystems() error {
 	if err := s.startFederationToken(); err != nil {
 		return err
 	}
+	if err := s.startFederationHTTPS(); err != nil {
+		return err
+	}
 	s.rebuildFeedIndex()
 	s.startDataFeeds()
 	s.syncInputs()

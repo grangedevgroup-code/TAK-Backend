@@ -302,6 +302,10 @@ func (s *Server) serveFederate(ctx context.Context, conn net.Conn, name, dir str
 				errc <- errors.New("federate closed")
 				return
 			case m := <-c.out:
+				if isFileShare(m.Event) && !m.fedReady {
+					go s.pushV1Package(c, remoteIP(conn.RemoteAddr().String()), m)
+					continue
+				}
 				f, ok := s.fedOutEvent(c, m)
 				if !ok {
 					continue

@@ -70,6 +70,10 @@ func (s *Server) startFederationHTTPS() error {
 	}
 	ln, err := s.listenTCP(port)
 	if err != nil {
+		if s.Config().Federation.HTTPSPort == 0 {
+			s.log.Warn("federation file transfer port unavailable; federated data packages over version 1 need it", "port", port, "err", err)
+			return nil
+		}
 		return err
 	}
 	base := &tls.Config{
