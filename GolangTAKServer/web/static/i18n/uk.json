@@ -1551,5 +1551,10 @@
  "Changes to the mission's content": "Зміни вмісту місії",
  "New subscriptions to the mission": "Нові підписки на місію",
  "on one and": "на одному та",
- "on the other.": "на іншому."
+ "on the other.": "на іншому.",
+ "Out-of-date messages": "Застарілі повідомлення",
+ "Drop messages that are already stale when they arrive": "Відкидати повідомлення, що вже застаріли на момент надходження",
+ "Message checks": "Перевірка повідомлень",
+ "Drop messages that lack what CoT requires": "Відкидати повідомлення без обов'язкових для CoT даних",
+ "Version, uid, type, how, time, start and stale, and a point inside valid ranges.": "Версія, uid, type, how, time, start і stale та точка в допустимих межах."
 }

@@ -1508,5 +1508,10 @@
  "Changes to the mission's content": "Modifications du contenu de la mission",
  "New subscriptions to the mission": "Nouveaux abonnements à la mission",
  "on one and": "sur l'un et",
- "on the other.": "sur l'autre."
+ "on the other.": "sur l'autre.",
+ "Out-of-date messages": "Messages périmés",
+ "Drop messages that are already stale when they arrive": "Ignorer les messages déjà périmés à leur arrivée",
+ "Message checks": "Vérification des messages",
+ "Drop messages that lack what CoT requires": "Ignorer les messages auxquels il manque ce que CoT exige",
+ "Version, uid, type, how, time, start and stale, and a point inside valid ranges.": "Version, uid, type, how, time, start et stale, et un point dans des plages valides."
 }

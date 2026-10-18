@@ -2,9 +2,12 @@ package server
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/grangedevgroup-code/TAK-Backend/GolangTAKServer/internal/cot"
 )
 
 type MessageFilters struct {
@@ -16,6 +19,24 @@ type MessageFilters struct {
 	ScrubberAction string       `json:"scrubberAction,omitempty"`
 	FlowTag        bool         `json:"flowTag,omitempty"`
 	FlowTagText    string       `json:"flowTagText,omitempty"`
+	IgnoreStale    bool         `json:"ignoreStaleMessages,omitempty"`
+	ValidateCoT    bool         `json:"validateXml,omitempty"`
+}
+
+func validCoT(e *cot.Event) bool {
+	if e.Version == "" || e.UID == "" || e.Type == "" || e.How == "" || e.Time.IsZero() || e.Start.IsZero() || e.Stale.IsZero() {
+		return false
+	}
+	for _, r := range e.Type {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("-_.;:/ ", r)) {
+			return false
+		}
+	}
+	p := e.Point
+	if math.IsNaN(p.Lat) || math.IsNaN(p.Lon) || math.IsNaN(p.Hae) || math.IsNaN(p.Ce) || math.IsNaN(p.Le) {
+		return false
+	}
+	return p.Lat >= -90 && p.Lat <= 90 && p.Lon >= -180 && p.Lon <= 180 && p.Ce >= 0 && p.Le >= 0
 }
 
 func parseArea(v string) (*geoFilter, error) {
@@ -82,6 +103,12 @@ func (s *Server) messageFilter(m *Message) bool {
 		return false
 	}
 	f := s.Config().Filters
+	if f.IgnoreStale && !e.IsControl() && !e.IsDelete() && !e.Stale.IsZero() && e.Stale.Before(time.Now()) {
+		return false
+	}
+	if f.ValidateCoT && !e.IsControl() && !validCoT(e) {
+		return false
+	}
 	if len(f.DropTypes) > 0 && !e.IsControl() && !e.IsDelete() && typeMatches(e.Type, f.DropTypes) {
 		return false
 	}
