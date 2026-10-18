@@ -58,3 +58,15 @@ func TestGeoEventMatchesOfficialDetailHandling(t *testing.T) {
 		t.Fatalf("%d track elements", n)
 	}
 }
+
+func FuzzUnmarshalFed(f *testing.F) {
+	e := cot.New("FZ-1", "a-f-G", "m-g", time.Minute)
+	f.Add(MarshalFed(FedEvent{Event: e, Groups: []string{"Red"}, FeedUID: "feed", MissionGUIDs: []string{"g"}, MaxHops: 3}))
+	f.Add([]byte{0x0a, 0x02, 0x4a, 0x00})
+	f.Fuzz(func(t *testing.T, b []byte) {
+		if fe, err := UnmarshalFed(b); err == nil && fe.Event != nil {
+			fe.Event.XML()
+			MarshalFed(*fe)
+		}
+	})
+}
