@@ -64,8 +64,14 @@ func TestWebContentAndAccessRules(t *testing.T) {
 	if st, _ := get("/list/", "", ""); st != http.StatusNotFound {
 		t.Fatalf("directory listing %d", st)
 	}
-	if st, b := get("/../outside.txt", "", ""); st != http.StatusNotFound || b == "secret" {
-		t.Fatalf("path traversal %d %q", st, b)
+	for _, p := range []string{"/../outside.txt", "/outside.txt", "/public/../../outside.txt", "/%2e%2e/outside.txt"} {
+		st, b := get(p, "", "")
+		if st == http.StatusTemporaryRedirect || st == http.StatusMovedPermanently {
+			st, b = get("/outside.txt", "", "")
+		}
+		if st != http.StatusNotFound || b == "secret" {
+			t.Fatalf("path traversal %s: %d %q", p, st, b)
+		}
 	}
 	if st, _ := get("/Marti/api/version", "", ""); st != 200 {
 		t.Fatalf("API still reachable %d", st)
