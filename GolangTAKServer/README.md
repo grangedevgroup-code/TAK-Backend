@@ -410,6 +410,9 @@ scrape_configs:
 | 19023 | TCP | FreeTAKServer-compatible REST API |
 | 9000 | TCP | Federation version 1 (off by default) |
 | 9001 | TCP | Federation version 2, gRPC (off by default) |
+| 9002 | TCP | Federation token sign-in (when turned on) |
+| 8444 | TCP | Data packages from federation version 1 servers (when federation is on) |
+| 8090 | UDP | QUIC streaming, when a QUIC input on this port is added (the port is set per input) |
 | 64738 | TCP and UDP | Voice server (Mumble) |
 | 3478 | UDP | Call relay (STUN and TURN) |
 | 49160-49200 | UDP | Call relay media |
