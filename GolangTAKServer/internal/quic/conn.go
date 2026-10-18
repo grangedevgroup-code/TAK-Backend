@@ -273,10 +273,6 @@ func (c *Conn) handleTLSEvents() error {
 				c.dropSpace(spHandshake)
 			}
 			c.estOnce.Do(func() { close(c.established) })
-		default:
-			if e.Err != nil {
-				return e.Err
-			}
 		}
 	}
 }
