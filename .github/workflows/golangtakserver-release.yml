@@ -82,5 +82,5 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=GolangTAKServer, open source server for TAK clients
-            org.opencontainers.image.licenses=Apache-2.0
+            org.opencontainers.image.licenses=0BSD
           push: true

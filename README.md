@@ -30,4 +30,4 @@ The installer sets up a service that starts at boot, opens the firewall and prin
 
 **These projects are independent and open source. They are not affiliated with, endorsed by, or associated with tak.gov, the TAK Product Center, or the makers of any TAK product.**
 
-Licensed under the [Apache License 2.0](LICENSE).
+Licensed under the [BSD Zero Clause License](LICENSE): use, copy, modify, sell or relicense it for any purpose. No attribution, copyright notice or project name is required.

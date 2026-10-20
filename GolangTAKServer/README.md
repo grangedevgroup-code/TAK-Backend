@@ -546,4 +546,6 @@ Trivy is not used: its releases, images and GitHub Action were compromised in Ma
 
 ## License
 
-GolangTAKServer is open source under the [Apache License 2.0](LICENSE). The dashboard embeds the Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono fonts, which are licensed under the SIL Open Font License 1.1 (see `web/static/fonts`).
+GolangTAKServer is under the [BSD Zero Clause License](LICENSE): use, copy, modify, sell or relicense it for any purpose. No attribution, copyright notice or project name is required.
+
+It has no third-party Go modules. The dashboard embeds the Atkinson Hyperlegible Next and Atkinson Hyperlegible Mono fonts under the SIL Open Font License 1.1, whose text ships next to them in `web/static/fonts`. Binaries include the Go runtime and standard library (BSD-3-Clause).
