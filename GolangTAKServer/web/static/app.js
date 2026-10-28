@@ -390,13 +390,6 @@
     return Number.isFinite(v) ? v : 0;
   }
 
-  function download(url) {
-    const a = h("a", { href: url, download: "" });
-    document.body.append(a);
-    a.click();
-    a.remove();
-  }
-
   function copyButton(text, label) {
     return btn(label || "Copy", () => copy(text), "small", "copy");
   }
