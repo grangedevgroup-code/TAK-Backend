@@ -77,11 +77,11 @@ func tsShown(args []string) string {
 func installTailscale() error {
 	switch runtime.GOOS {
 	case "linux":
-		script := filepath.Join(os.TempDir(), "tailscale-install.sh")
-		defer os.Remove(script)
-		if err := fetchTo("https://tailscale.com/install.sh", script); err != nil {
+		script, cleanup, err := fetchToTemp("https://tailscale.com/install.sh", "tailscale-install.sh")
+		if err != nil {
 			return err
 		}
+		defer cleanup()
 		return runShown("sh", script)
 	case "freebsd":
 		if err := runShown("pkg", "install", "-y", "tailscale"); err != nil {
@@ -124,11 +124,11 @@ func installTailscale() error {
 		case "386":
 			arch = "x86"
 		}
-		msi := filepath.Join(os.TempDir(), "tailscale-setup.msi")
-		defer os.Remove(msi)
-		if err := fetchTo("https://pkgs.tailscale.com/stable/tailscale-setup-latest-"+arch+".msi", msi); err != nil {
+		msi, cleanup, err := fetchToTemp("https://pkgs.tailscale.com/stable/tailscale-setup-latest-"+arch+".msi", "tailscale-setup.msi")
+		if err != nil {
 			return err
 		}
+		defer cleanup()
 		return runShown("msiexec", "/i", msi, "/qn", "/norestart")
 	}
 	return fmt.Errorf("install Tailscale for %s (see https://tailscale.com/download) and run this again", runtime.GOOS)

@@ -77,6 +77,20 @@ func runShown(name string, args ...string) error {
 	return cmd.Run()
 }
 
+func fetchToTemp(url, name string) (string, func(), error) {
+	dir, err := os.MkdirTemp("", "zyrn-tak-")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(dir) }
+	path := filepath.Join(dir, name)
+	if err := fetchTo(url, path); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	return path, cleanup, nil
+}
+
 func fetchTo(url, path string) error {
 	hc := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := hc.Get(url)
@@ -87,7 +101,7 @@ func fetchTo(url, path string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s: HTTP %d", url, resp.StatusCode)
 	}
-	f, err := os.Create(path)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
 	}
@@ -101,11 +115,11 @@ func fetchTo(url, path string) error {
 func installZeroTier() error {
 	switch runtime.GOOS {
 	case "linux":
-		script := filepath.Join(os.TempDir(), "zerotier-install.sh")
-		defer os.Remove(script)
-		if err := fetchTo("https://install.zerotier.com", script); err != nil {
+		script, cleanup, err := fetchToTemp("https://install.zerotier.com", "zerotier-install.sh")
+		if err != nil {
 			return err
 		}
+		defer cleanup()
 		return runShown("bash", script)
 	case "freebsd":
 		if err := runShown("pkg", "install", "-y", "zerotier"); err != nil {
@@ -114,11 +128,11 @@ func installZeroTier() error {
 		runShown("sysrc", "zerotier_enable=YES")
 		return runShown("service", "zerotier", "start")
 	case "darwin":
-		pkg := filepath.Join(os.TempDir(), "ZeroTierOne.pkg")
-		defer os.Remove(pkg)
-		if err := fetchTo("https://download.zerotier.com/dist/ZeroTier%20One.pkg", pkg); err != nil {
+		pkg, cleanup, err := fetchToTemp("https://download.zerotier.com/dist/ZeroTier%20One.pkg", "ZeroTierOne.pkg")
+		if err != nil {
 			return err
 		}
+		defer cleanup()
 		return runShown("installer", "-pkg", pkg, "-target", "/")
 	case "windows":
 		if _, err := exec.LookPath("winget"); err == nil {
@@ -126,11 +140,11 @@ func installZeroTier() error {
 				return nil
 			}
 		}
-		msi := filepath.Join(os.TempDir(), "ZeroTierOne.msi")
-		defer os.Remove(msi)
-		if err := fetchTo("https://download.zerotier.com/dist/ZeroTier%20One.msi", msi); err != nil {
+		msi, cleanup, err := fetchToTemp("https://download.zerotier.com/dist/ZeroTier%20One.msi", "ZeroTierOne.msi")
+		if err != nil {
 			return err
 		}
+		defer cleanup()
 		return runShown("msiexec", "/i", msi, "/qn", "/norestart")
 	}
 	return fmt.Errorf("install ZeroTier for %s from https://www.zerotier.com/download/ and run this again", runtime.GOOS)
