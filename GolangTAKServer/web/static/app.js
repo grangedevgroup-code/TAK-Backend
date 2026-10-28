@@ -1590,7 +1590,6 @@
       dot.setAttribute("x", px - 4);
       dot.setAttribute("y", py - 4);
       dot.style.display = "";
-      const r = svg.getBoundingClientRect();
       clear(tip).append(h("b", null, opts.fmt(p.v)), h("span", null, fmtTime(p.t).slice(11)));
       tip.style.left = px.toFixed(0) + "px";
       tip.style.top = (py - 12).toFixed(0) + "px";
