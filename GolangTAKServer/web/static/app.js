@@ -1840,7 +1840,9 @@
           if (!p) continue;
           const kind = t.startsWith("b-a-") ? "Alerts" : v.shape ? "Shapes and routes" : "Points";
           const rows = kind === "Shapes and routes" ? shapeRows(v) : [];
-          add(kind, { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: kind === "Alerts" ? [alertName(t), fmtAgo(v.time)] : rows.length ? [rows[0][1], rows[2] && rows[2][1]] : [v.remarks || t], lat: p[0], lon: p[1], alert: kind === "Alerts", live: true });
+          const from = kind === "Alerts" ? alertSender(v) : "";
+          const fromName = from ? senderName(from) : "";
+          add(kind, { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: kind === "Alerts" ? [alertName(t), fromName && "From " + fromName, fmtAgo(v.time)] : rows.length ? [rows[0][1], rows[2] && rows[2][1]] : [v.remarks || t], lat: p[0], lon: p[1], alert: kind === "Alerts", from: fromName ? v : null, live: true });
         }
       }
       const order = ["Alerts", "TAK devices", "Mesh radios", "Web and API", "Other tracks", "Server links", "Points", "Shapes and routes", "Offline"];
