@@ -1115,7 +1115,19 @@
       trigger.setAttribute("aria-expanded", "false");
       document.removeEventListener("mousedown", outside, true);
       document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("resize", close);
       S.modals.delete(close);
+    };
+    const place = () => {
+      const r = box.getBoundingClientRect();
+      let dx = 0;
+      if (r.right > window.innerWidth - 8) dx = window.innerWidth - 8 - r.right;
+      if (r.left + dx < 8) dx = 8 - r.left;
+      if (dx) {
+        box.style.left = box.offsetLeft + dx + "px";
+        box.style.right = "auto";
+      }
+      box.style.maxHeight = Math.max(120, window.innerHeight - r.top - 8) + "px";
     };
     const outside = (ev) => {
       if (box && !box.contains(ev.target) && !trigger.contains(ev.target)) close();
