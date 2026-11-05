@@ -1081,6 +1081,65 @@
   let countTimer = null;
   let liveEl = null;
   let crumbEl = null;
+  let OPS = null;
+
+  const TEAM_COLORS = { white: "#f2f2f2", yellow: "#f2d64b", orange: "#f08a24", magenta: "#e04fd9", red: "#e5484d", maroon: "#9b2c2c", purple: "#8e4ec6", "dark blue": "#3e63dd", blue: "#2f7ff0", cyan: "#3ac4d6", teal: "#12a594", green: "#46a758", "dark green": "#2f7a3e", brown: "#a0714f" };
+
+  function teamColor(team) {
+    return TEAM_COLORS[String(team || "").trim().toLowerCase()] || "var(--text-3)";
+  }
+
+  function stored(key, fallback) {
+    try {
+      const v = localStorage.getItem("golangtakserver-" + key);
+      return v === null ? fallback : v;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function store(key, value) {
+    try {
+      localStorage.setItem("golangtakserver-" + key, value);
+    } catch (e) {}
+  }
+
+  function popover(trigger, build, align) {
+    let box = null;
+    const close = () => {
+      if (!box) return;
+      box.remove();
+      box = null;
+      trigger.setAttribute("aria-expanded", "false");
+      document.removeEventListener("mousedown", outside, true);
+      document.removeEventListener("keydown", onKey, true);
+      S.modals.delete(close);
+    };
+    const outside = (ev) => {
+      if (box && !box.contains(ev.target) && !trigger.contains(ev.target)) close();
+    };
+    const onKey = (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close();
+        trigger.focus();
+      }
+    };
+    trigger.setAttribute("aria-haspopup", "true");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.addEventListener("click", () => {
+      if (box) return close();
+      box = h("div", { class: "pop " + (align || "left"), onclick: (ev) => ev.target.closest("a,[data-close]") && close() }, build(close));
+      trigger.parentNode.append(box);
+      trigger.setAttribute("aria-expanded", "true");
+      document.addEventListener("mousedown", outside, true);
+      document.addEventListener("keydown", onKey, true);
+      S.modals.add(close);
+      const first = box.querySelector("a,button,input,select");
+      if (first) first.focus();
+    });
+    return close;
+  }
 
   function mark(size) {
     const ns = "http://www.w3.org/2000/svg";
