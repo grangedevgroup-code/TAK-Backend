@@ -1892,8 +1892,8 @@
         return;
       }
       for (const [name, items] of groups) {
-        items.sort((a, b) => String(a.title).localeCompare(String(b.title)));
-        const closed = collapsed.has(name) && !filter;
+        items.sort((a, b) => (b.alert ? 1 : 0) - (a.alert ? 1 : 0) || String(a.title).localeCompare(String(b.title)));
+        const closed = collapsed.has(name) && !filter && !items.some((it) => it.uid && it.uid === map.selected);
         list.append(
           h(
             "button",
