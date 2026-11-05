@@ -1809,7 +1809,7 @@
       const alerts = alertsBySender();
       const raised = (it) => {
         const a = it.uid && alerts.get(it.uid);
-        if (a) Object.assign(it, { alert: true, sub: [alertName(a.type), fmtAgo(a.time), ...it.sub] });
+        if (a) Object.assign(it, { alert: true, sub: [alertName(a.type), fmtAgo(a.time)] });
         return it;
       };
       if (dockTab === "contacts") {
