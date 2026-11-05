@@ -1209,7 +1209,8 @@
     alertEl.onclick = () => {
       if (OPS) setTimeout(() => OPS.focusAlert(first), 0);
     };
-    const text = list.length === 1 ? "Emergency: " + (first.callsign || first.uid) + ", " + alertName(first.type) : list.length + " active emergencies";
+    const sender = S.events.get(alertSender(first));
+    const text = list.length === 1 ? "Emergency: " + ((sender && sender.callsign) || first.callsign || first.uid) + ", " + alertName(first.type) : list.length + " active emergencies";
     clear(alertEl).append(icon("alert", 18), h("span", null, text), h("span", { class: "go" }, "View on map"));
   }
 
