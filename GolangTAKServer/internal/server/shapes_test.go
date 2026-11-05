@@ -65,6 +65,21 @@ func TestShapeParsing(t *testing.T) {
 	}
 }
 
+func TestEventParent(t *testing.T) {
+	alert := parseEvent(t, shapeXML("ANDROID-abc-9-1-1", "b-a-o-tbl", "38.9", `<link uid="ANDROID-abc" type="a-f-G-U-C" relation="p-p"/><contact callsign="ALPHA-Alert"/><emergency type="911 Alert">ALPHA</emergency>`))
+	if p := viewOf(&Message{Event: alert}, false).Parent; p != "ANDROID-abc" {
+		t.Fatalf("alert parent = %q", p)
+	}
+	route := parseEvent(t, shapeXML("r1", "b-m-r", "38.9", `<link uid="w1" type="b-m-p-w" point="38.9,-77.0" relation="c"/><link uid="w2" type="b-m-p-w" point="38.91,-77.0" relation="c"/>`))
+	if p := viewOf(&Message{Event: route}, false).Parent; p != "" {
+		t.Fatalf("route waypoints taken as parent: %q", p)
+	}
+	self := parseEvent(t, shapeXML("u1", "a-f-G", "38.9", `<link uid="u1" relation="p-p"/>`))
+	if p := viewOf(&Message{Event: self}, false).Parent; p != "" {
+		t.Fatalf("self link taken as parent: %q", p)
+	}
+}
+
 func TestCasevacAndImage(t *testing.T) {
 	s := newTestServer(t, nil)
 	s.dir.AddUser("viewer", "viewer-password", true, nil)
