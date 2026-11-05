@@ -452,6 +452,7 @@ type eventView struct {
 	Source   string    `json:"source,omitempty"`
 	Chat     string    `json:"chat,omitempty"`
 	To       string    `json:"to,omitempty"`
+	Parent   string    `json:"parent,omitempty"`
 	XML      string    `json:"xml,omitempty"`
 
 	Shape   *shapeView        `json:"shape,omitempty"`
