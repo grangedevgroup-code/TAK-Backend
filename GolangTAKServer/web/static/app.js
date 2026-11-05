@@ -577,6 +577,21 @@
     return out;
   }
 
+  function alertSender(v) {
+    if (v.parent) return v.parent;
+    const m = /^(.+)-9-1-1$/.exec(v.uid || "");
+    return m ? m[1] : "";
+  }
+
+  function alertsBySender() {
+    const out = new Map();
+    for (const v of emergencies()) {
+      const from = alertSender(v);
+      if (from && (!out.has(from) || out.get(from).time < v.time)) out.set(from, v);
+    }
+    return out;
+  }
+
   async function refreshEvents() {
     try {
       const list = await api("GET", "/api/cot/latest");
