@@ -16,6 +16,8 @@
     events: new Map(),
     chats: [],
     listeners: new Set(),
+    keep: new Set(),
+    stopOps: null,
     ws: null,
     wsDelay: 1000,
     cleanup: null,
