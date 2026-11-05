@@ -1823,7 +1823,7 @@
         for (const v of S.events.values()) {
           if (!isLive(v) || seen.has(v.uid) || v.shape || !(v.type || "").startsWith("a-")) continue;
           if (v.lat === 0 && v.lon === 0) continue;
-          add("Other tracks", { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: [AFF[SlippyMap.affiliation(v.type)] || "Track"], lat: v.lat, lon: v.lon, live: true });
+          add("Other tracks", raised({ uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: [AFF[SlippyMap.affiliation(v.type)] || "Track"], lat: v.lat, lon: v.lon, live: true }));
         }
         if (scope === "all" && devices) {
           for (const d of devices) {
