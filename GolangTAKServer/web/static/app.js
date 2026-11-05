@@ -1995,10 +1995,6 @@
       map: map,
       dock: setDock,
       restyle: () => map.setStyle(...mapLook()),
-      focusUid: (uid) => {
-        const v = S.events.get(uid);
-        if (v) focusItem({ uid: uid, lat: v.lat, lon: v.lon });
-      },
       focusAlert: focusAlert,
       shown: () => {
         map.resize();
