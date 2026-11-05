@@ -1818,7 +1818,7 @@
             lon: p ? p[1] : 0,
             chat: info.callsign || "",
             live: true,
-          });
+          }));
         }
         for (const v of S.events.values()) {
           if (!isLive(v) || seen.has(v.uid) || v.shape || !(v.type || "").startsWith("a-")) continue;
