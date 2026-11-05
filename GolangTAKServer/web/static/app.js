@@ -226,6 +226,42 @@
     return lat.toFixed(5) + ", " + lon.toFixed(5);
   }
 
+  function toMGRS(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -80 || lat > 84) return "";
+    lon = ((((lon + 180) % 360) + 360) % 360) - 180;
+    let zone = Math.min(60, Math.floor((lon + 180) / 6) + 1);
+    if (lat >= 56 && lat < 64 && lon >= 3 && lon < 12) zone = 32;
+    if (lat >= 72) {
+      if (lon >= 0 && lon < 9) zone = 31;
+      else if (lon >= 9 && lon < 21) zone = 33;
+      else if (lon >= 21 && lon < 33) zone = 35;
+      else if (lon >= 33 && lon < 42) zone = 37;
+    }
+    const a = 6378137;
+    const fl = 1 / 298.257223563;
+    const k0 = 0.9996;
+    const e2 = fl * (2 - fl);
+    const ep2 = e2 / (1 - e2);
+    const phi = (lat * Math.PI) / 180;
+    const dl = ((lon - ((zone - 1) * 6 - 177)) * Math.PI) / 180;
+    const s = Math.sin(phi);
+    const c = Math.cos(phi);
+    const n = a / Math.sqrt(1 - e2 * s * s);
+    const t = Math.tan(phi) ** 2;
+    const cc = ep2 * c * c;
+    const A = c * dl;
+    const m = a * ((1 - e2 / 4 - (3 * e2 ** 2) / 64 - (5 * e2 ** 3) / 256) * phi - ((3 * e2) / 8 + (3 * e2 ** 2) / 32 + (45 * e2 ** 3) / 1024) * Math.sin(2 * phi) + ((15 * e2 ** 2) / 256 + (45 * e2 ** 3) / 1024) * Math.sin(4 * phi) - ((35 * e2 ** 3) / 3072) * Math.sin(6 * phi));
+    const east = k0 * n * (A + ((1 - t + cc) * A ** 3) / 6 + ((5 - 18 * t + t * t + 72 * cc - 58 * ep2) * A ** 5) / 120) + 500000;
+    let north = k0 * (m + n * Math.tan(phi) * ((A * A) / 2 + ((5 - t + 9 * cc + 4 * cc * cc) * A ** 4) / 24 + ((61 - 58 * t + t * t + 600 * cc - 330 * ep2) * A ** 6) / 720));
+    if (lat < 0) north += 10000000;
+    const band = "CDEFGHJKLMNPQRSTUVWXX"[Math.floor((lat + 80) / 8)];
+    const set = (zone - 1) % 6;
+    const col = ["ABCDEFGH", "JKLMNPQR", "STUVWXYZ"][set % 3][Math.floor(east / 100000) - 1] || "?";
+    const row = "ABCDEFGHJKLMNPQRSTUV"[(Math.floor(north / 100000) + (set % 2 ? 5 : 0)) % 20];
+    const five = (v) => String(Math.floor(v % 100000)).padStart(5, "0");
+    return zone + band + " " + col + row + " " + five(east) + " " + five(north);
+  }
+
   function joined(v) {
     return (v || []).join(", ") || "-";
   }
