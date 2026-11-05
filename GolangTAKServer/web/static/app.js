@@ -587,7 +587,7 @@
   }
 
   function notify(v) {
-    for (const fn of S.listeners) {
+    for (const fn of [...S.keep, ...S.listeners]) {
       try {
         fn(v);
       } catch (e) {}
