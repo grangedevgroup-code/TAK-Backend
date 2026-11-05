@@ -1863,7 +1863,8 @@
         lead,
         main,
         it.battery ? h("span", { class: "bat" + (bat && bat <= 20 ? " low" : ""), title: "Battery" }, icon("battery", 14), it.battery + "%") : null,
-        it.chat ? h("a", { class: "button icon-only ghost small", href: "#/chat/" + enc(it.chat), title: "Message", "aria-label": "Message " + it.title }, icon("chat", 15)) : null
+        it.chat ? h("a", { class: "button icon-only ghost small", href: "#/chat/" + enc(it.chat), title: "Message", "aria-label": "Message " + it.title }, icon("chat", 15)) : null,
+        it.from ? h("button", { type: "button", class: "icon-only ghost small", title: "Show the sender in Contacts", "aria-label": "Show the sender of " + it.title + " in Contacts", onclick: () => focusAlert(it.from) }, icon("contacts", 15)) : null
       );
     };
     function renderDock() {
