@@ -472,6 +472,12 @@ func viewOf(m *Message, withXML bool) eventView {
 			v.Speed = &sp
 		}
 	}
+	for _, l := range e.Links() {
+		if l.Relation == "p-p" && l.UID != "" && l.UID != e.UID {
+			v.Parent = l.UID
+			break
+		}
+	}
 	v.Shape = shapeOf(e)
 	v.Medevac = medevacOf(e)
 	if n := e.D("image"); n != nil && strings.TrimSpace(n.Text) != "" {
