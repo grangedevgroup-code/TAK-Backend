@@ -1806,7 +1806,7 @@
           const v = info.uid && S.events.get(info.uid);
           const p = posOf(v) || (info.lat || info.lon ? [info.lat, info.lon] : null);
           const name = info.callsign || c.name || c.user || c.remote;
-          add(c.kind === "mesh" || c.kind === "meshtastic" ? "Mesh radios" : c.kind === "api" || c.kind === "websocket" ? "Web and API" : "TAK devices", {
+          add(c.kind === "mesh" || c.kind === "meshtastic" ? "Mesh radios" : c.kind === "api" || c.kind === "websocket" ? "Web and API" : "TAK devices", raised({
             uid: info.uid,
             title: name,
             team: info.team || (v && v.team),
