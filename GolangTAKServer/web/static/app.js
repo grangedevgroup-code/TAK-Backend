@@ -1178,6 +1178,9 @@
     alertEl.style.display = list.length ? "" : "none";
     if (!list.length) return;
     const first = list[0];
+    alertEl.onclick = () => {
+      if (OPS) setTimeout(() => OPS.focusUid(first.uid), 0);
+    };
     const text = list.length === 1 ? "Emergency: " + (first.callsign || first.uid) + ", " + alertName(first.type) : list.length + " active emergencies";
     clear(alertEl).append(icon("alert", 18), h("span", null, text), h("span", { class: "go" }, "View on map"));
   }
@@ -1303,6 +1306,7 @@
   }
 
   function layout() {
+    stopOps();
     clear(root);
     const side = h("aside", { class: "side", id: "side", "aria-label": "Navigation" });
     alertEl = h("a", { class: "banner", href: "#/map", style: "display:none", role: "alert" });
@@ -1324,7 +1328,7 @@
     const addTab = (title, items) => {
       const b = h("button", { type: "button", class: "tab", "data-tab": title }, h("span", null, title), icon("chevron", 14));
       tabs.append(h("div", { class: "tabwrap" }, b));
-      popover(b, () => h("div", { class: "menu-list", role: "menu" }, items.map((it) => h("a", { href: it.href, role: "menuitem", "data-page": it.page || "" }, icon(it.icon, 16), h("span", { class: "t" }, it.title)))));
+      popover(b, () => h("div", { class: "menu-list", role: "menu" }, items.map((it) => h("a", { href: it.href, role: "menuitem", "data-page": it.page || "", "aria-current": location.hash === it.href || location.hash.startsWith(it.href + "/") ? "page" : null }, icon(it.icon, 16), h("span", { class: "t" }, it.title)))));
     };
     tabs.append(h("a", { class: "tab", href: "#/map", "data-tab": "map" }, icon("map", 16), h("span", null, "Map")));
     countEl = null;
@@ -1448,7 +1452,7 @@
   function buildOps(mapbar, onDock) {
     const canvas = h("canvas", { role: "application", "aria-label": "Map. Drag to pan, scroll or pinch to zoom." });
     const infoBox = h("div", { class: "map-info" });
-    const cursorEl = h("div", { class: "hud-cursor" }, h("b", null, "-"), h("span", null, "-"));
+    const cursorEl = h("div", { class: "hud-cursor", title: "Map centre, or the pointer when it is over the map" });
     const countLine = h("div", { class: "hud-count" });
     const attr = h("div", { class: "map-attr" });
     const hint = h("div", { class: "map-hint", hidden: true }, h("span", null, "Click the map to place the marker"), h("button", { type: "button", class: "small", onclick: () => setAdd(false) }, "Cancel"));
@@ -1534,9 +1538,11 @@
 
     const stage = h("div", { class: "stage" }, canvas, rail, infoBox, hint, h("div", { class: "hud" }, cursorEl, countLine), attr);
 
-    map.onmove = (lat, lon) => {
+    const showPos = (lat, lon) => {
       clear(cursorEl).append(h("b", null, toMGRS(lat, lon) || "-"), h("span", null, lat.toFixed(5) + ", " + lon.toFixed(5)));
     };
+    map.onmove = showPos;
+    canvas.addEventListener("pointerleave", () => showPos(map.lat, map.lon));
 
     const markers = () => {
       const out = [];
@@ -1895,7 +1901,9 @@
     refreshEvents().then(() => {
       redraw();
       fitAll();
+      showPos(map.lat, map.lon);
     });
+    showPos(map.lat, map.lon);
     setTimeout(() => setDock(dockOpen), 0);
 
     return {
@@ -1941,12 +1949,7 @@
 
   function setCrumbs(page, extra) {
     if (!crumbEl) return;
-    let group = "";
-    for (const p of PAGES) {
-      if (p.group) group = p.group;
-      if (p === page) break;
-    }
-    if (page.id === "plugin") group = "Plugins";
+    const group = groupOf(page);
     const parts = [];
     if (group) parts.push(h("span", null, group), h("span", { class: "sep" }, "/"));
     if (extra) parts.push(h("a", { href: "#/" + page.id }, page.title), h("span", { class: "sep" }, "/"), h("b", null, extra));
@@ -1986,6 +1989,7 @@
     const main = clear(document.getElementById("main"));
     if (S.page !== page.id) window.scrollTo(0, 0);
     S.page = page.id;
+    markTabs();
     document.title = page.title + " - GolangTAKServer";
     try {
       const c = await page.render(main, rest.map(decodeURIComponent));
@@ -1995,9 +1999,16 @@
     }
   }
 
+  function stopOps() {
+    if (S.stopOps) S.stopOps();
+    S.stopOps = null;
+    OPS = null;
+  }
+
   function showLogin(message) {
     disconnectStream();
     stopCalls();
+    stopOps();
     clearInterval(countTimer);
     S.me = null;
     S.csrf = "";
