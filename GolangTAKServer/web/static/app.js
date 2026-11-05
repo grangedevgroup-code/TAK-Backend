@@ -1271,6 +1271,35 @@
     }
   });
 
+  function navGroups() {
+    const groups = [];
+    let cur = null;
+    for (const p of PAGES) {
+      if (p.group) {
+        cur = p.admin && !S.me.admin ? null : { title: p.group, pages: [] };
+        if (cur) groups.push(cur);
+        continue;
+      }
+      if (!cur || p.hidden || (p.admin && !S.me.admin)) continue;
+      cur.pages.push(p);
+    }
+    return groups.filter((g) => g.pages.length);
+  }
+
+  function groupOf(page) {
+    if (page.id === "plugin") return "Plugins";
+    let group = "";
+    for (const p of PAGES) {
+      if (p.group) group = p.group;
+      if (p === page) break;
+    }
+    return group;
+  }
+
+  function isDarkNow() {
+    return getComputedStyle(document.documentElement).colorScheme === "dark";
+  }
+
   function layout() {
     clear(root);
     const side = h("aside", { class: "side", id: "side", "aria-label": "Navigation" });
@@ -1287,20 +1316,26 @@
     menuBtn.setAttribute("aria-controls", "side");
     menuBtn.setAttribute("aria-label", "Menu");
     menuBtn.setAttribute("aria-expanded", "false");
-    const findMobile = btn("Search", openPalette, "mfind icon-only ghost", "search");
-    findMobile.setAttribute("aria-label", "Go to a page or setting");
     const serverName = S.me.server || "GolangTAKServer";
     const nav = h("nav", { "aria-label": "Sections" });
+    const tabs = h("nav", { class: "tabs-top", "aria-label": "Sections" });
+    const addTab = (title, items) => {
+      const b = h("button", { type: "button", class: "tab", "data-tab": title }, h("span", null, title), icon("chevron", 14));
+      tabs.append(h("div", { class: "tabwrap" }, b));
+      popover(b, () => h("div", { class: "menu-list", role: "menu" }, items.map((it) => h("a", { href: it.href, role: "menuitem", "data-page": it.page || "" }, icon(it.icon, 16), h("span", { class: "t" }, it.title)))));
+    };
+    tabs.append(h("a", { class: "tab", href: "#/map", "data-tab": "map" }, icon("map", 16), h("span", null, "Map")));
     countEl = null;
-    for (const p of PAGES) {
-      if ((p.admin && !S.me.admin) || p.hidden) continue;
-      if (p.group) {
-        nav.append(h("div", { class: "group" }, p.group));
-        continue;
+    for (const g of navGroups()) {
+      nav.append(h("div", { class: "group" }, g.title));
+      for (const p of g.pages) {
+        const count = p.count ? h("span", { class: "count", title: "Connected now" }) : null;
+        if (count) countEl = count;
+        nav.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => setOpen(false) }, icon(p.icon), h("span", { class: "t" }, p.title), count));
       }
-      const count = p.count ? h("span", { class: "count", title: "Connected now" }) : null;
-      if (count) countEl = count;
-      nav.append(h("a", { href: "#/" + p.id, "data-page": p.id, onclick: () => setOpen(false) }, icon(p.icon), h("span", { class: "t" }, p.title), count));
+      if (g.title === "Account") continue;
+      const items = g.pages.filter((p) => p.id !== "map").map((p) => ({ href: "#/" + p.id, icon: p.icon, title: p.title, page: p.id }));
+      if (items.length) addTab(g.title, items);
     }
     api("GET", "/api/plugin-pages")
       .then((list) => {
@@ -1308,15 +1343,16 @@
         if (!list.length) return;
         nav.append(h("div", { class: "group" }, "Plugins"));
         for (const p of list) nav.append(h("a", { href: "#/plugin/" + enc(p.name), "data-page": "plugin", "data-plugin": p.name, title: p.description || p.page, onclick: () => setOpen(false) }, icon("plugins"), h("span", { class: "t" }, p.page)));
+        addTab("Plugins", list.map((p) => ({ href: "#/plugin/" + enc(p.name), icon: "plugins", title: p.page, page: "plugin" })));
         markPluginNav();
+        markTabs();
       })
       .catch(() => {});
     const signOutBtn = btn("Sign out", signOut, "icon-only ghost", "signout");
     signOutBtn.setAttribute("aria-label", "Sign out");
     signOutBtn.title = "Sign out";
     side.append(
-      h("a", { class: "brand", href: "#/overview" }, mark(30), h("span", null, h("span", { class: "name" }, "GolangTAKServer"), h("span", { class: "srv", title: serverName }, serverName))),
-      h("button", { type: "button", class: "find", onclick: openPalette, "aria-label": "Go to a page or setting" }, icon("search", 16), h("span", { class: "label" }, "Go to..."), h("kbd", null, mac ? "⌘K" : "Ctrl K")),
+      h("a", { class: "brand", href: "#/map" }, mark(30), h("span", null, h("span", { class: "name" }, "GolangTAKServer"), h("span", { class: "srv", title: serverName }, serverName))),
       nav,
       h(
         "div",
@@ -1325,27 +1361,556 @@
         signOutBtn
       )
     );
-    const main = h("main", { id: "main", tabindex: "-1" });
-    const strip = h(
+    const findBtn = h("button", { type: "button", class: "find", onclick: openPalette, "aria-label": "Go to a page or setting" }, icon("search", 16), h("span", { class: "label" }, "Go to..."), h("kbd", null, mac ? "⌘K" : "Ctrl K"));
+    const themeBtn = h("button", { type: "button", class: "icon-only ghost", title: "Switch between light and dark", "aria-label": "Switch between light and dark" });
+    const paintTheme = () => clear(themeBtn).append(icon(isDarkNow() ? "sun" : "moon", 18));
+    themeBtn.addEventListener("click", () => setTheme(isDarkNow() ? "light" : "dark"));
+    const userBtn = h("button", { type: "button", class: "user ghost", "aria-label": "Account menu" }, h("span", { class: "avatar", "aria-hidden": "true" }, (S.me.user || "?").slice(0, 1)), h("span", { class: "un" }, S.me.user), icon("chevron", 14));
+    const userWrap = h("div", { class: "tabwrap" }, userBtn);
+    popover(
+      userBtn,
+      () =>
+        h(
+          "div",
+          { class: "menu-list", role: "menu" },
+          h("div", { class: "menu-head" }, h("b", null, S.me.user), h("small", null, S.me.admin ? "Administrator" : "User"), h("small", { title: serverName }, serverName)),
+          h("a", { href: "#/account", role: "menuitem" }, icon("account", 16), h("span", { class: "t" }, "My account")),
+          h("a", { href: "#/tokens", role: "menuitem" }, icon("tokens", 16), h("span", { class: "t" }, "API tokens")),
+          h("button", { type: "button", role: "menuitem", "data-close": "1", onclick: signOut }, icon("signout", 16), h("span", { class: "t" }, "Sign out"))
+        ),
+      "right"
+    );
+    const bar1 = h(
       "div",
-      { class: "strip" },
+      { class: "bar1" },
       h("a", { class: "skip", href: "#main", onclick: (ev) => (ev.preventDefault(), document.getElementById("main").focus()) }, "Skip to content"),
       menuBtn,
-      h("a", { class: "mbrand", href: "#/overview" }, mark(22), "GolangTAKServer"),
-      crumbEl,
+      h("a", { class: "brand", href: "#/map", title: serverName }, mark(22), h("span", { class: "name" }, "GolangTAKServer")),
+      tabs,
       h("span", { class: "spacer" }),
-      liveEl,
-      findMobile
+      findBtn,
+      themeBtn,
+      userWrap
     );
+    const mapbar = h("div", { class: "mapbar" });
+    const back = h("a", { class: "button small ghost back", href: "#/map" }, icon("close", 16), h("span", null, "Back to map"));
+    const dockBtn = h("button", { type: "button", class: "small ghost dock-btn", "aria-controls": "dock" }, icon("contacts", 16), h("span", null, "Contacts"));
+    const bar2 = h("div", { class: "bar2" }, liveEl, crumbEl, h("span", { class: "spacer" }), mapbar, back, dockBtn);
     const marking = (S.me.classification || "").trim();
     const level = /TOP SECRET/i.test(marking) ? "ts" : /SECRET/i.test(marking) ? "s" : /CONFIDENTIAL/i.test(marking) ? "c" : /CUI|CONTROLLED/i.test(marking) ? "cui" : "u";
     const markEl = marking ? h("div", { class: "marking " + level, role: "note" }, marking) : null;
-    const column = h("div", { class: "main", onmousedown: () => side.classList.contains("open") && setOpen(false) }, markEl, strip, alertEl, main);
-    root.append(h("div", { class: "app" }, side, column));
+    const head = h("header", { class: "head" }, markEl, bar1, bar2, alertEl);
+    const main = h("main", { id: "main", tabindex: "-1" });
+    const closeSide = () => side.classList.contains("open") && setOpen(false);
+    const work = h("div", { class: "work", onmousedown: closeSide }, main);
+    const app = h("div", { class: "app" }, head, side);
+    const setDock = (open) => {
+      app.classList.toggle("dock-open", open);
+      dockBtn.setAttribute("aria-pressed", String(open));
+    };
+    dockBtn.addEventListener("click", () => OPS.dock(!app.classList.contains("dock-open")));
+    OPS = buildOps(mapbar, setDock);
+    OPS.stage.addEventListener("mousedown", closeSide);
+    app.append(OPS.stage, OPS.panel, work);
+    root.append(app);
+    const sizeHead = () => app.style.setProperty("--head-h", head.offsetHeight + "px");
+    if (window.ResizeObserver) new ResizeObserver(sizeHead).observe(head);
+    sizeHead();
+    paintTheme();
+    const onTheme = () => {
+      paintTheme();
+      if (OPS) OPS.restyle();
+    };
+    new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", onTheme);
     updateAlert();
     clearInterval(countTimer);
     countTimer = setInterval(updateCount, 10000);
     updateCount();
+  }
+
+  function markTabs() {
+    const page = PAGES.find((p) => p.id === S.page);
+    if (!page) return;
+    const group = groupOf(page);
+    for (const t of document.querySelectorAll(".tabs-top .tab")) {
+      const on = page.id === "map" ? t.dataset.tab === "map" : t.dataset.tab === group;
+      t.classList.toggle("active", on);
+      if (on) t.setAttribute("aria-current", "true");
+      else t.removeAttribute("aria-current");
+    }
+    const app = document.querySelector(".app");
+    if (app) app.classList.toggle("on-map", page.id === "map");
+  }
+
+  function buildOps(mapbar, onDock) {
+    const canvas = h("canvas", { role: "application", "aria-label": "Map. Drag to pan, scroll or pinch to zoom." });
+    const infoBox = h("div", { class: "map-info" });
+    const cursorEl = h("div", { class: "hud-cursor" }, h("b", null, "-"), h("span", null, "-"));
+    const countLine = h("div", { class: "hud-count" });
+    const attr = h("div", { class: "map-attr" });
+    const hint = h("div", { class: "map-hint", hidden: true }, h("span", null, "Click the map to place the marker"), h("button", { type: "button", class: "small", onclick: () => setAdd(false) }, "Cancel"));
+    let style = stored("map-style", "auto");
+    let symbology = stored("map-symbols", "2525");
+    let showTracks = false;
+    let addMode = false;
+    let tileLayers = [];
+    let fitted = false;
+    const mapLook = () => {
+      if (style.startsWith("layer:")) return ["none", isDarkNow()];
+      const s = style === "auto" ? (isDarkNow() ? "dark" : "light") : style;
+      if (s === "dark") return ["grayscale(1) invert(1) brightness(0.86) contrast(0.92)", true];
+      if (s === "light") return ["grayscale(1) contrast(1.02)", false];
+      return ["none", isDarkNow()];
+    };
+    const [tf, dk] = mapLook();
+    const map = new SlippyMap(canvas, { tileUrl: S.me.tileUrl, lat: 20, lon: 0, zoom: 3, tileFilter: tf, dark: dk });
+    map.symbology = symbology;
+    const applyBase = () => {
+      const l = tileLayers.find((x) => "layer:" + x.uid === style);
+      map.setTileUrl(l ? l.url : S.me.tileUrl);
+      const url = l ? l.url : S.me.tileUrl || "";
+      attr.textContent = url.includes("openstreetmap") ? TR("Map data © OpenStreetMap contributors") : "";
+    };
+    applyBase();
+    api("GET", "/Marti/api/maplayers/all")
+      .then((r) => {
+        tileLayers = ((r && r.data) || []).filter((l) => l.enabled !== false && /\{z\}/.test(l.url || "") && l.type !== "WMS");
+        if (style.startsWith("layer:") && tileLayers.some((l) => "layer:" + l.uid === style)) {
+          applyBase();
+          map.setStyle(...mapLook());
+        }
+      })
+      .catch(() => {});
+
+    const railBtn = (label, ic, fn) => h("button", { type: "button", class: "icon-only", title: label, "aria-label": label, onclick: fn }, icon(ic, 18));
+    const addBtn = railBtn("Add marker", "pin", () => setAdd(!addMode));
+    const tracksBtn = railBtn("Tracks (last hour)", "route", () => {
+      showTracks = !showTracks;
+      tracksBtn.setAttribute("aria-pressed", String(showTracks));
+      loadTracks();
+    });
+    tracksBtn.setAttribute("aria-pressed", "false");
+    addBtn.setAttribute("aria-pressed", "false");
+    const setAdd = (on) => {
+      addMode = on;
+      addBtn.setAttribute("aria-pressed", String(on));
+      hint.hidden = !on;
+      canvas.classList.toggle("placing", on);
+    };
+    const rail = h("div", { class: "rail", role: "toolbar", "aria-label": "Map tools", "aria-orientation": "vertical" }, railBtn("Zoom in", "plus", () => map.zoomAt(1)), railBtn("Zoom out", "minus", () => map.zoomAt(-1)), railBtn("Show all", "fit", () => fitAll(true)), h("span", { class: "sep" }), addBtn, tracksBtn);
+
+    const layersBtn = h("button", { type: "button", class: "small ghost" }, icon("layers", 16), h("span", null, "Layers"), icon("chevron", 14));
+    popover(layersBtn, () => {
+      const sel = select("mapstyle", [["auto", "Match theme"], ["dark", "Dark"], ["light", "Light"], ["color", "Color"]], style);
+      if (tileLayers.length) sel.append(h("optgroup", { label: "Map layers" }, tileLayers.map((l) => h("option", { value: "layer:" + l.uid }, l.name))));
+      sel.value = style;
+      sel.addEventListener("change", () => {
+        style = sel.value;
+        store("map-style", style);
+        applyBase();
+        map.setStyle(...mapLook());
+      });
+      const sym = checkbox("milsym", symbology !== "simple", "MIL-STD-2525 symbols");
+      sym.querySelector("input").addEventListener("change", (ev) => {
+        symbology = ev.target.checked ? "2525" : "simple";
+        map.symbology = symbology;
+        store("map-symbols", symbology);
+        map.draw();
+      });
+      return h(
+        "div",
+        { class: "layers-pop" },
+        h("label", { for: "mapstyle", class: "pop-label" }, "Base map"),
+        sel,
+        sym,
+        h("div", { class: "pop-label" }, "Affiliation"),
+        h("div", { class: "legend" }, [["#80e0ff", "Friendly"], ["#ff8080", "Hostile"], ["#aaffaa", "Neutral"], ["#ffff80", "Unknown"], ["#ff4d4f", "Emergency"]].map(([c, t]) => h("span", null, h("i", { style: "background:" + c }), t)))
+      );
+    });
+    mapbar.append(h("div", { class: "tabwrap" }, layersBtn));
+
+    const stage = h("div", { class: "stage" }, canvas, rail, infoBox, hint, h("div", { class: "hud" }, cursorEl, countLine), attr);
+
+    map.onmove = (lat, lon) => {
+      clear(cursorEl).append(h("b", null, toMGRS(lat, lon) || "-"), h("span", null, lat.toFixed(5) + ", " + lon.toFixed(5)));
+    };
+
+    const markers = () => {
+      const out = [];
+      for (const v of S.events.values()) {
+        if (!isLive(v)) continue;
+        const pts = v.shape && v.shape.points;
+        if (v.lat === 0 && v.lon === 0 && !(pts && pts.length)) continue;
+        if (!v.type || v.type.startsWith("t-") || v.type.startsWith("b-t-f") || v.type.startsWith("b-f-t")) continue;
+        const [lat, lon] = v.lat === 0 && v.lon === 0 ? pts[0] : [v.lat, v.lon];
+        out.push({ uid: v.uid, lat: lat, lon: lon, label: v.callsign || "", kind: v.shape ? "shape" : SlippyMap.affiliation(v.type), shape: v.shape, type: v.type, course: v.course, speed: v.speed, v: v });
+      }
+      return out;
+    };
+    const redraw = () => {
+      const m = markers();
+      map.setMarkers(m);
+      countLine.textContent = TR(m.length + " on map");
+    };
+    const fitAll = (force) => {
+      if (map.fit(markers(), 15) || force) fitted = true;
+    };
+    const loadTracks = async () => {
+      if (!showTracks) {
+        map.setTracks([]);
+        return;
+      }
+      try {
+        const t = await api("GET", "/api/tracks?minutes=60");
+        map.setTracks(Object.values(t).map((x) => ({ points: x.points })));
+      } catch (e) {
+        fail(e);
+      }
+    };
+    const showInfo = (m) => {
+      clear(infoBox);
+      if (!m) {
+        infoBox.classList.remove("show");
+        return;
+      }
+      const v = S.events.get(m.uid) || m.v;
+      if (!v) return;
+      infoBox.classList.add("show");
+      const closeInfo = () => {
+        map.selected = "";
+        showInfo(null);
+        map.draw();
+        renderDock();
+      };
+      infoBox.append(
+        h("div", { class: "info-head" }, h("span", { class: "bar", style: "background:" + teamColor(v.team) }), h("b", null, v.callsign || v.uid), h("button", { type: "button", class: "icon-only ghost small", title: "Close", "aria-label": "Close", onclick: closeInfo }, icon("close", 16))),
+        kv([
+          ["MGRS", h("span", { class: "mono" }, toMGRS(v.lat, v.lon) || "-")],
+          ["Position", h("span", { class: "mono" }, fmtCoord(v.lat, v.lon))],
+          ["Altitude", v.hae && v.hae < 9999999 ? Math.round(v.hae) + " m" : "-"],
+          ["Type", h("span", { class: "mono" }, v.type)],
+          ["Team", v.team],
+          ["Updated", fmtAgo(v.time)],
+          ["Stale", fmtTime(v.stale)],
+          ["Remarks", v.remarks],
+          ...shapeRows(v),
+          ...medevacRows(v.medevac),
+          ["UID", h("span", { class: "mono small break" }, v.uid)],
+        ]),
+        ...(v.image ? [h("a", { href: "/api/cot/" + enc(v.uid) + "/image", target: "_blank", rel: "noopener", class: "cot-image" }, h("img", { src: "/api/cot/" + enc(v.uid) + "/image", alt: "Image attached to " + (v.callsign || v.uid), loading: "lazy" }))] : []),
+        h(
+          "div",
+          { class: "toolbar" },
+          (v.type || "").startsWith("a-") ? h("a", { class: "button small", href: "#/chat/" + enc(v.callsign || v.uid) }, icon("chat", 16), "Message") : null,
+          S.me.admin && !v.uid.startsWith("ANDROID") && !(v.type || "").startsWith("b-a")
+            ? btn(S.repeated && S.repeated.has(v.uid) ? "Stop repeating" : "Repeat", async () => {
+                try {
+                  if (S.repeated && S.repeated.has(v.uid)) {
+                    await api("DELETE", "/api/repeated/" + enc(v.uid));
+                    S.repeated.delete(v.uid);
+                    toast("No longer repeated");
+                  } else {
+                    await api("POST", "/api/repeated/" + enc(v.uid));
+                    (S.repeated = S.repeated || new Set()).add(v.uid);
+                    toast("Sent to every device that connects, and again every minute");
+                  }
+                  showInfo(m);
+                } catch (e) {
+                  fail(e);
+                }
+              }, "small")
+            : null,
+          btn("Delete", () =>
+            confirmAction("Delete " + (v.callsign || v.uid), "Remove this item from the map on all connected devices?", "Delete", async () => {
+              await api("DELETE", "/api/cot/" + enc(v.uid));
+              S.events.delete(v.uid);
+              closeInfo();
+              redraw();
+            }), "small danger")
+        )
+      );
+    };
+    map.onselect = (m, lat, lon) => {
+      if (addMode) {
+        setAdd(false);
+        const f = h(
+          "form",
+          { class: "grid" },
+          field("Name", input("mname", "Marker", { required: true })),
+          field("Type", select("mtype", [["a-u-G", "Unknown ground"], ["a-f-G", "Friendly ground"], ["a-h-G", "Hostile ground"], ["a-n-G", "Neutral ground"], ["b-m-p-s-m", "Spot map point"], ["b-m-p-w", "Waypoint"]], "a-u-G")),
+          field("Position", h("span", { class: "mono" }, toMGRS(lat, lon) + "  " + fmtCoord(lat, lon))),
+          field("Remarks", input("mrem", "")),
+          field("Keep for", select("mmin", [["60", "1 hour"], ["1440", "1 day"], ["10080", "7 days"], ["43200", "30 days"]], "1440"))
+        );
+        modal("New marker", f, [
+          { label: "Cancel" },
+          {
+            label: "Place marker",
+            primary: true,
+            run: async () => {
+              const r = await api("POST", "/api/markers", { name: val(f, "mname"), type: val(f, "mtype"), lat: lat, lon: lon, remarks: val(f, "mrem"), minutes: num(f, "mmin") });
+              toast("Marker sent to all devices");
+              S.events.set(r.uid, { uid: r.uid, type: val(f, "mtype"), callsign: val(f, "mname"), lat: lat, lon: lon, time: new Date().toISOString(), remarks: val(f, "mrem") });
+              redraw();
+              renderDock();
+            },
+          },
+        ]);
+        return;
+      }
+      showInfo(m);
+      renderDock();
+    };
+
+    const panel = h("aside", { class: "dock", id: "dock", "aria-label": "Contacts and markers" });
+    let dockOpen = window.innerWidth >= 1100 && stored("dock", "1") === "1";
+    let dockTab = stored("dock-tab", "contacts");
+    let scope = "live";
+    let filter = "";
+    let clients = [];
+    let devices = null;
+    let renderTimer = null;
+    const collapsed = new Set(stored("dock-collapsed", "").split("|").filter(Boolean));
+    const tabBtn = (id, label) => h("button", { type: "button", role: "tab", "data-tab": id, onclick: () => ((dockTab = id), store("dock-tab", id), renderDock()) }, h("span", null, label), h("span", { class: "n" }));
+    const tabC = tabBtn("contacts", "Contacts");
+    const tabM = tabBtn("markers", "Markers");
+    const q = h("input", { type: "search", placeholder: "Filter", "aria-label": "Filter contacts and markers", autocomplete: "off", spellcheck: "false" });
+    q.addEventListener("input", () => {
+      filter = q.value.trim();
+      renderDock();
+    });
+    const scopeBtn = (id, label, title) =>
+      h("button", {
+        type: "button", "data-scope": id, title: title,
+        onclick: () => {
+          scope = id;
+          if (id === "all") loadDevices();
+          renderDock();
+        },
+      }, label);
+    const seg = h("div", { class: "seg", role: "group", "aria-label": "Show" }, scopeBtn("live", "Live", "Connected now"), scopeBtn("all", "All", "Include devices that are offline"));
+    const list = h("div", { class: "dock-list" });
+    panel.append(
+      h("div", { class: "dock-tabs", role: "tablist" }, tabC, tabM, h("span", { class: "spacer" }), h("button", { type: "button", class: "icon-only ghost small dock-close", title: "Close", "aria-label": "Close contacts", onclick: () => setDock(false) }, icon("close", 16))),
+      h("div", { class: "dock-tools" }, h("div", { class: "q" }, icon("search", 15), q), seg),
+      list
+    );
+
+    const AFF = { friend: "Friendly", hostile: "Hostile", neutral: "Neutral", unknown: "Unknown" };
+    const posOf = (v) => {
+      if (!v) return null;
+      if (!(v.lat === 0 && v.lon === 0) && Number.isFinite(v.lat)) return [v.lat, v.lon];
+      const pts = v.shape && v.shape.points;
+      return pts && pts.length ? pts[0] : null;
+    };
+    const focusItem = (it) => {
+      const v = it.uid && S.events.get(it.uid);
+      const p = posOf(v) || (it.lat || it.lon ? [it.lat, it.lon] : null);
+      if (!p) return;
+      map.setView(p[0], p[1], Math.max(map.zoom, 14));
+      fitted = true;
+      if (v) {
+        map.selected = v.uid;
+        showInfo({ uid: v.uid, v: v });
+      }
+      map.draw();
+      if (S.page !== "map") location.hash = "#/map";
+      if (window.innerWidth < 1100) setDock(false);
+      renderDock();
+    };
+    const groupsFor = () => {
+      const groups = new Map();
+      const f = filter.toLowerCase();
+      const add = (name, it) => {
+        if (f && ![it.title, it.uid, it.team, it.role, it.soft].join(" ").toLowerCase().includes(f)) return;
+        if (!groups.has(name)) groups.set(name, []);
+        groups.get(name).push(it);
+      };
+      if (dockTab === "contacts") {
+        const seen = new Set();
+        for (const c of clients) {
+          if (c.internal) continue;
+          const info = c.info || {};
+          if (c.kind === "peer" || c.kind === "federation") {
+            add("Server links", { title: c.name || c.remote, sub: [c.kind === "federation" ? "Federation" : "Server link", c.remote], live: true });
+            continue;
+          }
+          if (info.uid) seen.add(info.uid);
+          const v = info.uid && S.events.get(info.uid);
+          const p = posOf(v) || (info.lat || info.lon ? [info.lat, info.lon] : null);
+          const name = info.callsign || c.name || c.user || c.remote;
+          add(c.kind === "mesh" || c.kind === "meshtastic" ? "Mesh radios" : c.kind === "api" || c.kind === "websocket" ? "Web and API" : "TAK devices", {
+            uid: info.uid,
+            title: name,
+            team: info.team || (v && v.team),
+            role: info.role,
+            soft: [info.platform, info.version, c.user].filter(Boolean).join(" "),
+            sub: [[info.team, info.role].filter(Boolean).join(" · ") || [info.platform, info.version].filter(Boolean).join(" ") || c.user || c.kind],
+            battery: info.battery,
+            lat: p ? p[0] : 0,
+            lon: p ? p[1] : 0,
+            chat: info.callsign || "",
+            live: true,
+          });
+        }
+        for (const v of S.events.values()) {
+          if (!isLive(v) || seen.has(v.uid) || v.shape || !(v.type || "").startsWith("a-")) continue;
+          if (v.lat === 0 && v.lon === 0) continue;
+          add("Other tracks", { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: [AFF[SlippyMap.affiliation(v.type)] || "Track", v.team ? " · " + v.team : ""], lat: v.lat, lon: v.lon, live: true });
+        }
+        if (scope === "all" && devices) {
+          for (const d of devices) {
+            if (seen.has(d.uid)) continue;
+            add("Offline", { uid: d.uid, title: d.callsign || d.uid, soft: [d.platform, d.version, d.user].filter(Boolean).join(" "), sub: ["Last seen ", fmtAgo(d.lastSeen)], lat: d.lat, lon: d.lon, live: false });
+          }
+        }
+      } else {
+        for (const v of S.events.values()) {
+          const t = v.type || "";
+          if (!isLive(v) || t.startsWith("t-") || t.startsWith("b-t-f") || t === "b-a-o-can") continue;
+          if (t.startsWith("a-") && !v.shape) continue;
+          const p = posOf(v);
+          if (!p) continue;
+          const kind = t.startsWith("b-a-") ? "Alerts" : v.shape ? "Shapes and routes" : "Points";
+          const rows = kind === "Shapes and routes" ? shapeRows(v) : [];
+          add(kind, { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: kind === "Alerts" ? [alertName(t), " · ", fmtAgo(v.time)] : rows.length ? [rows[0][1], " · ", rows[2] ? rows[2][1] : ""] : [v.remarks || t], lat: p[0], lon: p[1], alert: kind === "Alerts", live: true });
+        }
+      }
+      const order = ["Alerts", "TAK devices", "Mesh radios", "Web and API", "Other tracks", "Server links", "Points", "Shapes and routes", "Offline"];
+      return [...groups.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+    };
+    const row = (it) => {
+      const canGo = !!(it.uid && S.events.get(it.uid)) || !!(it.lat || it.lon);
+      const cls = "crow" + (it.live ? "" : " off") + (it.alert ? " alert" : "") + (it.uid && it.uid === map.selected ? " on" : "");
+      const main = canGo
+        ? h("button", { type: "button", class: "cmain", title: "Show on map", onclick: () => focusItem(it) }, h("b", null, it.title), h("small", null, it.sub))
+        : h("div", { class: "cmain" }, h("b", null, it.title), h("small", null, it.sub));
+      const bat = Number(it.battery);
+      return h(
+        "div",
+        { class: cls, style: "--team:" + (it.alert ? "var(--bad)" : teamColor(it.team)) },
+        main,
+        it.battery ? h("span", { class: "bat" + (bat && bat <= 20 ? " low" : ""), title: "Battery" }, icon("battery", 14), it.battery + "%") : null,
+        it.chat ? h("a", { class: "button icon-only ghost small", href: "#/chat/" + enc(it.chat), title: "Message", "aria-label": "Message " + it.title }, icon("chat", 15)) : null
+      );
+    };
+    function renderDock() {
+      clearTimeout(renderTimer);
+      renderTimer = null;
+      if (!dockOpen) return;
+      for (const b of [tabC, tabM]) b.setAttribute("aria-selected", String(b.dataset.tab === dockTab));
+      for (const b of seg.children) b.setAttribute("aria-pressed", String(b.dataset.scope === scope));
+      seg.hidden = dockTab !== "contacts";
+      const groups = groupsFor();
+      const total = groups.reduce((n, [name, items]) => n + (name === "Offline" ? 0 : items.length), 0);
+      const other = dockTab === "contacts" ? tabM : tabC;
+      (dockTab === "contacts" ? tabC : tabM).querySelector(".n").textContent = String(total);
+      other.querySelector(".n").textContent = "";
+      const keepScroll = list.scrollTop;
+      clear(list);
+      if (!groups.length) {
+        list.append(
+          h(
+            "div",
+            { class: "dock-empty" },
+            filter ? h("span", null, "Nothing matches \"" + filter + "\".") : dockTab === "contacts" ? h("span", null, "No devices are connected. ", h("a", { href: "#/connect" }, "Connect a device"), ".") : h("span", null, "No markers, shapes or alerts on the map.")
+          )
+        );
+        return;
+      }
+      for (const [name, items] of groups) {
+        items.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+        const closed = collapsed.has(name) && !filter;
+        list.append(
+          h(
+            "button",
+            {
+              type: "button", class: "ghead" + (name === "Alerts" ? " alert" : ""), "aria-expanded": String(!closed),
+              onclick: () => {
+                if (collapsed.has(name)) collapsed.delete(name);
+                else collapsed.add(name);
+                store("dock-collapsed", [...collapsed].join("|"));
+                renderDock();
+              },
+            },
+            icon("chevron", 14),
+            h("span", { class: "gt" }, name),
+            h("span", { class: "gn" }, String(items.length))
+          )
+        );
+        if (!closed) for (const it of items) list.append(row(it));
+      }
+      list.scrollTop = keepScroll;
+    }
+    const soon = () => {
+      if (dockOpen && !renderTimer) renderTimer = setTimeout(renderDock, 300);
+    };
+    const loadClients = async () => {
+      if (!dockOpen || document.hidden) return;
+      try {
+        clients = await api("GET", "/api/clients");
+        renderDock();
+      } catch (e) {}
+    };
+    const loadDevices = async () => {
+      try {
+        devices = await api("GET", "/api/devices");
+        renderDock();
+      } catch (e) {}
+    };
+    const setDock = (open) => {
+      dockOpen = open;
+      if (window.innerWidth >= 1100) store("dock", open ? "1" : "0");
+      onDock(open);
+      if (open) {
+        loadClients();
+        if (scope === "all") loadDevices();
+        renderDock();
+      }
+    };
+
+    const keep = (v) => {
+      redraw();
+      if (!fitted && S.events.size) fitAll();
+      if (map.selected && v && v.uid === map.selected) showInfo({ uid: v.uid, v: v });
+      soon();
+    };
+    S.keep.add(keep);
+    let tick = 0;
+    const timer = setInterval(() => {
+      tick++;
+      redraw();
+      if (showTracks && tick % 3 === 0) loadTracks();
+      loadClients();
+      if (scope === "all" && dockOpen && !document.hidden) loadDevices();
+    }, 5000);
+    S.stopOps = () => {
+      clearInterval(timer);
+      S.keep.delete(keep);
+      map.destroy();
+    };
+    refreshEvents().then(() => {
+      redraw();
+      fitAll();
+    });
+    setTimeout(() => setDock(dockOpen), 0);
+
+    return {
+      stage: stage,
+      panel: panel,
+      map: map,
+      dock: setDock,
+      restyle: () => map.setStyle(...mapLook()),
+      focusUid: (uid) => {
+        const v = S.events.get(uid);
+        if (v) focusItem({ uid: uid, lat: v.lat, lon: v.lon });
+      },
+      shown: () => {
+        map.resize();
+        redraw();
+      },
+    };
   }
 
   function markPluginNav() {
@@ -2076,248 +2641,8 @@
 
   async function pageMap(main) {
     if (S.me.admin) api("GET", "/api/repeated").then((l) => (S.repeated = new Set(l.map((r) => r.uid)))).catch(() => {});
-    pageHead(main, "Map", "Live positions, markers and alerts from every connected device.");
-    const coords = h("div", { class: "map-coords" }, "");
-    const infoBox = h("div", { class: "map-info" });
-    const canvas = h("canvas");
-    let style = "auto";
-    try {
-      style = localStorage.getItem("golangtakserver-map-style") || "auto";
-    } catch (e) {}
-    const isDark = () => getComputedStyle(document.documentElement).colorScheme === "dark";
-    const mapLook = () => {
-      if (style.startsWith("layer:")) return ["none", isDark()];
-      const s = style === "auto" ? (isDark() ? "dark" : "light") : style;
-      if (s === "dark") return ["grayscale(1) invert(1) brightness(0.86) contrast(0.92)", true];
-      if (s === "light") return ["grayscale(1) contrast(1.02)", false];
-      return ["none", isDark()];
-    };
-    const styleSel = select("mapstyle", [["auto", "Match theme"], ["dark", "Dark"], ["light", "Light"], ["color", "Color"]], style);
-    styleSel.setAttribute("aria-label", "Map style");
-    let tileLayers = [];
-    const applyBase = () => {
-      const l = tileLayers.find((x) => "layer:" + x.uid === style);
-      map.setTileUrl(l ? l.url : S.me.tileUrl);
-    };
-    api("GET", "/Marti/api/maplayers/all")
-      .then((r) => {
-        tileLayers = ((r && r.data) || []).filter((l) => l.enabled !== false && /\{z\}/.test(l.url || "") && l.type !== "WMS");
-        if (!tileLayers.length) return;
-        const group = h("optgroup", { label: "Map layers" }, tileLayers.map((l) => h("option", { value: "layer:" + l.uid }, l.name)));
-        styleSel.append(group);
-        if (style.startsWith("layer:") && tileLayers.some((l) => "layer:" + l.uid === style)) {
-          styleSel.value = style;
-          applyBase();
-          map.setStyle(...mapLook());
-        }
-      })
-      .catch(() => {});
-    const wrap = h("div", { class: "map-wrap" }, canvas, infoBox, coords, h("div", { class: "map-attr" }, S.me.tileUrl && S.me.tileUrl.includes("openstreetmap") ? "Map data © OpenStreetMap contributors" : ""));
-    let addMode = false;
-    let showTracks = false;
-    let symbology = "2525";
-    try {
-      symbology = localStorage.getItem("golangtakserver-map-symbols") || "2525";
-    } catch (e) {}
-    const addBtn = btn("Add marker", () => {
-      addMode = !addMode;
-      addBtn.classList.toggle("primary", addMode);
-      addBtn.lastChild.textContent = TR(addMode ? "Click the map to place it" : "Add marker");
-    }, "", "plus");
-    const countEl = h("span", { class: "muted" });
-    main.append(
-      h(
-        "div",
-        { class: "toolbar" },
-        btn("Show all", () => fitAll(true), "", "overview"),
-        addBtn,
-        checkbox("tracks", false, "Tracks (last hour)"),
-        checkbox("milsym", symbology !== "simple", "MIL-STD-2525 symbols"),
-        h("span", { class: "grow" }),
-        countEl,
-        styleSel
-      ),
-      wrap,
-      h(
-        "div",
-        { class: "legend", style: "margin-top:12px" },
-        [["#80e0ff", "Friendly"], ["#ff8080", "Hostile"], ["#aaffaa", "Neutral"], ["#ffff80", "Unknown"], ["#ff4d4f", "Emergency"]].map(([c, t]) => h("span", null, h("i", { style: "background:" + c }), t))
-      )
-    );
-    const [tf, dk] = mapLook();
-    const map = new SlippyMap(canvas, { tileUrl: S.me.tileUrl, lat: 20, lon: 0, zoom: 3, tileFilter: tf, dark: dk });
-    map.symbology = symbology;
-    main.querySelector("#milsym").addEventListener("change", (ev) => {
-      symbology = ev.target.checked ? "2525" : "simple";
-      map.symbology = symbology;
-      try {
-        localStorage.setItem("golangtakserver-map-symbols", symbology);
-      } catch (e) {}
-      map.draw();
-    });
-    const tools = h("div", { class: "map-tools" }, btn("+", () => map.zoomAt(1)), btn("-", () => map.zoomAt(-1)));
-    wrap.append(tools);
-    map.onmove = (lat, lon) => {
-      coords.textContent = TR(lat.toFixed(5) + ", " + lon.toFixed(5));
-    };
-    const markers = () => {
-      const out = [];
-      for (const v of S.events.values()) {
-        if (!isLive(v)) continue;
-        const pts = v.shape && v.shape.points;
-        if (v.lat === 0 && v.lon === 0 && !(pts && pts.length)) continue;
-        if (!v.type || v.type.startsWith("t-") || v.type.startsWith("b-t-f") || v.type.startsWith("b-f-t")) continue;
-        const [lat, lon] = v.lat === 0 && v.lon === 0 ? pts[0] : [v.lat, v.lon];
-        out.push({ uid: v.uid, lat: lat, lon: lon, label: v.callsign || "", kind: v.shape ? "shape" : SlippyMap.affiliation(v.type), shape: v.shape, type: v.type, course: v.course, speed: v.speed, v: v });
-      }
-      return out;
-    };
-    const redraw = () => {
-      const m = markers();
-      map.setMarkers(m);
-      countEl.textContent = TR(m.length + " on map");
-    };
-    let fitted = false;
-    const fitAll = (force) => {
-      if (map.fit(markers(), 15) || force) fitted = true;
-    };
-    const showInfo = (m) => {
-      clear(infoBox);
-      if (!m) {
-        infoBox.classList.remove("show");
-        return;
-      }
-      const v = S.events.get(m.uid) || m.v;
-      infoBox.classList.add("show");
-      infoBox.append(
-        h("b", null, v.callsign || v.uid),
-        kv([
-          ["Type", h("span", { class: "mono" }, v.type)],
-          ["Position", h("span", { class: "mono" }, fmtCoord(v.lat, v.lon))],
-          ["Altitude", v.hae && v.hae < 9999999 ? Math.round(v.hae) + " m" : "-"],
-          ["Team", v.team],
-          ["Updated", fmtAgo(v.time)],
-          ["Stale", fmtTime(v.stale)],
-          ["Remarks", v.remarks],
-          ...shapeRows(v),
-          ...medevacRows(v.medevac),
-          ["UID", h("span", { class: "mono small break" }, v.uid)],
-        ]),
-        ...(v.image ? [h("a", { href: "/api/cot/" + enc(v.uid) + "/image", target: "_blank", rel: "noopener", class: "cot-image" }, h("img", { src: "/api/cot/" + enc(v.uid) + "/image", alt: "Image attached to " + (v.callsign || v.uid), loading: "lazy" }))] : []),
-        h(
-          "div",
-          { class: "toolbar" },
-          (v.type || "").startsWith("a-")
-            ? btn("Message", () => {
-                location.hash = "#/chat/" + enc(v.callsign || v.uid);
-              })
-            : null,
-          S.me.admin && !v.uid.startsWith("ANDROID") && !(v.type || "").startsWith("b-a")
-            ? btn(S.repeated && S.repeated.has(v.uid) ? "Stop repeating" : "Repeat", async () => {
-                try {
-                  if (S.repeated && S.repeated.has(v.uid)) {
-                    await api("DELETE", "/api/repeated/" + enc(v.uid));
-                    S.repeated.delete(v.uid);
-                    toast("No longer repeated");
-                  } else {
-                    await api("POST", "/api/repeated/" + enc(v.uid));
-                    (S.repeated = S.repeated || new Set()).add(v.uid);
-                    toast("Sent to every device that connects, and again every minute");
-                  }
-                  showInfo(m);
-                } catch (e) {
-                  fail(e);
-                }
-              })
-            : null,
-          btn("Delete", () =>
-            confirmAction("Delete " + (v.callsign || v.uid), "Remove this item from the map on all connected devices?", "Delete", async () => {
-              await api("DELETE", "/api/cot/" + enc(v.uid));
-              S.events.delete(v.uid);
-              showInfo(null);
-              redraw();
-            })
-          ),
-          btn("Close", () => {
-            map.selected = "";
-            showInfo(null);
-            map.draw();
-          })
-        )
-      );
-    };
-    map.onselect = (m, lat, lon) => {
-      if (addMode) {
-        addMode = false;
-        addBtn.classList.remove("primary");
-        addBtn.lastChild.textContent = TR("Add marker");
-        const f = h(
-          "form",
-          { class: "grid" },
-          field("Name", input("mname", "Marker", { required: true })),
-          field("Type", select("mtype", [["a-u-G", "Unknown ground"], ["a-f-G", "Friendly ground"], ["a-h-G", "Hostile ground"], ["a-n-G", "Neutral ground"], ["b-m-p-s-m", "Spot map point"], ["b-m-p-w", "Waypoint"]], "a-u-G")),
-          field("Position", h("span", { class: "mono" }, fmtCoord(lat, lon))),
-          field("Remarks", input("mrem", "")),
-          field("Keep for", select("mmin", [["60", "1 hour"], ["1440", "1 day"], ["10080", "7 days"], ["43200", "30 days"]], "1440"))
-        );
-        modal("New marker", f, [
-          { label: "Cancel" },
-          {
-            label: "Place marker",
-            primary: true,
-            run: async () => {
-              const r = await api("POST", "/api/markers", { name: val(f, "mname"), type: val(f, "mtype"), lat: lat, lon: lon, remarks: val(f, "mrem"), minutes: num(f, "mmin") });
-              toast("Marker sent to all devices");
-              S.events.set(r.uid, { uid: r.uid, type: val(f, "mtype"), callsign: val(f, "mname"), lat: lat, lon: lon, time: new Date().toISOString(), remarks: val(f, "mrem") });
-              redraw();
-            },
-          },
-        ]);
-        return;
-      }
-      showInfo(m);
-    };
-    const tracksBox = main.querySelector("#tracks");
-    const loadTracks = async () => {
-      if (!showTracks) {
-        map.setTracks([]);
-        return;
-      }
-      try {
-        const t = await api("GET", "/api/tracks?minutes=60");
-        map.setTracks(Object.values(t).map((x) => ({ points: x.points })));
-      } catch (e) {
-        fail(e);
-      }
-    };
-    tracksBox.addEventListener("change", () => {
-      showTracks = tracksBox.checked;
-      loadTracks();
-    });
-    styleSel.addEventListener("change", () => {
-      style = styleSel.value;
-      try {
-        localStorage.setItem("golangtakserver-map-style", style);
-      } catch (e) {}
-      applyBase();
-      map.setStyle(...mapLook());
-    });
-    S.listeners.add((v) => {
-      redraw();
-      if (!fitted && S.events.size) fitAll();
-      if (map.selected && v && v.uid === map.selected) showInfo({ uid: v.uid, v: v });
-    });
-    await refreshEvents();
-    redraw();
-    fitAll();
-    const timer = setInterval(() => {
-      redraw();
-      if (showTracks) loadTracks();
-    }, 15000);
-    return () => {
-      clearInterval(timer);
-      map.destroy();
-    };
+    main.append(h("h1", { class: "sr" }, "Map"));
+    if (OPS) OPS.shown();
   }
 
   async function pageChat(main, params) {
