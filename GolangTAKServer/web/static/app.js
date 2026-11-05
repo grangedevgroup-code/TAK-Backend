@@ -1082,7 +1082,6 @@
   let countEl = null;
   let countTimer = null;
   let liveEl = null;
-  let crumbEl = null;
   let OPS = null;
 
   const TEAM_COLORS = { white: "#f2f2f2", yellow: "#f2d64b", orange: "#f08a24", magenta: "#e04fd9", red: "#e5484d", maroon: "#9b2c2c", purple: "#8e4ec6", "dark blue": "#3e63dd", blue: "#2f7ff0", cyan: "#3ac4d6", teal: "#12a594", green: "#46a758", "dark green": "#2f7a3e", brown: "#a0714f" };
@@ -1323,19 +1322,31 @@
     stopOps();
     clear(root);
     const side = h("aside", { class: "side", id: "side", "aria-label": "Navigation" });
+    const scrim = h("div", { class: "scrim" });
     alertEl = h("a", { class: "banner", href: "#/map", style: "display:none", role: "alert" });
     liveEl = h("span", { class: "live", role: "status" });
-    crumbEl = h("div", { class: "crumbs" });
     setLive(!!(S.ws && S.ws.readyState === 1));
     const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    let head, work;
     const setOpen = (open) => {
+      if (side.classList.contains("open") === open) return;
       side.classList.toggle("open", open);
       menuBtn.setAttribute("aria-expanded", String(open));
+      for (const el of [head, work, OPS && OPS.stage, OPS && OPS.panel]) if (el) el.inert = open;
+      if (open) {
+        const a = side.querySelector("nav a.active") || side.querySelector("nav a");
+        if (a) a.focus();
+      } else menuBtn.focus();
     };
-    const menuBtn = btn("Menu", () => setOpen(!side.classList.contains("open")), "menu icon-only ghost", "menu");
-    menuBtn.setAttribute("aria-controls", "side");
-    menuBtn.setAttribute("aria-label", "Menu");
-    menuBtn.setAttribute("aria-expanded", "false");
+    const menuBtn = h("button", { type: "button", class: "icon-only ghost menu", "aria-label": "Menu", title: "Menu", "aria-controls": "side", "aria-expanded": "false", onclick: () => setOpen(!side.classList.contains("open")) }, icon("menu", 18));
+    scrim.addEventListener("click", () => setOpen(false));
+    S.closeSide = () => setOpen(false);
+    side.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        setOpen(false);
+      }
+    });
     const serverName = S.me.server || "GolangTAKServer";
     const nav = h("nav", { "aria-label": "Sections" });
     const tabs = h("nav", { class: "tabs-top", "aria-label": "Sections" });
@@ -1357,6 +1368,15 @@
       const items = g.pages.filter((p) => p.id !== "map").map((p) => ({ href: "#/" + p.id, icon: p.icon, title: p.title, page: p.id }));
       if (items.length) addTab(g.title, items);
     }
+    const ribbon = h("div", { class: "ribbon" });
+    const fit = () => {
+      const levels = ["tight", "narrow", "tiny"];
+      ribbon.classList.remove(...levels);
+      for (const l of levels) {
+        if (ribbon.scrollWidth <= ribbon.clientWidth) break;
+        ribbon.classList.add(l);
+      }
+    };
     api("GET", "/api/plugin-pages")
       .then((list) => {
         S.pluginPages = list;
@@ -1366,27 +1386,29 @@
         addTab("Plugins", list.map((p) => ({ href: "#/plugin/" + enc(p.name), icon: "plugins", title: p.page, page: "plugin" })));
         markPluginNav();
         markTabs();
+        fit();
       })
       .catch(() => {});
-    const signOutBtn = btn("Sign out", signOut, "icon-only ghost", "signout");
-    signOutBtn.setAttribute("aria-label", "Sign out");
-    signOutBtn.title = "Sign out";
     side.append(
-      h("a", { class: "brand", href: "#/map" }, mark(30), h("span", null, h("span", { class: "name" }, "GolangTAKServer"), h("span", { class: "srv", title: serverName }, serverName))),
+      h(
+        "div",
+        { class: "side-head" },
+        h("a", { class: "brand", href: "#/map", onclick: () => setOpen(false) }, mark(30), h("span", null, h("span", { class: "name" }, "GolangTAKServer"), h("span", { class: "srv", title: serverName }, serverName))),
+        h("button", { type: "button", class: "icon-only ghost", title: "Close", "aria-label": "Close", onclick: () => setOpen(false) }, icon("close", 18))
+      ),
       nav,
       h(
         "div",
         { class: "me" },
-        h("a", { class: "who", href: "#/account", title: "My account", onclick: () => setOpen(false) }, h("span", { class: "avatar", "aria-hidden": "true" }, (S.me.user || "?").slice(0, 1)), h("span", { style: "min-width:0" }, h("b", null, S.me.user), h("small", null, S.me.admin ? "Administrator" : "User"))),
-        signOutBtn
+        h("a", { class: "who", href: "#/account", title: "My account", onclick: () => setOpen(false) }, icon("account", 18), h("span", { style: "min-width:0" }, h("b", null, S.me.user), h("small", null, S.me.admin ? "Administrator" : "User"))),
+        h("button", { type: "button", class: "icon-only ghost", title: "Sign out", "aria-label": "Sign out", onclick: signOut }, icon("signout", 18))
       )
     );
-    const findBtn = h("button", { type: "button", class: "find", onclick: openPalette, "aria-label": "Go to a page or setting" }, icon("search", 16), h("span", { class: "label" }, "Go to..."), h("kbd", null, mac ? "⌘K" : "Ctrl K"));
+    const findBtn = h("button", { type: "button", class: "icon-only ghost", onclick: openPalette, title: TR("Go to a page or setting") + (mac ? " (⌘K)" : " (Ctrl+K)"), "aria-label": "Go to a page or setting", "aria-keyshortcuts": mac ? "Meta+K" : "Control+K" }, icon("search", 18));
     const themeBtn = h("button", { type: "button", class: "icon-only ghost", title: "Switch between light and dark", "aria-label": "Switch between light and dark" });
     const paintTheme = () => clear(themeBtn).append(icon(isDarkNow() ? "sun" : "moon", 18));
     themeBtn.addEventListener("click", () => setTheme(isDarkNow() ? "light" : "dark"));
-    const userBtn = h("button", { type: "button", class: "user ghost", "aria-label": "Account menu" }, h("span", { class: "avatar", "aria-hidden": "true" }, (S.me.user || "?").slice(0, 1)), h("span", { class: "un" }, S.me.user), icon("chevron", 14));
-    const userWrap = h("div", { class: "tabwrap" }, userBtn);
+    const userBtn = h("button", { type: "button", class: "user ghost", "aria-label": "Account menu", title: S.me.user }, icon("account", 18), h("span", { class: "un" }, S.me.user), icon("chevron", 14));
     popover(
       userBtn,
       () =>
@@ -1400,42 +1422,42 @@
         ),
       "right"
     );
-    const bar1 = h(
-      "div",
-      { class: "bar1" },
+    const dockBtn = h("button", { type: "button", class: "ghost dock-btn", "aria-controls": "dock", title: "Contacts" }, icon("contacts", 18), h("span", { class: "lbl" }, "Contacts"));
+    ribbon.append(
       h("a", { class: "skip", href: "#main", onclick: (ev) => (ev.preventDefault(), document.getElementById("main").focus()) }, "Skip to content"),
       menuBtn,
       h("a", { class: "brand", href: "#/map", title: serverName }, mark(22), h("span", { class: "name" }, "GolangTAKServer")),
       tabs,
       h("span", { class: "spacer" }),
+      liveEl,
+      dockBtn,
       findBtn,
       themeBtn,
-      userWrap
+      h("div", { class: "tabwrap" }, userBtn)
     );
-    const mapbar = h("div", { class: "mapbar" });
-    const back = h("a", { class: "button small ghost back", href: "#/map" }, icon("close", 16), h("span", null, "Back to map"));
-    const dockBtn = h("button", { type: "button", class: "small ghost dock-btn", "aria-controls": "dock" }, icon("contacts", 16), h("span", null, "Contacts"));
-    const bar2 = h("div", { class: "bar2" }, liveEl, crumbEl, h("span", { class: "spacer" }), mapbar, back, dockBtn);
     const marking = (S.me.classification || "").trim();
     const level = /TOP SECRET/i.test(marking) ? "ts" : /SECRET/i.test(marking) ? "s" : /CONFIDENTIAL/i.test(marking) ? "c" : /CUI|CONTROLLED/i.test(marking) ? "cui" : "u";
     const markEl = marking ? h("div", { class: "marking " + level, role: "note" }, marking) : null;
-    const head = h("header", { class: "head" }, markEl, bar1, bar2, alertEl);
+    head = h("header", { class: "masthead" }, markEl, ribbon, alertEl);
     const main = h("main", { id: "main", tabindex: "-1" });
-    const closeSide = () => side.classList.contains("open") && setOpen(false);
-    const work = h("div", { class: "work", onmousedown: closeSide }, main);
-    const app = h("div", { class: "app" }, head, side);
+    work = h("div", { class: "work" }, main);
+    const app = h("div", { class: "app" }, head, side, scrim);
     const setDock = (open) => {
       app.classList.toggle("dock-open", open);
       dockBtn.setAttribute("aria-pressed", String(open));
     };
     dockBtn.addEventListener("click", () => OPS.dock(!app.classList.contains("dock-open")));
-    OPS = buildOps(mapbar, setDock);
-    OPS.stage.addEventListener("mousedown", closeSide);
+    OPS = buildOps(setDock);
     app.append(OPS.stage, OPS.panel, work);
     root.append(app);
     const sizeHead = () => app.style.setProperty("--head-h", head.offsetHeight + "px");
-    if (window.ResizeObserver) new ResizeObserver(sizeHead).observe(head);
+    if (window.ResizeObserver) {
+      new ResizeObserver(sizeHead).observe(head);
+      new ResizeObserver(fit).observe(ribbon);
+    } else window.addEventListener("resize", fit);
     sizeHead();
+    fit();
+    if (document.fonts) document.fonts.ready.then(fit);
     paintTheme();
     const onTheme = () => {
       paintTheme();
@@ -1463,7 +1485,7 @@
     if (app) app.classList.toggle("on-map", page.id === "map");
   }
 
-  function buildOps(mapbar, onDock) {
+  function buildOps(onDock) {
     const canvas = h("canvas", { role: "application", "aria-label": "Map. Drag to pan, scroll or pinch to zoom." });
     const infoBox = h("div", { class: "map-info" });
     const cursorEl = h("div", { class: "hud-cursor", title: "Map centre, or the pointer when it is over the map" });
@@ -1520,7 +1542,7 @@
     };
     const rail = h("div", { class: "rail", role: "toolbar", "aria-label": "Map tools", "aria-orientation": "vertical" }, railBtn("Zoom in", "plus", () => map.zoomAt(1)), railBtn("Zoom out", "minus", () => map.zoomAt(-1)), railBtn("Show all", "fit", () => fitAll(true)), h("span", { class: "sep" }), addBtn, tracksBtn);
 
-    const layersBtn = h("button", { type: "button", class: "small ghost" }, icon("layers", 16), h("span", null, "Layers"), icon("chevron", 14));
+    const layersBtn = railBtn("Layers", "layers", () => {});
     popover(layersBtn, () => {
       const sel = select("mapstyle", [["auto", "Match theme"], ["dark", "Dark"], ["light", "Light"], ["color", "Color"]], style);
       if (tileLayers.length) sel.append(h("optgroup", { label: "Map layers" }, tileLayers.map((l) => h("option", { value: "layer:" + l.uid }, l.name))));
@@ -1541,14 +1563,15 @@
       return h(
         "div",
         { class: "layers-pop" },
+        h("div", { class: "pop-title" }, "Layers"),
         h("label", { for: "mapstyle", class: "pop-label" }, "Base map"),
         sel,
         sym,
         h("div", { class: "pop-label" }, "Affiliation"),
         h("div", { class: "legend" }, [["#80e0ff", "Friendly"], ["#ff8080", "Hostile"], ["#aaffaa", "Neutral"], ["#ffff80", "Unknown"], ["#ff4d4f", "Emergency"]].map(([c, t]) => h("span", null, h("i", { style: "background:" + c }), t)))
       );
-    });
-    mapbar.append(h("div", { class: "tabwrap" }, layersBtn));
+    }, "beside");
+    rail.append(h("span", { class: "sep" }), h("div", { class: "tabwrap" }, layersBtn));
 
     const stage = h("div", { class: "stage" }, canvas, rail, infoBox, hint, h("div", { class: "hud" }, cursorEl, countLine), attr);
 
@@ -1606,13 +1629,13 @@
         renderDock();
       };
       infoBox.append(
-        h("div", { class: "info-head" }, h("span", { class: "bar", style: "background:" + teamColor(v.team) }), h("b", null, v.callsign || v.uid), h("button", { type: "button", class: "icon-only ghost small", title: "Close", "aria-label": "Close", onclick: closeInfo }, icon("close", 16))),
+        h("div", { class: "info-head" }, h("b", null, v.callsign || v.uid), h("button", { type: "button", class: "icon-only ghost small", title: "Close", "aria-label": "Close", onclick: closeInfo }, icon("close", 16))),
         kv([
           ["MGRS", h("span", { class: "mono" }, toMGRS(v.lat, v.lon) || "-")],
           ["Position", h("span", { class: "mono" }, fmtCoord(v.lat, v.lon))],
           ["Altitude", v.hae && v.hae < 9999999 ? Math.round(v.hae) + " m" : "-"],
           ["Type", h("span", { class: "mono" }, v.type)],
-          ["Team", v.team],
+          ["Team", v.team && h("span", { class: "team" }, h("i", { class: "sw", style: "background:" + teamColor(v.team) }), v.team)],
           ["Updated", fmtAgo(v.time)],
           ["Stale", fmtTime(v.stale)],
           ["Remarks", v.remarks],
@@ -1768,7 +1791,7 @@
             team: info.team || (v && v.team),
             role: info.role,
             soft: [info.platform, info.version, c.user].filter(Boolean).join(" "),
-            sub: [[info.team, info.role].filter(Boolean).join(" · ") || [info.platform, info.version].filter(Boolean).join(" ") || c.user || c.kind],
+            sub: info.role || info.team ? [info.role] : [[info.platform, info.version].filter(Boolean).join(" ") || c.user || c.kind],
             battery: info.battery,
             lat: p ? p[0] : 0,
             lon: p ? p[1] : 0,
@@ -1779,12 +1802,12 @@
         for (const v of S.events.values()) {
           if (!isLive(v) || seen.has(v.uid) || v.shape || !(v.type || "").startsWith("a-")) continue;
           if (v.lat === 0 && v.lon === 0) continue;
-          add("Other tracks", { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: [AFF[SlippyMap.affiliation(v.type)] || "Track", v.team ? " · " + v.team : ""], lat: v.lat, lon: v.lon, live: true });
+          add("Other tracks", { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: [AFF[SlippyMap.affiliation(v.type)] || "Track"], lat: v.lat, lon: v.lon, live: true });
         }
         if (scope === "all" && devices) {
           for (const d of devices) {
             if (seen.has(d.uid)) continue;
-            add("Offline", { uid: d.uid, title: d.callsign || d.uid, soft: [d.platform, d.version, d.user].filter(Boolean).join(" "), sub: ["Last seen ", fmtAgo(d.lastSeen)], lat: d.lat, lon: d.lon, live: false });
+            add("Offline", { uid: d.uid, title: d.callsign || d.uid, soft: [d.platform, d.version, d.user].filter(Boolean).join(" "), sub: [h("span", null, "Last seen ", fmtAgo(d.lastSeen))], lat: d.lat, lon: d.lon, live: false });
           }
         }
       } else {
@@ -1796,7 +1819,7 @@
           if (!p) continue;
           const kind = t.startsWith("b-a-") ? "Alerts" : v.shape ? "Shapes and routes" : "Points";
           const rows = kind === "Shapes and routes" ? shapeRows(v) : [];
-          add(kind, { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: kind === "Alerts" ? [alertName(t), " · ", fmtAgo(v.time)] : rows.length ? [rows[0][1], " · ", rows[2] ? rows[2][1] : ""] : [v.remarks || t], lat: p[0], lon: p[1], alert: kind === "Alerts", live: true });
+          add(kind, { uid: v.uid, title: v.callsign || v.uid, team: v.team, sub: kind === "Alerts" ? [alertName(t), fmtAgo(v.time)] : rows.length ? [rows[0][1], rows[2] && rows[2][1]] : [v.remarks || t], lat: p[0], lon: p[1], alert: kind === "Alerts", live: true });
         }
       }
       const order = ["Alerts", "TAK devices", "Mesh radios", "Web and API", "Other tracks", "Server links", "Points", "Shapes and routes", "Offline"];
@@ -1805,13 +1828,16 @@
     const row = (it) => {
       const canGo = !!(it.uid && S.events.get(it.uid)) || !!(it.lat || it.lon);
       const cls = "crow" + (it.live ? "" : " off") + (it.alert ? " alert" : "") + (it.uid && it.uid === map.selected ? " on" : "");
+      const sub = h("small", null, it.team ? h("span", { class: "team" }, h("i", { class: "sw", style: "background:" + teamColor(it.team) }), it.team) : null, ...it.sub.filter((x) => x !== "" && x != null).map((x) => h("span", null, x)));
+      const lead = it.alert ? h("span", { class: "lead alert" }, icon("alert", 16)) : null;
       const main = canGo
-        ? h("button", { type: "button", class: "cmain", title: "Show on map", onclick: () => focusItem(it) }, h("b", null, it.title), h("small", null, it.sub))
-        : h("div", { class: "cmain" }, h("b", null, it.title), h("small", null, it.sub));
+        ? h("button", { type: "button", class: "cmain", title: "Show on map", onclick: () => focusItem(it) }, h("b", null, it.title), sub)
+        : h("div", { class: "cmain" }, h("b", null, it.title), sub);
       const bat = Number(it.battery);
       return h(
         "div",
-        { class: cls, style: "--team:" + (it.alert ? "var(--bad)" : teamColor(it.team)) },
+        { class: cls },
+        lead,
         main,
         it.battery ? h("span", { class: "bat" + (bat && bat <= 20 ? " low" : ""), title: "Battery" }, icon("battery", 14), it.battery + "%") : null,
         it.chat ? h("a", { class: "button icon-only ghost small", href: "#/chat/" + enc(it.chat), title: "Message", "aria-label": "Message " + it.title }, icon("chat", 15)) : null
@@ -1955,20 +1981,9 @@
       return;
     }
     document.title = info.page + " - GolangTAKServer";
-    setCrumbs({ title: info.page, id: "plugin" }, "");
     pageHead(main, info.page, info.description || "", h("a", { class: "button", href: info.url, target: "_blank", rel: "noopener" }, "Open in a new tab"));
     main.append(h("iframe", { class: "plugin-frame", src: info.url, title: info.page }));
     markPluginNav();
-  }
-
-  function setCrumbs(page, extra) {
-    if (!crumbEl) return;
-    const group = groupOf(page);
-    const parts = [];
-    if (group) parts.push(h("span", null, group), h("span", { class: "sep" }, "/"));
-    if (extra) parts.push(h("a", { href: "#/" + page.id }, page.title), h("span", { class: "sep" }, "/"), h("b", null, extra));
-    else parts.push(h("b", null, page.title));
-    clear(crumbEl).append(...parts);
   }
 
   async function route() {
@@ -1992,9 +2007,7 @@
     S.listeners.clear();
     for (const close of Array.from(S.modals)) close();
     if (!document.getElementById("main")) layout();
-    const side = document.querySelector(".side");
-    if (side) side.classList.remove("open");
-    setCrumbs(page, page.id === "missions" && rest[0] ? decodeURIComponent(rest[0]) : "");
+    if (S.closeSide) S.closeSide();
     for (const a of document.querySelectorAll(".side nav a:not([data-plugin])")) {
       a.classList.toggle("active", a.dataset.page === page.id);
       if (a.dataset.page === page.id) a.setAttribute("aria-current", "page");
