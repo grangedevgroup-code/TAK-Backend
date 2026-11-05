@@ -1779,6 +1779,25 @@
       if (window.innerWidth < 1100) setDock(false);
       renderDock();
     };
+    const senderName = (uid) => {
+      const v = S.events.get(uid);
+      if (v && v.callsign) return v.callsign;
+      const c = clients.find((c) => c.info && c.info.uid === uid);
+      return c ? c.info.callsign || c.name || c.user || uid : "";
+    };
+    const focusAlert = (alert) => {
+      const from = alertSender(alert);
+      const sender = from && S.events.get(from);
+      if (!sender) return focusItem({ uid: alert.uid, lat: alert.lat, lon: alert.lon });
+      if (window.innerWidth >= 1100) {
+        dockTab = "contacts";
+        store("dock-tab", dockTab);
+        if (!dockOpen) setDock(true);
+      }
+      focusItem({ uid: from, lat: sender.lat, lon: sender.lon });
+      const on = list.querySelector(".crow.on");
+      if (on) on.scrollIntoView({ block: "nearest" });
+    };
     const groupsFor = () => {
       const groups = new Map();
       const f = filter.toLowerCase();
