@@ -1828,7 +1828,7 @@
         if (scope === "all" && devices) {
           for (const d of devices) {
             if (seen.has(d.uid)) continue;
-            add("Offline", { uid: d.uid, title: d.callsign || d.uid, soft: [d.platform, d.version, d.user].filter(Boolean).join(" "), sub: [h("span", null, "Last seen ", fmtAgo(d.lastSeen))], lat: d.lat, lon: d.lon, live: false });
+            add("Offline", raised({ uid: d.uid, title: d.callsign || d.uid, soft: [d.platform, d.version, d.user].filter(Boolean).join(" "), sub: [h("span", null, "Last seen ", fmtAgo(d.lastSeen))], lat: d.lat, lon: d.lon, live: false }));
           }
         }
       } else {
