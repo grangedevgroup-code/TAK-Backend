@@ -1049,8 +1049,8 @@
 
   const PAGES = [
     { group: "Operations" },
+    { id: "map", title: "Map", icon: "map", render: pageMap, keys: "markers positions tracks contacts home" },
     { id: "overview", title: "Overview", icon: "overview", render: pageOverview, keys: "home status dashboard" },
-    { id: "map", title: "Map", icon: "map", render: pageMap, keys: "markers positions tracks" },
     { id: "chat", title: "Chat", icon: "chat", render: pageChat, keys: "messages" },
     { id: "calls", title: "Calls", icon: "phone", render: pageCalls, keys: "video call voice phone conference meeting webrtc" },
     { group: "Devices" },
