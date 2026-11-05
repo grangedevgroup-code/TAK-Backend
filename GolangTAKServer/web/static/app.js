@@ -1207,7 +1207,7 @@
     if (!list.length) return;
     const first = list[0];
     alertEl.onclick = () => {
-      if (OPS) setTimeout(() => OPS.focusUid(first.uid), 0);
+      if (OPS) setTimeout(() => OPS.focusAlert(first), 0);
     };
     const text = list.length === 1 ? "Emergency: " + (first.callsign || first.uid) + ", " + alertName(first.type) : list.length + " active emergencies";
     clear(alertEl).append(icon("alert", 18), h("span", null, text), h("span", { class: "go" }, "View on map"));
