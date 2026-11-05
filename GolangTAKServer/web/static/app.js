@@ -1145,9 +1145,11 @@
       if (box) return close();
       box = h("div", { class: "pop " + (align || "left"), onclick: (ev) => ev.target.closest("a,[data-close]") && close() }, build(close));
       trigger.parentNode.append(box);
+      place();
       trigger.setAttribute("aria-expanded", "true");
       document.addEventListener("mousedown", outside, true);
       document.addEventListener("keydown", onKey, true);
+      window.addEventListener("resize", close);
       S.modals.add(close);
       const first = box.querySelector("a,button,input,select");
       if (first) first.focus();
